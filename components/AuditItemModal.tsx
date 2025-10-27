@@ -1,9 +1,7 @@
 import React from 'react';
 import { AuditItem, AuditAnswer, NonComplianceData } from '../types';
 import NonComplianceForm from './NonComplianceForm';
-import { PlusIcon } from './icons/PlusIcon';
-import { CheckmarkIcon } from './icons/CheckmarkIcon';
-import { XIcon } from './icons/XIcon';
+import { PlusIcon, CheckmarkIcon, XIcon } from './icons';
 
 interface AuditItemModalProps {
   item: AuditItem | null;

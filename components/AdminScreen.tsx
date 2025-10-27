@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { AuditStructure, AuditSection, AuditItem } from '../types';
-import { ArrowUpIcon } from './icons/ArrowUpIcon';
-import { ArrowDownIcon } from './icons/ArrowDownIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import { EditIcon } from './icons/EditIcon';
-import { SaveIcon } from './icons/SaveIcon';
-import { PlusIcon } from './icons/PlusIcon';
-import { DragHandleIcon } from './icons/DragHandleIcon';
+import { 
+    ArrowUpIcon, 
+    ArrowDownIcon, 
+    TrashIcon, 
+    EditIcon, 
+    SaveIcon, 
+    PlusIcon, 
+    DragHandleIcon 
+} from './icons';
 import { ItemEditModal } from './ItemEditModal';
 
 interface AdminScreenProps {
@@ -127,7 +129,7 @@ const SectionAdmin: React.FC<{
                             onDragStart={(e) => handleDragStart(e, item.id)}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, item.id)}
-                            className="flex items-center justify-between p-2 border-l-4 border-gray-200 hover:bg-gray-50 rounded-r-md flex-wrap gap-2"
+                            className="flex items-center justify-between p-2 border-l-4 border-gray-200 hover:bg-gray-50 rounded-r-md gap-2"
                         >
                             <ItemAdmin
                                 item={item}
@@ -281,7 +283,7 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                 // 1. Remove from old section
                 newSections = newSections.map(section => 
                     section.id === oldSectionId
-                        ? { ...section, items: section.items.filter(item => item.id !== updatedItem.id) }
+                        ? { ...section, items: section.items.filter(item => item.id !== updatedItem.id) } 
                         : section
                 );
 
@@ -348,7 +350,7 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                     onSave={handleSaveEditedItem}
                     onClose={handleCloseEditModal}
                 />
-            )}
+            )};
         </div>
     );
 };

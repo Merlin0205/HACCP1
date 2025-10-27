@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { AuditStructure, AuditData, AuditAnswer, AuditItem, NonComplianceData } from '../types';
-import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { WarningIcon } from './icons/WarningIcon';
+import { ChevronDownIcon, WarningIcon } from './icons';
 import { iconMap, QuestionMarkIcon } from './AuditIcons';
 import { AuditItemModal } from './AuditItemModal';
 

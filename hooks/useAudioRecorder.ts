@@ -1,6 +1,4 @@
-
 import { useState, useRef, useCallback } from 'react';
-import { transcribeAudioWithAI } from '../services/geminiService';
 import { AIResponse } from '../types';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -52,7 +50,7 @@ export const useAudioRecorder = (
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       log("Přístup k mikrofonu udělen.");
       streamRef.current = stream;
-      const mimeType = 'audio/webm'; // Use a common, well-supported format.
+      const mimeType = 'audio/webm'; 
       
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
@@ -80,9 +78,22 @@ export const useAudioRecorder = (
             log("Převádím audio na Base64...");
             const base64Audio = await blobToBase64(audioBlob);
             log(`Převod dokončen (${(audioBlob.size / 1024).toFixed(1)} kB). Odesílám k přepisu...`);
-            const response = await transcribeAudioWithAI(base64Audio, mimeType);
+
+            const response = await fetch('http://localhost:9000/api/transcribe-audio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audio: base64Audio, mimeType }),
+            });
+
+            if (!response.ok) {
+                 const errorData = await response.json();
+                 throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const transcriptionResponse: AIResponse<string> = await response.json();
+
             log("Přepis úspěšně přijat.");
-            await onTranscriptionComplete(response);
+            await onTranscriptionComplete(transcriptionResponse);
         } catch (e) {
             console.error("Transcription process failed:", e);
             const errorMessage = e instanceof Error ? e.message : "Zpracování nahrávky se nezdařilo.";

@@ -45,7 +45,7 @@ const rawStructure: RawAuditStructure = {
         { "id": "auditor_name", "label": "Auditor", "type": "text" },
         { "id": "auditor_phone", "label": "Mobil", "type": "tel" },
         { "id": "auditor_email", "label": "E-mail", "type": "email" },
-        { "id": "auditor_web", "label": "Web", "type": "url" }
+        { "id": "auditor_web", "label": "Web", "type": "text" }
       ]
     },
     "audit_meta": {

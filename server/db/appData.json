@@ -1,0 +1,376 @@
+{
+  "customers": [
+    {
+      "id": "customer_1761602132825",
+      "premise_name": "QQQQQQQQQQQQQQQ",
+      "premise_address": "xcyx",
+      "premise_responsible_person": "cyx",
+      "premise_phone": "cyxc",
+      "premise_email": "yxcy",
+      "operator_name": "xcyx",
+      "operator_address": "xcyx",
+      "operator_ico": "cyxc",
+      "operator_statutory_body": "yxcy",
+      "operator_phone": "yxc",
+      "operator_email": "yxc"
+    },
+    {
+      "id": "customer_1761602444625",
+      "premise_name": "CCCCCCCC",
+      "premise_address": "CC",
+      "premise_responsible_person": "CCCCCCCCC",
+      "premise_phone": "CCC",
+      "premise_email": "CCCCCCC",
+      "operator_name": "CCCCCCC",
+      "operator_address": "CCCCCCCCCCCCC",
+      "operator_ico": "CCCCCCCCC",
+      "operator_statutory_body": "C",
+      "operator_phone": "CCCCCCCCC",
+      "operator_email": "C"
+    }
+  ],
+  "audits": [
+    {
+      "id": "audit_1761602249359",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T21:57:29.359Z",
+      "headerValues": {},
+      "answers": {}
+    },
+    {
+      "id": "audit_1761602478389",
+      "customerId": "customer_1761602444625",
+      "createdAt": "2025-10-27T22:01:18.389Z",
+      "headerValues": {
+        "premise_name": "CCCCCCCC",
+        "premise_address": "CC",
+        "premise_responsible_person": "",
+        "premise_phone": "",
+        "premise_email": "",
+        "operator_name": "CCCCCCC",
+        "operator_address": "CCCCCCCCCCCCC",
+        "operator_ico": "",
+        "operator_statutory_body": ""
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761602490692",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:01:30.692Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "",
+        "premise_phone": "",
+        "premise_email": "",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "",
+        "operator_statutory_body": ""
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761602761361",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:06:01.361Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Martin Zápotocký",
+        "auditor_phone": "+420 721 730 432",
+        "auditor_email": "info@haccp-audit.cz",
+        "auditor_web": "https://haccp-audit.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761602975839",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:09:35.839Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Martin Zápotocký",
+        "auditor_phone": "+420 721 730 432",
+        "auditor_email": "info@haccp-audit.cz",
+        "auditor_web": "https://haccp-audit.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761602987597",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:09:47.597Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Martin Zápotocký",
+        "auditor_phone": "+420 721 730 432",
+        "auditor_email": "info@haccp-audit.cz",
+        "auditor_web": "https://haccp-audit.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603079573",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:11:19.573Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Martin Zápotocký",
+        "auditor_phone": "+420 721 730 432",
+        "auditor_email": "info@haccp-audit.cz",
+        "auditor_web": "https://haccp-audit.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603110865",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:11:50.865Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603127002",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:12:07.002Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603177104",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:12:57.104Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603376509",
+      "customerId": "customer_1761602444625",
+      "createdAt": "2025-10-27T22:16:16.509Z",
+      "headerValues": {
+        "premise_name": "CCCCCCCC",
+        "premise_address": "CC",
+        "premise_responsible_person": "CCCCCCCCC",
+        "premise_phone": "CCC",
+        "premise_email": "CCCCCCC",
+        "operator_name": "CCCCCCC",
+        "operator_address": "CCCCCCCCCCCCC",
+        "operator_ico": "CCCCCCCCC",
+        "operator_statutory_body": "C",
+        "operator_phone": "CCCCCCCCC",
+        "operator_email": "C",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603782292",
+      "customerId": "customer_1761602444625",
+      "createdAt": "2025-10-27T22:23:02.292Z",
+      "headerValues": {
+        "premise_name": "CCCCCCCC",
+        "premise_address": "CC",
+        "premise_responsible_person": "CCCCCCCCC",
+        "premise_phone": "CCC",
+        "premise_email": "CCCCCCC",
+        "operator_name": "CCCCCCC",
+        "operator_address": "CCCCCCCCCCCCC",
+        "operator_ico": "CCCCCCCCC",
+        "operator_statutory_body": "C",
+        "operator_phone": "CCCCCCCCC",
+        "operator_email": "C",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603818169",
+      "customerId": "customer_1761602444625",
+      "createdAt": "2025-10-27T22:23:38.169Z",
+      "headerValues": {
+        "premise_name": "CCCCCCCC",
+        "premise_address": "CC",
+        "premise_responsible_person": "CCCCCCCCC",
+        "premise_phone": "CCC",
+        "premise_email": "CCCCCCC",
+        "operator_name": "CCCCCCC",
+        "operator_address": "CCCCCCCCCCCCC",
+        "operator_ico": "CCCCCCCCC",
+        "operator_statutory_body": "C",
+        "operator_phone": "CCCCCCCCC",
+        "operator_email": "C",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    },
+    {
+      "id": "audit_1761603998540",
+      "customerId": "customer_1761602444625",
+      "status": "Probíhá",
+      "createdAt": "2025-10-27T22:26:38.540Z",
+      "headerValues": {
+        "premise_name": "CCCCCCCC",
+        "premise_address": "CC",
+        "premise_responsible_person": "CCCCCCCCC",
+        "premise_phone": "CCC",
+        "premise_email": "sylvapolzer@avlyspol.cz",
+        "operator_name": "CCCCCCC",
+        "operator_address": "CCCCCCCCCCCCC",
+        "operator_ico": "CCCCCCCCC",
+        "operator_statutory_body": "C",
+        "operator_phone": "CCCCCCCCC",
+        "operator_email": "sylvapolzer@avlyspol.cz",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {
+        "infra_surfaces": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "dsa",
+              "finding": "dsad",
+              "recommendation": "asdasd",
+              "photos": []
+            }
+          ]
+        },
+        "custom-1761604086752": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "sad",
+              "finding": "asdasd",
+              "recommendation": "asdasd",
+              "photos": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "audit_1761604171784",
+      "customerId": "customer_1761602132825",
+      "createdAt": "2025-10-27T22:29:31.784Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "sylvapolzer@avlyspol.cz",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "sylvapolzer@avlyspol.cz",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {}
+    }
+  ],
+  "reports": []
+}
