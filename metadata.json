@@ -1,0 +1,8 @@
+{
+  "name": "PRED ZMENAMI  of HACCP Audit Assistant",
+  "description": "A smart assistant to conduct HACCP audits for school cafeterias using voice commands, photo uploads, and AI-powered validation and summarization.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
