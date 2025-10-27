@@ -1,133 +1,296 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
-import { AppState, AuditData, AuditStructure, AuditAnswer, AuditHeaderValues, SavedAudit } from './types';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { AppState, Audit, Customer, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
-import Header from './components/Header';
-import AuditChecklist from './components/AuditChecklist';
-import SummaryReport from './components/SummaryReport';
-import AdminScreen from './components/AdminScreen';
-import { usePersistentState } from './hooks/usePersistentState';
-import WelcomeScreen from './components/WelcomeScreen';
+import { Header } from './components/Header';
+import { AuditChecklist } from './components/AuditChecklist';
+import { AdminScreen } from './components/AdminScreen';
+import { CustomerDashboard } from './components/CustomerDashboard';
+import { CustomerForm } from './components/CustomerForm';
+import { AuditList } from './components/AuditList';
+import { HeaderForm } from './components/HeaderForm';
+import { ReportView } from './components/ReportView';
 
 const App: React.FC = () => {
-  const [appState, setAppState] = useState<AppState>(AppState.WELCOME);
-  const [lastAppState, setLastAppState] = useState<AppState>(AppState.WELCOME);
-  const [auditData, setAuditData] = useState<AuditData>({ headerValues: {}, answers: {} });
-  const [auditStructure, setAuditStructure] = usePersistentState<AuditStructure>('auditStructure', DEFAULT_AUDIT_STRUCTURE);
+  // --- STATE MANAGEMENT ---
+  const [appState, setAppState] = useState<AppState>(AppState.CUSTOMER_DASHBOARD);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [audits, setAudits] = useState<Audit[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null);
+  const [activeAuditId, setActiveAuditId] = useState<string | null>(null);
+  const [auditStructure, setAuditStructureState] = useState<AuditStructure>(DEFAULT_AUDIT_STRUCTURE);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const isInitialLoad = useRef(true);
 
-  const activeItems = useMemo(() => {
-    return auditStructure.audit_sections
-      .filter(section => section.active)
-      .flatMap(section => section.items.filter(item => item.active));
-  }, [auditStructure]);
-    
-  const handleWelcomeContinue = () => {
-    setAppState(AppState.START);
-  };
-    
-  const startAudit = () => {
-      const initialAnswers: { [itemId: string]: AuditAnswer } = {};
-      activeItems.forEach(item => {
-        initialAnswers[item.id] = { compliant: true, nonComplianceData: [] };
-      });
-
-      setAuditData({ headerValues: {}, answers: initialAnswers });
-      setAppState(AppState.HEADER_FORM);
-  }
-  
-  const handleLoadAudit = (data: SavedAudit) => {
-    if (data.auditData && data.auditStructure) {
-        // Migration logic for old audit files with single non-compliance object
-        Object.keys(data.auditData.answers).forEach(itemId => {
-            const answer = data.auditData.answers[itemId];
-            if (answer.nonComplianceData && !Array.isArray(answer.nonComplianceData)) {
-                // @ts-ignore - Temporarily bypass strict typing for migration
-                answer.nonComplianceData = [answer.nonComplianceData];
-            }
-             if (!answer.nonComplianceData) {
-                answer.nonComplianceData = [];
-            }
-        });
-
-        setAuditData(data.auditData);
-        setAuditStructure(data.auditStructure);
-        setAppState(AppState.SUMMARY);
-    } else {
-        alert("Neplatný formát souboru auditu.");
-    }
-  };
-
-  const handleHeaderComplete = (headerValues: AuditHeaderValues) => {
-    setAuditData(prev => ({ ...prev, headerValues }));
-    if (activeItems.length > 0) {
-      setAppState(AppState.IN_PROGRESS);
-    } else {
-      setAppState(AppState.SUMMARY); // No active questions, go straight to summary
-    }
-  }
-
-  const handleAnswerUpdate = useCallback((itemId: string, answer: AuditAnswer) => {
-    setAuditData(prevData => ({
-      ...prevData,
-      answers: {
-        ...prevData.answers,
-        [itemId]: answer,
+  // --- DATA PERSISTENCE ---
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const response = await fetch('/api/app-data');
+        if (!response.ok) throw new Error(`Server error: ${response.status}`);
+        const data = await response.json();
+        setCustomers(data.customers || []);
+        setAudits(data.audits || []);
+        setReports(data.reports || []);
+      } catch (e) {
+        console.error("Failed to load data from server:", e);
+        setError("Nepodařilo se načíst data ze serveru. Zkuste prosím obnovit stránku.");
+      } finally {
+        setIsLoading(false);
+        setTimeout(() => { isInitialLoad.current = false; }, 500);
       }
-    }));
+    };
+    loadData();
   }, []);
 
+  useEffect(() => {
+    if (isInitialLoad.current || isLoading) return;
+    const saveData = async () => {
+      try {
+        await fetch('/api/app-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customers, audits, reports }),
+        });
+      } catch (e) {
+        console.error("Failed to save data to server:", e);
+        setError("Chyba při ukládání dat na server.");
+      }
+    };
+    saveData();
+  }, [customers, audits, reports, isLoading]);
 
-  const handleFinishAudit = () => {
-    setAppState(AppState.SUMMARY);
+  // --- BACKGROUND REPORT GENERATION ---
+    useEffect(() => {
+    const reportToGenerate = reports.find(r => r.status === ReportStatus.PENDING);
+    if (reportToGenerate && !isGenerating) {
+      setIsGenerating(true);
+      setReports(prev => prev.map(r => r.id === reportToGenerate.id ? { ...r, status: ReportStatus.GENERATING } : r));
+      
+      const auditForReport = audits.find(a => a.id === reportToGenerate.auditId);
+      if (!auditForReport) {
+          console.error("Audit for report not found!");
+          setReports(prev => prev.map(r => r.id === reportToGenerate.id ? { ...r, status: ReportStatus.ERROR, error: "Přiřazený audit nebyl nalezen." } : r));
+          setIsGenerating(false);
+          return;
+      }
+
+      fetch('/api/generate-report', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ auditData: auditForReport, auditStructure: auditStructure })
+       })
+      .then(res => {
+        if (!res.ok) throw new Error(`Chyba serveru: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+          setReports(prev => prev.map(r => 
+              r.id === reportToGenerate.id 
+              ? { ...r, status: ReportStatus.DONE, reportData: data.result, usage: data.usage }
+              : r
+          ));
+      })
+      .catch(err => {
+          console.error("Report generation failed:", err);
+          setReports(prev => prev.map(r => 
+              r.id === reportToGenerate.id 
+              ? { ...r, status: ReportStatus.ERROR, error: err.message }
+              : r
+          ));
+      })
+      .finally(() => {
+          setIsGenerating(false);
+      });
+    }
+  }, [reports, audits, isGenerating, auditStructure]);
+
+
+  // --- DERIVED STATE ---
+  const activeAudit = useMemo(() => audits.find(a => a.id === activeAuditId), [audits, activeAuditId]);
+  const activeReport = useMemo(() => reports.find(r => r.auditId === activeAuditId), [reports, activeAuditId]);
+  const customerToEdit = useMemo(() => customers.find(c => c.id === activeCustomerId), [customers, activeCustomerId]);
+
+  // --- NAVIGATION & ACTIONS ---
+  const handleBackToDashboard = () => {
+    setAppState(AppState.CUSTOMER_DASHBOARD);
+    setActiveCustomerId(null);
+    setActiveAuditId(null);
   };
 
-  const restartAudit = () => {
-    setAppState(AppState.WELCOME);
-    setAuditData({ headerValues: {}, answers: {} });
+  const handleAddNewCustomer = () => {
+    setActiveCustomerId(null);
+    setAppState(AppState.ADD_CUSTOMER);
   };
 
-  const handleToggleAdmin = () => {
-    if (appState === AppState.ADMIN) {
-      setAppState(lastAppState);
+  const handleEditCustomer = (customerId: string) => {
+    setActiveCustomerId(customerId);
+    setAppState(AppState.EDIT_CUSTOMER);
+  };
+
+  const handleSaveCustomer = (customerData: Omit<Customer, 'id'>) => {
+    if (activeCustomerId) {
+      setCustomers(prev => prev.map(c => (c.id === activeCustomerId ? { ...c, ...customerData } : c)));
     } else {
-      setLastAppState(appState);
-      setAppState(AppState.ADMIN);
+      const newCustomer: Customer = { id: `customer_${Date.now()}`, ...customerData };
+      setCustomers(prev => [...prev, newCustomer]);
+    }
+    handleBackToDashboard();
+  };
+
+  const handleDeleteCustomer = (customerId: string) => {
+    if (window.confirm("Opravdu si přejete smazat tohoto zákazníka a všechny jeho audity?")) {
+      const auditsToDelete = audits.filter(a => a.customerId === customerId).map(a => a.id);
+      setCustomers(prev => prev.filter(c => c.id !== customerId));
+      setAudits(prev => prev.filter(a => a.customerId !== customerId));
+      setReports(prev => prev.filter(r => !auditsToDelete.includes(r.auditId)));
     }
   };
-  
-  const renderContent = () => {
-    switch (appState) {
-      case AppState.WELCOME:
-        return <WelcomeScreen onContinue={handleWelcomeContinue} />;
-      case AppState.START:
-        return <StartScreen onStart={startAudit} onFileLoad={handleLoadAudit} />;
-      case AppState.HEADER_FORM:
-        return <HeaderForm headerData={auditStructure.header_data} onComplete={handleHeaderComplete} />;
-      case AppState.IN_PROGRESS:
-        if (activeItems.length === 0) {
-            return (
-                <div className="text-center bg-white p-8 rounded-lg shadow-md">
-                    <h2 className="text-2xl font-bold mb-4">Nejsou aktivní žádné otázky</h2>
-                    <p className="text-gray-600 mb-6">Přejděte prosím do správy a aktivujte alespoň jednu položku auditu.</p>
-                    <button onClick={() => setAppState(AppState.SUMMARY)} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">
-                        Dokončit prázdný audit
-                    </button>
-                </div>
-            );
+
+  const handleSelectCustomerForAudits = (customerId: string) => {
+    setActiveCustomerId(customerId);
+    setAppState(AppState.AUDIT_LIST);
+  };
+
+  const handleBackToAuditList = () => {
+    setAppState(AppState.AUDIT_LIST);
+    setActiveAuditId(null);
+  };
+
+  const handlePrepareNewAudit = () => {
+    if (!activeCustomerId) return;
+    const activeCustomer = customers.find(c => c.id === activeCustomerId);
+    if (!activeCustomer) return;
+
+    const prefilledHeaderValues: AuditHeaderValues = {
+        premise_name: activeCustomer.premise_name || '',
+        premise_address: activeCustomer.premise_address || '',
+        premise_responsible_person: activeCustomer.premise_responsible_person || '',
+        premise_phone: activeCustomer.premise_phone || '',
+        premise_email: activeCustomer.premise_email || '',
+        operator_name: activeCustomer.operator_name || '',
+        operator_address: activeCustomer.operator_address || '',
+        operator_ico: activeCustomer.operator_ico || '',
+        operator_statutory_body: activeCustomer.operator_statutory_body || '',
+        operator_phone: activeCustomer.operator_phone || '',
+        operator_email: activeCustomer.operator_email || '',
+        auditor_name: 'Bc. Sylva Polzer, hygienický konzultant',
+        auditor_phone: '603 398 774',
+        auditor_email: 'sylvapolzer@avlyspol.cz',
+        auditor_web: 'www.avlyspol.cz',
+    };
+
+    const newAudit: Audit = {
+      id: `audit_${Date.now()}`,
+      customerId: activeCustomerId,
+      status: AuditStatus.NEW,
+      createdAt: new Date().toISOString(),
+      headerValues: prefilledHeaderValues,
+      answers: {},
+    };
+
+    setAudits(prev => [...prev, newAudit]);
+    setActiveAuditId(newAudit.id);
+    setAppState(AppState.HEADER_FORM);
+  };
+
+  const handleDeleteAudit = (auditId: string) => {
+    setAudits(prev => prev.filter(a => a.id !== auditId));
+    setReports(prev => prev.filter(r => r.auditId !== auditId));
+  };
+
+
+  const handleSelectAudit = (auditId: string) => {
+    const selectedAudit = audits.find(a => a.id === auditId);
+    if (!selectedAudit) return;
+    setActiveAuditId(auditId);
+    if (selectedAudit.status === AuditStatus.COMPLETED || selectedAudit.status === AuditStatus.REPORT_GENERATED) {
+        setAppState(AppState.REPORT_VIEW);
+    } else if (selectedAudit.status === AuditStatus.IN_PROGRESS) {
+        setAppState(AppState.AUDIT_IN_PROGRESS);
+    } else {
+        setAppState(AppState.HEADER_FORM);
+    }
+  };
+
+  const handleHeaderUpdateAndReturn = (headerValues: AuditHeaderValues) => {
+    if (!activeAuditId) return;
+    setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
+    handleBackToAuditList();
+  };
+
+  const handleHeaderUpdateAndContinue = (headerValues: AuditHeaderValues) => {
+    if (!activeAuditId) {
+      return;
+    }
+    setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
+    setAppState(AppState.AUDIT_IN_PROGRESS);
+  };
+
+  const handleAnswerUpdate = useCallback((itemId: string, answer: any) => {
+    if (!activeAuditId) return;
+    setAudits(prev => prev.map(audit => {
+        if (audit.id === activeAuditId) {
+            const newAnswers = { ...audit.answers, [itemId]: answer };
+            return { ...audit, answers: newAnswers };
         }
-        return (
-            <AuditChecklist
-              auditStructure={auditStructure}
-              auditData={auditData}
-              onAnswerUpdate={handleAnswerUpdate}
-              onComplete={handleFinishAudit}
-            />
-        );
-      case AppState.SUMMARY:
-        return <SummaryReport auditData={auditData} auditStructure={auditStructure} onRestart={restartAudit} />;
-      case AppState.ADMIN:
-        return <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructure} />;
-      default:
-        return <WelcomeScreen onContinue={handleWelcomeContinue} />;
+        return audit;
+    }));
+  }, [activeAuditId]);
+
+  const handleFinishAudit = () => {
+    if (!activeAuditId || !window.confirm("Opravdu chcete audit uzavřít a vygenerovat protokol?")) return;
+    setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: AuditStatus.COMPLETED } : a));
+    const newReport: Report = {
+      id: `report_${Date.now()}`,
+      auditId: activeAuditId,
+      status: ReportStatus.PENDING,
+      createdAt: new Date().toISOString(),
+    };
+    setReports(prev => [...prev, newReport]);
+    setAppState(AppState.REPORT_VIEW);
+  };
+
+ const handleToggleAdmin = () => {
+    setAppState(prev => prev === AppState.ADMIN ? AppState.CUSTOMER_DASHBOARD : AppState.ADMIN)
+  }
+
+  // --- RENDER LOGIC ---
+  const renderContent = () => {
+    if (isLoading) return <div className="text-center"><p>Načítání dat ze serveru...</p></div>;
+    if (error) return <div className="text-center text-red-600"><p>{error}</p></div>;
+
+    switch (appState) {
+      case AppState.CUSTOMER_DASHBOARD:
+        return <CustomerDashboard customers={customers} onSelectCustomer={handleSelectCustomerForAudits} onAddNewCustomer={handleAddNewCustomer} onEditCustomer={handleEditCustomer} onDeleteCustomer={handleDeleteCustomer} />;
+      case AppState.ADD_CUSTOMER:
+      case AppState.EDIT_CUSTOMER:
+        return <CustomerForm initialData={appState === AppState.EDIT_CUSTOMER ? customerToEdit || null : null} onSave={handleSaveCustomer} onBack={handleBackToDashboard} />;
+      case AppState.AUDIT_LIST: {
+        const activeCustomer = customers.find(c => c.id === activeCustomerId);
+        const customerAudits = audits.filter(a => a.customerId === activeCustomerId);
+        return <AuditList customerName={activeCustomer?.premise_name || ''} audits={customerAudits} reports={reports.filter(r => customerAudits.some(a => a.id === r.auditId))} onSelectAudit={handleSelectAudit} onPrepareNewAudit={handlePrepareNewAudit} onDeleteAudit={handleDeleteAudit} onBack={handleBackToDashboard} />;
+      }
+      case AppState.HEADER_FORM: {
+          if (!activeAudit) return <p>Chyba: Aktivní audit nebyl nalezen.</p>
+          return <HeaderForm headerData={auditStructure.header_data} initialValues={activeAudit.headerValues} onSaveAndBack={handleHeaderUpdateAndReturn} onSaveAndContinue={handleHeaderUpdateAndContinue} onBack={handleBackToAuditList} />;
+      }
+      case AppState.AUDIT_IN_PROGRESS: {
+          if (!activeAudit) {
+            return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
+          }
+          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} />;
+      }
+      case AppState.REPORT_VIEW: {
+          if (!activeAudit) return <p>Chyba: Audit pro report nebyl nalezen.</p>
+          return <ReportView report={activeReport} audit={activeAudit} onBack={handleBackToAuditList} />
+      }
+      case AppState.ADMIN:        
+        return <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructureState} />;
+      default:                    
+        return <CustomerDashboard customers={customers} onSelectCustomer={handleSelectCustomerForAudits} onAddNewCustomer={handleAddNewCustomer} onEditCustomer={handleEditCustomer} onDeleteCustomer={handleDeleteCustomer} />;
     }
   };
 
@@ -140,221 +303,5 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-interface StartScreenProps {
-  onStart: () => void;
-  onFileLoad: (data: SavedAudit) => void;
-}
-
-const StartScreen: React.FC<StartScreenProps> = ({ onStart, onFileLoad }) => {
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleLoadClick = () => {
-        fileInputRef.current?.click();
-    };
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const result = e.target?.result;
-                if (typeof result === 'string') {
-                    const parsedData = JSON.parse(result);
-                    onFileLoad(parsedData);
-                }
-            } catch (error) {
-                console.error("Error parsing audit file:", error);
-                alert("Soubor s auditem je poškozený nebo v neplatném formátu.");
-            }
-        };
-        reader.readAsText(file);
-        
-        // Reset file input value to allow loading the same file again
-        event.target.value = '';
-    };
-
-    return (
-        <div className="w-full max-w-lg bg-white p-8 rounded-2xl shadow-lg animate-fade-in text-center">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-700 mb-6">Asistent pro HACCP Audity</h2>
-            <p className="text-gray-500 mb-8">Zahajte nový audit nebo pokračujte v rozpracované práci nahráním souboru.</p>
-            <div className="space-y-4">
-                 <button
-                    onClick={onStart}
-                    className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
-                >
-                    Zahájit nový audit
-                </button>
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    style={{ display: 'none' }}
-                    accept=".json,application/json"
-                />
-                 <button
-                    onClick={handleLoadClick}
-                    className="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-transform transform hover:scale-105"
-                >
-                    Nahrát audit ze souboru
-                </button>
-            </div>
-        </div>
-    );
-};
-
-interface HeaderFormProps {
-    headerData: AuditStructure['header_data'];
-    onComplete: (headerValues: AuditHeaderValues) => void;
-}
-
-const HeaderForm: React.FC<HeaderFormProps> = ({ headerData, onComplete }) => {
-    const [values, setValues] = useState<AuditHeaderValues>(() => {
-        const initial: AuditHeaderValues = {};
-        Object.values(headerData).forEach(section => {
-            if (section.fields) {
-                section.fields.forEach(field => {
-                    initial[field.id] = field.type === 'date' ? new Date().toISOString().split('T')[0] : '';
-                });
-            }
-        });
-        return initial;
-    });
-
-    const handleChange = (id: string, value: string) => {
-        setValues(prev => ({...prev, [id]: value}));
-    }
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onComplete(values);
-    }
-    
-    const handleGenerateRandomData = () => {
-        const removeDiacritics = (str: string) => {
-            return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        };
-        
-        const firstNames = ["Jana", "Eva", "Petra", "Lucie", "Tomáš", "Pavel", "Marek", "Jakub"];
-        const lastNames = ["Nováková", "Svobodová", "Černá", "Dvořáková", "Novák", "Svoboda", "Černý", "Dvořák"];
-        const cities = [
-            { name: "Praha", zip: "110 00" },
-            { name: "Brno", zip: "602 00" },
-            { name: "Ostrava", zip: "702 00" },
-            { name: "Plzeň", zip: "301 00" },
-            { name: "Liberec", zip: "460 01" }
-        ];
-        const streets = ["Hlavní", "Nádražní", "Školní", "Zahradní", "Masarykova"];
-        const schoolNames = ["ZŠ Komenského", "ZŠ Mírová", "ZŠ Slunečná", "Gymnázium J. K. Tyla"];
-
-        const getRandomItem = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-        const getRandomDigits = (length: number): string => Math.floor(Math.random() * (10 ** length)).toString().padStart(length, '0');
-
-        const responsiblePersonFirstName = getRandomItem(firstNames);
-        const responsiblePersonLastName = getRandomItem(lastNames);
-        const statutoryFirstName = getRandomItem(firstNames);
-        const statutoryLastName = getRandomItem(lastNames);
-        const auditorFirstName = getRandomItem(firstNames);
-        const auditorLastName = getRandomItem(lastNames);
-        const repFirstName = getRandomItem(firstNames);
-        const repLastName = getRandomItem(lastNames);
-        
-        const city = getRandomItem(cities);
-        const schoolName = getRandomItem(schoolNames);
-
-        const newValues: AuditHeaderValues = {
-            // Audited Premise
-            premise_name: `Školní jídelna ${schoolName}`,
-            premise_address: `${getRandomItem(streets)} ${Math.floor(Math.random() * 100) + 1}, ${city.zip} ${city.name}`,
-            premise_responsible_person: `${responsiblePersonFirstName} ${responsiblePersonLastName}`,
-            premise_phone: `+420 777 ${getRandomDigits(3)} ${getRandomDigits(3)}`,
-            premise_email: `${removeDiacritics(responsiblePersonFirstName.toLowerCase())}.${removeDiacritics(responsiblePersonLastName.toLowerCase())}@skola.cz`,
-
-            // Operator
-            operator_name: `Město ${city.name}, příspěvková organizace`,
-            operator_address: `Radniční ${Math.floor(Math.random() * 10) + 1}, ${city.zip} ${city.name}`,
-            operator_ico: getRandomDigits(8),
-            operator_statutory_body: `ředitel/ka ${statutoryFirstName} ${statutoryLastName}`,
-            operator_phone: `+420 603 ${getRandomDigits(3)} ${getRandomDigits(3)}`,
-            operator_email: `reditel@${removeDiacritics(city.name.toLowerCase().replace(/\s/g, ''))}.cz`,
-
-            // Auditor
-            auditor_name: `${auditorFirstName} ${auditorLastName}`,
-            auditor_phone: `+420 724 ${getRandomDigits(3)} ${getRandomDigits(3)}`,
-            auditor_email: `audit@${removeDiacritics(auditorLastName.toLowerCase())}.cz`,
-            auditor_web: `www.${removeDiacritics(auditorLastName.toLowerCase())}-haccp.cz`,
-
-            // Audit Meta
-            audit_date: new Date().toISOString().split('T')[0],
-            operator_representative: `${repFirstName} ${repLastName} (vedoucí školní jídelny)`,
-        };
-        setValues(newValues);
-    };
-
-    const renderSection = (section: any) => (
-        <div key={section.title} className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-            <h3 className="text-xl font-bold text-gray-700 mb-4">{section.title}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {section.fields.map((field : any) => (
-                    <div key={field.id}>
-                        <label htmlFor={field.id} className="block text-sm font-medium text-gray-600 mb-1">{field.label}</label>
-                        <input
-                            type={field.type}
-                            id={field.id}
-                            value={values[field.id] || ''}
-                            onChange={(e) => handleChange(field.id, e.target.value)}
-                            className="w-full px-3 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition-shadow"
-                            required={field.id !== 'auditor_web'} // Make web optional
-                        />
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-
-    return (
-        <form onSubmit={handleSubmit} className="w-full max-w-4xl space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center flex-wrap gap-4">
-                <h2 className="text-3xl font-bold text-gray-800">Základní údaje auditu</h2>
-                <button
-                    type="button"
-                    onClick={handleGenerateRandomData}
-                    className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors text-sm"
-                >
-                    Vygenerovat náhodná data
-                </button>
-            </div>
-            {renderSection(headerData.audited_premise)}
-            {renderSection(headerData.operator)}
-            {renderSection(headerData.auditor)}
-            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {headerData.audit_meta.fields.map(field => (
-                    <div key={field.id}>
-                        <label htmlFor={field.id} className="block text-sm font-medium text-gray-600 mb-1">{field.label}</label>
-                        <input
-                            type={field.type}
-                            id={field.id}
-                            value={values[field.id] || ''}
-                            onChange={(e) => handleChange(field.id, e.target.value)}
-                            className="w-full px-3 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition-shadow"
-                            required
-                        />
-                    </div>
-                ))}
-              </div>
-            </div>
-            <button
-                type="submit"
-                className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
-            >
-                Zahájit kontrolu
-            </button>
-        </form>
-    );
-};
-
 
 export default App;

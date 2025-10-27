@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuditItem, AuditSection } from '../types';
-import { XIcon } from './icons/XIcon';
+import { XIcon } from './icons';
 
 interface ItemEditModalProps {
   item: AuditItem;

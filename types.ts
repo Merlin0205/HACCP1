@@ -69,13 +69,16 @@ export interface AuditData {
 }
 
 export enum AppState {
-  WELCOME = 'welcome',
-  START = 'start',
+  CUSTOMER_DASHBOARD = 'customer_dashboard',
+  ADD_CUSTOMER = 'add_customer',
+  EDIT_CUSTOMER = 'edit_customer',
+  AUDIT_LIST = 'audit_list',
   HEADER_FORM = 'header_form',
-  IN_PROGRESS = 'in-progress',
-  SUMMARY = 'summary',
+  AUDIT_IN_PROGRESS = 'audit_in_progress',
+  REPORT_VIEW = 'report_view',
   ADMIN = 'admin'
 }
+
 
 export interface SavedAudit {
   auditData: AuditData;
@@ -96,17 +99,65 @@ export interface AIResponse<T> {
   usage: AIUsage | null;
 }
 
-
-// Kept for legacy compatibility in case some components use it, but should be phased out
-export enum QuestionType {
-  TEXT = 'text',
-  DATE = 'date',
-  NUMBER = 'number',
-  TEXTAREA = 'textarea',
-  CHECKBOX = 'checkbox',
-  TIME_RANGE = 'time_range',
-  CHOICE = 'choice',
-  COMPLEX_TEXT = 'complex_text'
+export interface AIReportData {
+  introduction: string;
+  summary: {
+    area: string;
+    findings: string;
+  }[];
+  conclusion: string;
 }
-// This is a new file that will be created
-export const ROBOTO_FONT_BASE64 = `...`; // Content will be in the new file
+
+// --- NEW DATA STRUCTURES for Audit Management System ---
+
+export interface Customer {
+  id: string; // UUID
+
+  // Provozovatel (Operator) - who owns the business
+  operator_name: string;
+  operator_address: string;
+  operator_ico: string;
+  operator_statutory_body: string;
+  operator_phone: string;
+  operator_email: string;
+
+  // Auditované pracoviště (Premise) - the specific location being audited
+  premise_name: string;         // This will be the main display name
+  premise_address: string;
+  premise_responsible_person: string;
+  premise_phone: string;
+  premise_email: string;
+}
+
+export enum AuditStatus {
+  PREPARED = 'Připraven',       // Audit is created, but not started yet
+  IN_PROGRESS = 'Probíhá',   // Audit is actively being filled out
+  COMPLETED = 'Dokončen',     // Audit is finished and locked, report can be generated
+}
+
+export interface Audit {
+  id: string; // UUID
+  customerId: string;
+  status: AuditStatus;
+  createdAt: string; // ISO 8601 date string
+  completedAt?: string; // ISO 8601 date string
+  auditData: AuditData;
+  auditStructure: AuditStructure; // The structure snapshot at the time of audit creation
+}
+
+export enum ReportStatus {
+  PENDING = 'Čeká na generování',
+  GENERATING = 'Generuje se',
+  DONE = 'Hotovo',
+  ERROR = 'Chyba'
+}
+
+export interface Report {
+  id: string; // Corresponds to the audit ID
+  auditId: string;
+  status: ReportStatus;
+  generatedAt?: string; // ISO 8601 date string
+  reportData?: AIReportData;
+  error?: string;
+  usage?: AIUsage;
+}

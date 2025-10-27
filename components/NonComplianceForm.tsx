@@ -3,11 +3,10 @@ import { PhotoWithAnalysis, NonComplianceData, AIResponse } from '../types';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import ImagePreview from './ImagePreview';
 import Spinner from './Spinner';
-import { MicrophoneIcon } from './icons/MicrophoneIcon';
-import { StopIcon } from './icons/StopIcon';
+import MicrophoneIcon from './icons/MicrophoneIcon';
+import StopIcon from './icons/StopIcon';
 import { CameraIcon } from './icons/CameraIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import { analyzeImageWithAI } from '../services/geminiService';
+import TrashIcon from './icons/TrashIcon';
 
 const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -79,24 +78,39 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ data, onChange, o
     const handleAnalyzePhoto = async (photoIndex: number) => {
         const photos = [...data.photos];
         const photoToAnalyze = photos[photoIndex];
-        if (!photoToAnalyze || photoToAnalyze.isAnalyzing || !photoToAnalyze.base64) return;
+        if (!photoToAnalyze || photoToAnalyze.isAnalyzing || !photoToAnalyze.base64 || !photoToAnalyze.file) return;
     
         photos[photoIndex] = { ...photoToAnalyze, isAnalyzing: true };
         onChange('photos', photos);
     
         try {
             const mimeType = photoToAnalyze.file.type;
-            const { result: analysisResult } = await analyzeImageWithAI(photoToAnalyze.base64, mimeType);
-            
-            const currentPhotos = [...data.photos];
-            currentPhotos[photoIndex] = { ...photoToAnalyze, analysis: analysisResult, isAnalyzing: false };
+            const response = await fetch('http://localhost:9000/api/analyze-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: photoToAnalyze.base64,
+                    mimeType: mimeType
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            }
+
+            const analysisResponse: AIResponse<string> = await response.json();
+            const analysisResult = analysisResponse.result;
+
+            const currentPhotos = [...photos];
+            currentPhotos[photoIndex] = { ...photoToAnalyze, analysis: analysisResult, isAnalyzing: false, base64: photoToAnalyze.base64 };
             onChange('photos', currentPhotos);
     
         } catch (error) {
             console.error("Image analysis failed:", error);
-            const currentPhotos = [...data.photos];
+            const currentPhotos = [...photos];
             const errorMessage = error instanceof Error ? error.message : "Analýza se nezdařila.";
-            currentPhotos[photoIndex] = { ...photoToAnalyze, analysis: `<p class="text-red-600 font-bold">${errorMessage}</p>`, isAnalyzing: false };
+            currentPhotos[photoIndex] = { ...photoToAnalyze, analysis: `<p class="text-red-600 font-bold">${errorMessage}</p>`, isAnalyzing: false, base64: photoToAnalyze.base64 };
             onChange('photos', currentPhotos);
         }
     };
