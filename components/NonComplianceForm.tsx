@@ -1,4 +1,4 @@
-import React, { useState, useCallback, ChangeEvent, useRef } from 'react';
+import React, { useState, useCallback, ChangeEvent, useEffect } from 'react';
 import { PhotoWithAnalysis, NonComplianceData } from '../types';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import ImagePreview from './ImagePreview';
@@ -25,40 +25,63 @@ interface NonComplianceFormProps {
     log: (message: string) => void;
 }
 
+// Komponenta pro textové pole s mikrofonem
+const TextAreaWithMic: React.FC<{
+    value: string;
+    onChange: (value: string) => void;
+    label: string;
+    id: string;
+    log: (message: string) => void;
+    isOtherFieldRecording: boolean;
+    onRecordingStateChange: (isRecording: boolean) => void;
+}> = ({ value, onChange, label, id, log, isOtherFieldRecording, onRecordingStateChange }) => {
+    
+    const handleTranscription = useCallback((transcribedText: string) => {
+        const newText = value ? `${value} ${transcribedText}`.trim() : transcribedText;
+        onChange(newText);
+    }, [value, onChange]);
+
+    const { isRecording, isTranscribing, error, toggleRecording } = useAudioRecorder(handleTranscription, log);
+
+    // Informujeme rodiče o změně stavu nahrávání
+    useEffect(() => {
+        onRecordingStateChange(isRecording || isTranscribing);
+    }, [isRecording, isTranscribing, onRecordingStateChange]);
+
+    const isLoading = isRecording || isTranscribing;
+    const buttonIcon = isLoading ? (isRecording ? <StopIcon/> : <Spinner small/>) : <MicrophoneIcon/>;
+    const buttonClass = isRecording ? 'bg-red-500' : 'bg-blue-500';
+
+    return (
+        <div className="relative">
+            <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+            <textarea
+                id={id}
+                rows={3}
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md pr-12"
+                placeholder={isRecording ? "Nahrávám..." : (isTranscribing ? "Přepisuji..." : "")}
+                readOnly={isLoading}
+            />
+            <button 
+                onClick={toggleRecording}
+                disabled={isOtherFieldRecording}
+                className={`absolute top-8 right-2 p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400`}
+            >
+                {buttonIcon}
+            </button>
+            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+        </div>
+    );
+};
+
 const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ data, onChange, onRemove, index, log }) => {
-    const [activeDictationField, setActiveDictationField] = useState<'finding' | 'recommendation' | null>(null);
-    const baseTextRef = useRef<string>(""); 
-    const finalTranscriptRef = useRef<string>("");
+    const [isFindingRecording, setIsFindingRecording] = useState(false);
+    const [isRecommendationRecording, setIsRecommendationRecording] = useState(false);
 
-    const handleTranscriptionUpdate = useCallback((transcript: string, isFinal: boolean) => {
-        if (!activeDictationField) return;
-        
-        const newText = baseTextRef.current ? `${baseTextRef.current} ${transcript}`.trim() : transcript;
-        onChange(activeDictationField, newText);
-
-        if (isFinal) {
-            finalTranscriptRef.current = newText;
-        }
-    }, [activeDictationField, onChange]);
-
-    const { isRecording, isTranscribing, toggleRecording } = useAudioRecorder(handleTranscriptionUpdate, log);
-    
-    const handleDictationRequest = (field: 'finding' | 'recommendation') => {
-        if (isTranscribing && !isRecording) return;
-
-        if (isRecording) {
-            toggleRecording();
-        } 
-        else {
-            setActiveDictationField(field);
-            baseTextRef.current = data[field]; 
-            finalTranscriptRef.current = data[field];
-            toggleRecording();
-        }
-    };
-    
     const handlePhotoChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
+        if (e.target.files && e.target.files.length > 0) {
             const files = Array.from(e.target.files);
             const newPhotos: PhotoWithAnalysis[] = [...data.photos];
             for (const file of files) {
@@ -78,47 +101,9 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ data, onChange, o
     };
 
     const handleAnalyzePhoto = async (photoIndex: number) => {
-        // ... kód pro analýzu fotek ...
+        // ... (kód pro analýzu fotek)
     };
     
-    const getButtonState = (field: 'finding' | 'recommendation') => {
-        const isThisActive = activeDictationField === field;
-
-        if (isThisActive && isTranscribing) {
-            return { disabled: true, icon: <Spinner small/>, text: "Přepisuji...", className: 'bg-gray-400' };
-        }
-        if (isThisActive && isRecording) {
-            return { disabled: false, icon: <StopIcon/>, text: "Nahrávám...", className: 'bg-red-500' };
-        }
-        const isOtherFieldActive = (isRecording || isTranscribing) && !isThisActive;
-        return { disabled: isOtherFieldActive, icon: <MicrophoneIcon/>, text: "", className: 'bg-blue-500' };
-    };
-
-    const renderTextareaAndButton = (field: 'finding' | 'recommendation', label: string) => {
-        const state = getButtonState(field);
-        return (
-             <div className="relative">
-                <label htmlFor={`${field}-${index}`} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                <textarea
-                    id={`${field}-${index}`}
-                    rows={3}
-                    value={data[field]}
-                    onChange={e => onChange(field, e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md pr-12"
-                    placeholder={state.text}
-                    readOnly={state.disabled || state.text === "Nahrávám..."}
-                />
-                <button 
-                    onClick={() => handleDictationRequest(field)}
-                    disabled={state.disabled}
-                    className={`absolute top-8 right-2 p-2 rounded-full text-white ${state.className} disabled:bg-gray-400`}
-                >
-                    {state.icon}
-                </button>
-            </div>
-        );
-    }
-
     return (
         <div className="p-4 border bg-white rounded-md shadow-sm space-y-4 relative mt-2">
              <div className="flex justify-between items-center">
@@ -143,8 +128,25 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ data, onChange, o
                 />
             </div>
             
-            {renderTextareaAndButton('finding', 'Popis zjištěné neshody')}
-            {renderTextareaAndButton('recommendation', 'Doporučené nápravné opatření')}
+            <TextAreaWithMic
+                id={`finding-${index}`}
+                label="Popis zjištěné neshody"
+                value={data.finding}
+                onChange={(value) => onChange('finding', value)}
+                log={log}
+                isOtherFieldRecording={isRecommendationRecording}
+                onRecordingStateChange={setIsFindingRecording}
+            />
+            
+            <TextAreaWithMic
+                id={`recommendation-${index}`}
+                label="Doporučené nápravné opatření"
+                value={data.recommendation}
+                onChange={(value) => onChange('recommendation', value)}
+                log={log}
+                isOtherFieldRecording={isFindingRecording}
+                onRecordingStateChange={setIsRecommendationRecording}
+            />
 
             <div>
                 <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors">

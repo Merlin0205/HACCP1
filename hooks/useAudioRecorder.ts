@@ -1,119 +1,119 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { usePersistentState } from './usePersistentState';
+import { transcribeAudio } from '../src/geminiService';
+import { Part } from '@google/generative-ai';
 
-export const useAudioRecorder = (onTranscriptionUpdate: (text: string) => void) => {
+// --- Pomocná funkce pro převod audia na base64 ---
+const blobToGenerativePart = async (blob: Blob): Promise<Part> => {
+    const reader = new FileReader();
+    const promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = (error) => reject(error);
+    });
+    reader.readAsDataURL(blob);
+    return { inlineData: { mimeType: blob.type, data: await promise } };
+};
+
+/**
+ * Hook pro nahrávání zvuku, PŘEPRACOVANÝ pro použití externí logovací funkce.
+ */
+export const useAudioRecorder = (
+    onTranscriptionComplete: (text: string) => void,
+    // Přijímáme funkci pro logování zvenčí
+    logMessage: (message: string) => void
+) => {
     const [isRecording, setIsRecording] = useState(false);
     const [isTranscribing, setIsTranscribing] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [log, setLog] = usePersistentState<string[]>('log', []);
-    
-    const socketRef = useRef<WebSocket | null>(null);
-    const recorderRef = useRef<MediaRecorder | null>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-    
-    const logMessage = useCallback((message: string) => {
-        const now = new Date();
-        const timestamp = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-        setLog(prev => [`[${timestamp}] ${message}`, ...prev]);
-    }, [setLog]);
-    
-    
+
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+
+    const cleanup = useCallback(() => {
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+            logMessage("PROSTŘEDKY: Mikrofon uvolněn.");
+        }
+        mediaRecorderRef.current = null;
+        audioChunksRef.current = [];
+    }, [logMessage]);
+
     const stopRecording = useCallback(() => {
-        logMessage('Příkaz k zastavení nahrávání.');
-        if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-            recorderRef.current.stop();
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-        }
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            socketRef.current.close();
+        logMessage("AKCE: Požadavek na zastavení nahrávání.");
+        if (mediaRecorderRef.current?.state === 'recording') {
+            mediaRecorderRef.current.stop();
+        } else {
+            logMessage("VAROVÁNÍ: Nelze zastavit, nahrávání neběží.");
         }
     }, [logMessage]);
     
     const startRecording = useCallback(async () => {
-        logMessage('Spouštím nahrávání a navazuji WebSocket spojení...');
-        setIsRecording(true);
+        logMessage("AKCE: Požadavek na spuštění nahrávání.");
         setError(null);
-        
+        audioChunksRef.current = [];
+
         try {
-            logMessage('Žádám o přístup k mikrofonu...');
+            logMessage("INFO: Žádám o přístup k mikrofonu...");
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            streamRef.current = stream;
-            logMessage('Přístup k mikrofonu udělen.');
-            
-            socketRef.current = new WebSocket('ws://localhost:3001');
-            
-            socketRef.current.onopen = () => {
-                logMessage('WebSocket spojení navázáno.');
-                recorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                
-                recorderRef.current.ondataavailable = event => {
-                    if (event.data.size > 0 && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-                        socketRef.current.send(event.data);
-                    }
-                };
-                
-                recorderRef.current.onstop = () => {
-                    logMessage('Nahrávání fyzicky zastaveno. Ukončuji stream.');
-                    setIsRecording(false);
-                    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-                        socketRef.current.close();
-                    }
-                };
-                
-                recorderRef.current.start(500); // Posíláme data každých 500ms
-                logMessage('Nahrávání spuštěno, posílám data...');
+            mediaStreamRef.current = stream;
+            logMessage("ÚSPĚCH: Přístup k mikrofonu udělen.");
+
+            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorderRef.current = recorder;
+
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) audioChunksRef.current.push(event.data);
             };
-            
-            socketRef.current.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'final') {
-                    onTranscriptionUpdate(data.text);
+
+            recorder.onstop = async () => {
+                logMessage("STAV: Nahrávání fyzicky zastaveno.");
+                setIsRecording(false);
+
+                if (audioChunksRef.current.length === 0) {
+                    logMessage("VAROVÁNÍ: Nebyla nahrána žádná data.");
+                    cleanup();
+                    return;
+                }
+
+                setIsTranscribing(true);
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+                try {
+                    logMessage("PŘEPIS: Odesílám data na server...");
+                    const audioPart = await blobToGenerativePart(audioBlob);
+                    const transcribedText = await transcribeAudio(audioPart);
+                    logMessage(`ÚSPĚCH: Přepis dokončen: "${transcribedText}"`);
+                    onTranscriptionComplete(transcribedText);
+                } catch (e) {
+                    const errorMsg = e instanceof Error ? e.message : String(e);
+                    logMessage(`CHYBA: Přepis selhal - ${errorMsg}`);
+                    setError("Přepis selhal.");
+                } finally {
                     setIsTranscribing(false);
-                } else if (data.type === 'interim') {
-                    // Můžete zpracovat i průběžné výsledky
+                    cleanup();
                 }
             };
-            
-            socketRef.current.onclose = () => {
-                logMessage('WebSocket spojení uzavřeno.');
-                if (isRecording) {
-                    stopRecording();
-                }
-            };
-            
-            socketRef.current.onerror = (event) => {
-                logMessage(`CHYBA WebSocketu: ${JSON.stringify(event)}`);
-                setError('Chyba WebSocket spojení.');
-                if (isRecording) {
-                    stopRecording();
-                }
-            };
-            
-        } catch (err) {
-            logMessage(`CHYBA při startu nahrávání: ${err}`);
-            setError('Nepodařilo se získat přístup k mikrofonu.');
-            if (socketRef.current) socketRef.current.close();
+
+            recorder.start();
+            setIsRecording(true);
+            logMessage("STAV: Nahrávání běží.");
+
+        } catch (e) {
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            logMessage(`CHYBA: Start nahrávání selhal - ${errorMsg}`);
+            setError("Nepodařilo se spustit nahrávání.");
+            cleanup();
         }
-    }, [logMessage, onTranscriptionUpdate, isRecording, stopRecording]);
-    
+    }, [logMessage, onTranscriptionComplete, cleanup]);
+
     const toggleRecording = useCallback(() => {
-        if (isRecording) {
-            stopRecording();
-        } else {
-            startRecording();
-        }
-    }, [isRecording, startRecording, stopRecording]);
-    
-    useEffect(() => {
-        // Cleanup on unmount
-        return () => {
-            if (isRecording) {
-                stopRecording();
-            }
-        };
-    }, [isRecording, stopRecording]);
-    
-    return { isRecording, isTranscribing, error, log, toggleRecording, clearLog: () => setLog([]) };
+        if (isRecording) stopRecording();
+        else if (!isTranscribing) startRecording();
+    }, [isRecording, isTranscribing, startRecording, stopRecording]);
+
+    useEffect(() => cleanup, [cleanup]);
+
+    // Vracíme pouze stavy, logování je řízeno zvenčí
+    return { isRecording, isTranscribing, error, toggleRecording };
 };

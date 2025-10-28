@@ -214,8 +214,8 @@
           "nonComplianceData": [
             {
               "location": "",
-              "finding": "Všechno bylo ve špíně, nic se nikde neukázalo.",
-              "recommendation": "",
+              "finding": "Na dva tři.",
+              "recommendation": "Na dva tři. Špína všude kolem nás.",
               "photos": []
             }
           ]
@@ -232,15 +232,8 @@
           ]
         },
         "gmp_distribution": {
-          "compliant": false,
-          "nonComplianceData": [
-            {
-              "location": "",
-              "finding": "",
-              "recommendation": "",
-              "photos": []
-            }
-          ]
+          "compliant": true,
+          "nonComplianceData": []
         },
         "infra_sinks": {
           "compliant": false,
@@ -254,15 +247,8 @@
           ]
         },
         "gmp_cross_contamination": {
-          "compliant": false,
-          "nonComplianceData": [
-            {
-              "location": "",
-              "finding": "",
-              "recommendation": "",
-              "photos": []
-            }
-          ]
+          "compliant": true,
+          "nonComplianceData": []
         },
         "hygiene_personal_cleanliness": {
           "compliant": false,
@@ -298,6 +284,10 @@
           ]
         },
         "cleaning_maintenance": {
+          "compliant": true,
+          "nonComplianceData": []
+        },
+        "infra_equipment": {
           "compliant": false,
           "nonComplianceData": [
             {
@@ -308,13 +298,43 @@
             }
           ]
         },
-        "infra_equipment": {
+        "cleaning_laundry": {
+          "compliant": true,
+          "nonComplianceData": []
+        },
+        "haccp_documentation": {
+          "compliant": true,
+          "nonComplianceData": []
+        },
+        "storage_freezing_eq": {
           "compliant": false,
           "nonComplianceData": [
             {
               "location": "",
-              "finding": "",
-              "recommendation": "",
+              "finding": "Jedna, osm, devět, deset, patnáct, osmdesát pět, čtyřicet čtyři.",
+              "recommendation": "1 15 85 43",
+              "photos": []
+            }
+          ]
+        },
+        "storage_dry_storage": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "Nejsou označeny. Jedna osm, tuto větu přehodit. Chtělo by to něco až zítra.",
+              "recommendation": "Jedna a dvě jsou tři.",
+              "photos": []
+            }
+          ]
+        },
+        "storage_identifiability": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "Zde je přepis záznamu:\n\nPotravin na všech vstupních výroby, zpracování a distribuci.",
+              "recommendation": "Potravin na všech stupních výroby, zpracování a distribuce.",
               "photos": []
             }
           ]
