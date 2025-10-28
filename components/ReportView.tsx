@@ -123,7 +123,7 @@ const FullReportContent: React.FC<{ reportData: AIReportData, audit: Audit, audi
                     <tbody>
                         {auditStructure.audit_sections.filter(s => s.active).map(section => (
                             <React.Fragment key={section.id}>
-                                <tr className="bg-gray-50 print:break-inside-avoid-page">
+                                <tr className={`bg-gray-50 print:break-inside-avoid-page ${section.title.trim() === 'SPRÁVNÁ VÝROBNÍ PRAXE' ? 'print:break-before-page' : ''}`}>
                                     <td colSpan={2} className="border border-gray-300 p-2 font-bold">{section.title}</td>
                                 </tr>
                                 {section.items.filter(i => i.active).map(item => {
