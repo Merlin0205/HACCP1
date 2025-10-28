@@ -72,31 +72,27 @@ export enum AppState {
   ADMIN = 'admin'
 }
 
-export interface AIUsage {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  costUSD: number;
-  costCZK: number;
-  model: string;
-}
-
-export interface AIResponse<T> {
-  result: T;
-  usage: AIUsage | null;
-}
-
-export interface AIReportData {
-  introduction: string;
+export interface ReportData {
   summary: {
-    area: string;
-    findings: string;
+    title: string;
+    evaluation_text: string;
+    key_findings: string[];
+    key_recommendations: string[];
+  };
+  sections: {
+    section_title: string;
+    evaluation: string;
+    non_compliances: {
+      item_title: string;
+      location: string;
+      finding: string;
+      recommendation: string;
+    }[];
   }[];
-  conclusion: string;
 }
 
 export interface Customer {
-  id: string; // UUID
+  id: string; 
   operator_name: string;
   operator_address: string;
   operator_ico: string;
@@ -114,7 +110,7 @@ export enum AuditStatus {
   NOT_STARTED = 'Nový',
   IN_PROGRESS = 'Probíhá',
   COMPLETED = 'Dokončen',
-  REPORT_GENERATED = 'Report vygenerován'
+  LOCKED = 'Uzamčen' 
 }
 
 export interface Audit {
@@ -142,7 +138,7 @@ export interface Report {
   status: ReportStatus;
   createdAt: string;
   generatedAt?: string;
-  reportData?: AIReportData;
+  reportData?: ReportData;
   error?: string;
-  usage?: AIUsage;
+  usage?: any; 
 }

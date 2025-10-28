@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { AuditStructure, AuditData, AuditAnswer, AuditItem, NonComplianceData } from '../types';
+import React, { useState, useMemo } from 'react';
+import { AuditStructure, AuditData, AuditItem, AuditAnswer } from '../types';
 import { ChevronDownIcon, WarningIcon } from './icons';
 import { iconMap, QuestionMarkIcon } from './AuditIcons';
 import { AuditItemModal } from './AuditItemModal';
+import ConfirmationModal from './ConfirmationModal'; // Import ConfirmationModal
 
 interface AuditChecklistProps {
   auditStructure: AuditStructure;
@@ -10,13 +11,14 @@ interface AuditChecklistProps {
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
   onComplete: () => void;
   onBack: () => void;
-  log: (message: string) => void; // Přidáno logování
+  log: (message: string) => void;
 }
 
 const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete, onBack, log }) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<AuditItem | null>(null);
   const [isMobileNcSidebarOpen, setIsMobileNcSidebarOpen] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false); // State for confirmation modal
 
   const toggleSection = (sectionId: string) => {
     setOpenSections(prev => {
@@ -47,14 +49,21 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
           newSet.add(sectionId);
           return newSet;
       });
-
       setIsMobileNcSidebarOpen(false);
-      
       const section = auditStructure.audit_sections.find(s => s.id === sectionId);
       const item = section?.items.find(i => i.id === itemId);
       if(item) {
         setSelectedItem(item);
       }
+  };
+
+  const handleFinishClick = () => {
+    setIsConfirmModalOpen(true);
+  };
+
+  const handleConfirmFinish = () => {
+    onComplete();
+    setIsConfirmModalOpen(false);
   };
   
   const activeSections = auditStructure.audit_sections.filter(s => s.active && s.items.some(i => i.active));
@@ -77,7 +86,6 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
   return (
     <div className="relative w-full max-w-6xl">
         <div className="flex gap-8">
-            {/* Desktop Sidebar */}
             {nonCompliantItems.length > 0 && (
                 <div className="hidden md:block w-60 flex-shrink-0">
                     <div className="sticky top-28 bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -101,11 +109,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                                     className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-t-lg transition-colors"
                                 >
                                     <div className="flex items-center">
-                                        <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${
-                                            hasNonCompliance
-                                            ? 'bg-red-500 animate-pulse'
-                                            : 'bg-green-500'
-                                        }`}></span>
+                                        <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${hasNonCompliance ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></span>
                                         <h3 className="text-lg font-bold text-left text-gray-800">{section.title}</h3>
                                     </div>
                                     <ChevronDownIcon className={`transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -123,11 +127,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                                                         key={item.id}
                                                         title={item.title}
                                                         onClick={() => setSelectedItem(item)}
-                                                        className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 aspect-square transition-all text-gray-700 hover:shadow-md hover:-translate-y-1 ${
-                                                            isCompliant 
-                                                            ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                                                            : 'bg-red-50 border-red-300 hover:bg-red-100'
-                                                        }`}
+                                                        className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 aspect-square transition-all text-gray-700 hover:shadow-md hover:-translate-y-1 ${isCompliant ? 'bg-green-50 border-green-200 hover:bg-green-100' : 'bg-red-50 border-red-300 hover:bg-red-100'}`}
                                                     >
                                                         <IconComponent className="h-7 w-7 mb-1.5 flex-shrink-0" />
                                                         <span className="text-xs text-center leading-tight font-medium break-all">{item.title}</span>
@@ -149,7 +149,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                         Zpět na seznam auditů
                     </button>
                     <button
-                        onClick={onComplete}
+                        onClick={handleFinishClick}
                         className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
                     >
                         Dokončit a vygenerovat zprávu
@@ -168,8 +168,16 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
             />
         )}
 
+        <ConfirmationModal
+            isOpen={isConfirmModalOpen}
+            title="Dokončit audit"
+            message="Opravdu chcete audit uzavřít a vygenerovat protokol? Tuto akci nelze vrátit zpět."
+            onConfirm={handleConfirmFinish}
+            onCancel={() => setIsConfirmModalOpen(false)}
+            confirmButtonText="Dokončit a generovat"
+            cancelButtonText="Zrušit"
+        />
 
-        {/* Mobile FAB and Sidebar */}
         {nonCompliantItems.length > 0 && (
             <div className="md:hidden">
                 <button 

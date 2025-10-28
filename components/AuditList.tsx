@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Audit, AuditStatus, Report, ReportStatus } from '../types';
-import { BackIcon, PlusIcon, ReportIcon, TrashIcon } from './icons';
+import { BackIcon, PlusIcon, ReportIcon, TrashIcon, EditIcon } from './icons'; // Přidána EditIcon
 
 interface AuditListProps {
   customerName: string;
@@ -9,6 +9,7 @@ interface AuditListProps {
   onSelectAudit: (auditId: string) => void;
   onPrepareNewAudit: () => void;
   onDeleteAudit: (auditId: string) => void;
+  onUnlockAudit: (auditId: string) => void; // Nová funkce pro odemčení
   onBack: () => void;
 }
 
@@ -19,9 +20,11 @@ export const AuditList: React.FC<AuditListProps> = ({
   onSelectAudit, 
   onPrepareNewAudit, 
   onDeleteAudit, 
+  onUnlockAudit, 
   onBack 
 }) => {
   const [deletingAuditId, setDeletingAuditId] = useState<string | null>(null);
+  const [unlockingAuditId, setUnlockingAuditId] = useState<string | null>(null);
 
   const getReportStatusBadge = (auditId: string) => {
     const report = reports.find(r => r.auditId === auditId);
@@ -55,20 +58,6 @@ export const AuditList: React.FC<AuditListProps> = ({
     );
   };
   
-  const getActionText = (status: AuditStatus): string => {
-      switch (status) {
-          case AuditStatus.NOT_STARTED:
-              return "Začít";
-          case AuditStatus.IN_PROGRESS:
-              return "Pokračovat";
-          case AuditStatus.COMPLETED:
-          case AuditStatus.REPORT_GENERATED:
-              return "Zobrazit report";
-          default:
-              return "Otevřít";
-      }
-  }
-
   const handleDeleteRequest = (e: React.MouseEvent, auditId: string) => {
     e.stopPropagation();
     setDeletingAuditId(auditId);
@@ -81,8 +70,16 @@ export const AuditList: React.FC<AuditListProps> = ({
     }
   };
 
-  const handleDeleteCancel = () => {
-    setDeletingAuditId(null);
+  const handleUnlockRequest = (e: React.MouseEvent, auditId: string) => {
+    e.stopPropagation();
+    setUnlockingAuditId(auditId);
+  };
+
+  const handleUnlockConfirm = () => {
+    if (unlockingAuditId) {
+      onUnlockAudit(unlockingAuditId);
+      setUnlockingAuditId(null);
+    }
   };
 
   return (
@@ -113,13 +110,14 @@ export const AuditList: React.FC<AuditListProps> = ({
                   <p className="font-bold text-lg text-gray-800">Audit ze dne: {new Date(audit.createdAt).toLocaleDateString('cs-CZ')}</p>
                   <div className="flex items-center space-x-3 mt-2">
                       <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
-                          audit.status === AuditStatus.NOT_STARTED ? 'bg-blue-100 text-blue-800' :
+                          audit.status === AuditStatus.LOCKED ? 'bg-gray-200 text-gray-800' :
+                          audit.status === AuditStatus.COMPLETED ? 'bg-green-100 text-green-800' :
                           audit.status === AuditStatus.IN_PROGRESS ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-200 text-gray-700'
+                          'bg-blue-100 text-blue-800'
                       }`}>
                           {audit.status}
                       </span>
-                      {(audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.REPORT_GENERATED) && getReportStatusBadge(audit.id)}
+                      {audit.status === AuditStatus.LOCKED && getReportStatusBadge(audit.id)}
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
@@ -128,8 +126,17 @@ export const AuditList: React.FC<AuditListProps> = ({
                     className="bg-green-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors flex items-center"
                   >
                     <ReportIcon className="h-5 w-5 mr-2" />
-                    {getActionText(audit.status)}
+                    {audit.status === AuditStatus.LOCKED ? 'Zobrazit report' : 'Pokračovat'}
                   </button>
+                  {audit.status === AuditStatus.LOCKED && (
+                     <button 
+                        onClick={(e) => handleUnlockRequest(e, audit.id)}
+                        className="bg-yellow-500 text-white font-semibold p-3 rounded-lg hover:bg-yellow-600 transition-colors"
+                        aria-label="Upravit audit"
+                      >
+                        <EditIcon className="h-5 w-5" />
+                      </button>
+                  )}
                   <button 
                     onClick={(e) => handleDeleteRequest(e, audit.id)}
                     className="bg-red-600 text-white font-semibold p-3 rounded-lg hover:bg-red-700 transition-colors"
@@ -142,43 +149,33 @@ export const AuditList: React.FC<AuditListProps> = ({
             ))
           ) : (
             <div className="text-center py-10 bg-gray-50 rounded-lg border-2 border-dashed">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Žádné audity</h3>
-              <p className="mt-1 text-sm text-gray-500">Začněte vytvořením nového auditu pro tohoto zákazníka.</p>
-              <div className="mt-6">
-                 <button 
-                  className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 inline-flex items-center"
-                  onClick={onPrepareNewAudit}
-                  >
-                  <PlusIcon className="h-5 w-5 mr-2" />
-                  Vytvořit první audit
-                  </button>
-              </div>
+                <p>Žádné audity</p>
             </div>
           )}
         </div>
       </div>
 
       {deletingAuditId && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center z-50 animate-fade-in">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4">
-            <h3 className="text-xl font-bold text-gray-800">Potvrdit smazání</h3>
-            <p className="my-4 text-gray-600">Opravdu si přejete smazat tento audit? Tato akce je nevratná.</p>
-            <div className="flex justify-end space-x-4 mt-6">
-              <button
-                onClick={handleDeleteCancel}
-                className="bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Zrušit
-              </button>
-              <button
-                onClick={handleDeleteConfirm}
-                className="bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Smazat
-              </button>
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <h3 className="text-lg font-semibold">Potvrdit smazání</h3>
+            <p className="my-4">Opravdu chcete smazat tento audit?</p>
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => setDeletingAuditId(null)} className="px-4 py-2 rounded bg-gray-200">Zrušit</button>
+              <button onClick={handleDeleteConfirm} className="px-4 py-2 rounded bg-red-600 text-white">Smazat</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {unlockingAuditId && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <h3 className="text-lg font-semibold">Odemknout audit</h3>
+            <p className="my-4">Chcete tento audit odemknout a upravit? Změny se projeví v reportu.</p>
+            <div className="flex justify-end space-x-2">
+              <button onClick={() => setUnlockingAuditId(null)} className="px-4 py-2 rounded bg-gray-200">Zrušit</button>
+              <button onClick={handleUnlockConfirm} className="px-4 py-2 rounded bg-yellow-500 text-white">Odemknout</button>
             </div>
           </div>
         </div>

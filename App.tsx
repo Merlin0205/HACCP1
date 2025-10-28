@@ -9,7 +9,6 @@ import { CustomerForm } from './components/CustomerForm';
 import { AuditList } from './components/AuditList';
 import { HeaderForm } from './components/HeaderForm';
 import ReportView from './components/ReportView';
-import LogViewer from './components/LogViewer'; // Import LogViewer
 
 const App: React.FC = () => {
   // --- STATE MANAGEMENT ---
@@ -25,7 +24,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const isInitialLoad = useRef(true);
   const [pendingHeader, setPendingHeader] = useState<AuditHeaderValues | null>(null);
-  const [logs, setLogs] = useState<string[]>([]); // State for logs
+  const [logs, setLogs] = useState<string[]>([]);
 
   // --- LOGGING FUNCTION ---
   const log = useCallback((message: string) => {
@@ -208,6 +207,12 @@ const App: React.FC = () => {
     setAudits(prev => prev.filter(a => a.id !== auditId));
     setReports(prev => prev.filter(r => r.auditId !== auditId));
   };
+  
+  const handleUnlockAudit = (auditId: string) => {
+      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a));
+      setActiveAuditId(auditId);
+      setAppState(AppState.AUDIT_IN_PROGRESS);
+  };
 
 
   const handleSelectAudit = (auditId: string) => {
@@ -215,13 +220,10 @@ const App: React.FC = () => {
     if (!selectedAudit) return;
 
     setActiveAuditId(auditId);
-
-    if (selectedAudit.status === AuditStatus.COMPLETED || selectedAudit.status === AuditStatus.REPORT_GENERATED) {
+    
+    if (selectedAudit.status === AuditStatus.LOCKED) {
         setAppState(AppState.REPORT_VIEW);
-    } else if (selectedAudit.status === AuditStatus.IN_PROGRESS) {
-        setAppState(AppState.AUDIT_IN_PROGRESS);
-    } else if (selectedAudit.status === AuditStatus.NOT_STARTED) {
-        setAudits(prev => prev.map(a => (a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a)));
+    } else {
         setAppState(AppState.AUDIT_IN_PROGRESS);
     }
   };
@@ -274,8 +276,16 @@ const App: React.FC = () => {
   }, [activeAuditId]);
 
   const handleFinishAudit = () => {
-    if (!activeAuditId || !window.confirm("Opravdu chcete audit uzavřít a vygenerovat protokol?")) return;
-    setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: AuditStatus.COMPLETED, completedAt: new Date().toISOString() } : a));
+    if (!activeAuditId) return;
+    
+    setAudits(prev => prev.map(a => a.id === activeAuditId 
+      ? { ...a, status: AuditStatus.LOCKED, completedAt: a.completedAt || new Date().toISOString() } 
+      : a
+    ));
+    
+    // Invalidate old report if exists
+    setReports(prev => prev.filter(r => r.auditId !== activeAuditId));
+
     const newReport: Report = {
       id: `report_${Date.now()}`,
       auditId: activeAuditId,
@@ -304,7 +314,16 @@ const App: React.FC = () => {
       case AppState.AUDIT_LIST: {
         const activeCustomer = customers.find(c => c.id === activeCustomerId);
         const customerAudits = audits.filter(a => a.customerId === activeCustomerId);
-        return <AuditList customerName={activeCustomer?.premise_name || ''} audits={customerAudits} reports={reports.filter(r => customerAudits.some(a => a.id === r.auditId))} onSelectAudit={handleSelectAudit} onPrepareNewAudit={handlePrepareNewAudit} onDeleteAudit={handleDeleteAudit} onBack={handleBackToDashboard} />;
+        return <AuditList 
+                  customerName={activeCustomer?.premise_name || ''} 
+                  audits={customerAudits} 
+                  reports={reports.filter(r => customerAudits.some(a => a.id === r.auditId))} 
+                  onSelectAudit={handleSelectAudit} 
+                  onPrepareNewAudit={handlePrepareNewAudit} 
+                  onDeleteAudit={handleDeleteAudit}
+                  onUnlockAudit={handleUnlockAudit}
+                  onBack={handleBackToDashboard} 
+                />;
       }
       case AppState.HEADER_FORM: {
         const initialValues = activeAudit ? activeAudit.headerValues : pendingHeader;
@@ -334,7 +353,6 @@ const App: React.FC = () => {
       <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
         {renderContent()}
       </main>
-      {/* <LogViewer logs={logs} /> */}
     </div>
   );
 };
