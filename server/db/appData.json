@@ -215,7 +215,7 @@
             {
               "location": "",
               "finding": "Na dva tři.",
-              "recommendation": "Na dva tři. Špína všude kolem nás.",
+              "recommendation": "Na dva tři. Špína všude kolem nás. Špína všude kolem nás a neustává",
               "photos": []
             }
           ]
@@ -335,6 +335,17 @@
               "location": "",
               "finding": "Zde je přepis záznamu:\n\nPotravin na všech vstupních výroby, zpracování a distribuci.",
               "recommendation": "Potravin na všech stupních výroby, zpracování a distribuce.",
+              "photos": []
+            }
+          ]
+        },
+        "infra_water": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
               "photos": []
             }
           ]

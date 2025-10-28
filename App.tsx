@@ -334,7 +334,7 @@ const App: React.FC = () => {
       <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
         {renderContent()}
       </main>
-      <LogViewer logs={logs} />
+      {/* <LogViewer logs={logs} /> */}
     </div>
   );
 };
