@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+    body {
+        /* Vynucení tisku barev a pozadí pro konzistentní vzhled */
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Skrytí prvků, které se nemají tisknout */
+    .print\:hidden {
+        display: none !important;
+    }
+
+    /* Kontrola zalamování stránek pro čistý výstup */
+    .print\:break-before-page {
+        break-before: page;
+    }
+
+    .print\:break-inside-avoid {
+        break-inside: avoid;
+    }
+
+    .print\:break-inside-avoid-page {
+        break-inside: avoid-page;
+    }
+}

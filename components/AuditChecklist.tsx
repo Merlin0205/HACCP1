@@ -9,9 +9,10 @@ interface AuditChecklistProps {
   auditData: AuditData;
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
   onComplete: () => void;
+  onBack: () => void;
 }
 
-const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete }) => {
+const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete, onBack }) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<AuditItem | null>(null);
   const [isMobileNcSidebarOpen, setIsMobileNcSidebarOpen] = useState(false);
@@ -90,7 +91,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                 <div className="space-y-3">
                     {activeSections.map(section => {
                         const isOpen = openSections.has(section.id);
-                        const hasNonCompliance = section.items.some(item => !auditData.answers[item.id]?.compliant);
+                        const hasNonCompliance = section.items.some(item => auditData.answers[item.id]?.compliant === false);
 
                         return (
                             <div key={section.id} className="border border-gray-200 rounded-lg">
@@ -99,7 +100,11 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                                     className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-t-lg transition-colors"
                                 >
                                     <div className="flex items-center">
-                                        {hasNonCompliance && <span className="w-3 h-3 bg-red-500 rounded-full mr-3 flex-shrink-0 animate-pulse"></span>}
+                                        <span className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${
+                                            hasNonCompliance
+                                            ? 'bg-red-500 animate-pulse'
+                                            : 'bg-green-500'
+                                        }`}></span>
                                         <h3 className="text-lg font-bold text-left text-gray-800">{section.title}</h3>
                                     </div>
                                     <ChevronDownIcon className={`transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -135,7 +140,13 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                         );
                     })}
                 </div>
-                <div className="mt-8">
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                        onClick={onBack}
+                        className="w-full bg-gray-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-transform transform hover:scale-105"
+                    >
+                        Zpět na seznam auditů
+                    </button>
                     <button
                         onClick={onComplete}
                         className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"

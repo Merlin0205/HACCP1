@@ -61,13 +61,6 @@ export interface AuditHeaderValues {
   [fieldId: string]: string;
 }
 
-export interface AuditData {
-  headerValues: AuditHeaderValues;
-  answers: {
-    [itemId: string]: AuditAnswer;
-  };
-}
-
 export enum AppState {
   CUSTOMER_DASHBOARD = 'customer_dashboard',
   ADD_CUSTOMER = 'add_customer',
@@ -77,12 +70,6 @@ export enum AppState {
   AUDIT_IN_PROGRESS = 'audit_in_progress',
   REPORT_VIEW = 'report_view',
   ADMIN = 'admin'
-}
-
-
-export interface SavedAudit {
-  auditData: AuditData;
-  auditStructure: AuditStructure;
 }
 
 export interface AIUsage {
@@ -108,21 +95,15 @@ export interface AIReportData {
   conclusion: string;
 }
 
-// --- NEW DATA STRUCTURES for Audit Management System ---
-
 export interface Customer {
   id: string; // UUID
-
-  // Provozovatel (Operator) - who owns the business
   operator_name: string;
   operator_address: string;
   operator_ico: string;
   operator_statutory_body: string;
   operator_phone: string;
   operator_email: string;
-
-  // Auditované pracoviště (Premise) - the specific location being audited
-  premise_name: string;         // This will be the main display name
+  premise_name: string;
   premise_address: string;
   premise_responsible_person: string;
   premise_phone: string;
@@ -130,19 +111,22 @@ export interface Customer {
 }
 
 export enum AuditStatus {
-  PREPARED = 'Připraven',       // Audit is created, but not started yet
-  IN_PROGRESS = 'Probíhá',   // Audit is actively being filled out
-  COMPLETED = 'Dokončen',     // Audit is finished and locked, report can be generated
+  NOT_STARTED = 'Nový',
+  IN_PROGRESS = 'Probíhá',
+  COMPLETED = 'Dokončen',
+  REPORT_GENERATED = 'Report vygenerován'
 }
 
 export interface Audit {
-  id: string; // UUID
+  id: string;
   customerId: string;
   status: AuditStatus;
-  createdAt: string; // ISO 8601 date string
-  completedAt?: string; // ISO 8601 date string
-  auditData: AuditData;
-  auditStructure: AuditStructure; // The structure snapshot at the time of audit creation
+  createdAt: string;
+  completedAt?: string;
+  headerValues: AuditHeaderValues;
+  answers: {
+    [itemId: string]: AuditAnswer;
+  };
 }
 
 export enum ReportStatus {
@@ -153,10 +137,11 @@ export enum ReportStatus {
 }
 
 export interface Report {
-  id: string; // Corresponds to the audit ID
+  id: string;
   auditId: string;
   status: ReportStatus;
-  generatedAt?: string; // ISO 8601 date string
+  createdAt: string;
+  generatedAt?: string;
   reportData?: AIReportData;
   error?: string;
   usage?: AIUsage;

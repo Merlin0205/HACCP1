@@ -3,10 +3,10 @@ import { PhotoWithAnalysis, NonComplianceData, AIResponse } from '../types';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import ImagePreview from './ImagePreview';
 import Spinner from './Spinner';
-import MicrophoneIcon from './icons/MicrophoneIcon';
-import StopIcon from './icons/StopIcon';
+import { MicrophoneIcon } from './icons/MicrophoneIcon';
+import { StopIcon } from './icons/StopIcon';
 import { CameraIcon } from './icons/CameraIcon';
-import TrashIcon from './icons/TrashIcon';
+import { TrashIcon } from './icons/TrashIcon';
 
 const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {

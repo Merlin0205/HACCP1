@@ -2,13 +2,13 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { AppState, Audit, Customer, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
 import { Header } from './components/Header';
-import { AuditChecklist } from './components/AuditChecklist';
-import { AdminScreen } from './components/AdminScreen';
+import AuditChecklist from './components/AuditChecklist';
+import AdminScreen from './components/AdminScreen';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { CustomerForm } from './components/CustomerForm';
 import { AuditList } from './components/AuditList';
 import { HeaderForm } from './components/HeaderForm';
-import { ReportView } from './components/ReportView';
+import ReportView from './components/ReportView';
 
 const App: React.FC = () => {
   // --- STATE MANAGEMENT ---
@@ -23,6 +23,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const isInitialLoad = useRef(true);
+  const [pendingHeader, setPendingHeader] = useState<AuditHeaderValues | null>(null);
+
 
   // --- DATA PERSISTENCE ---
   useEffect(() => {
@@ -118,6 +120,7 @@ const App: React.FC = () => {
     setAppState(AppState.CUSTOMER_DASHBOARD);
     setActiveCustomerId(null);
     setActiveAuditId(null);
+    setPendingHeader(null);
   };
 
   const handleAddNewCustomer = () => {
@@ -141,12 +144,10 @@ const App: React.FC = () => {
   };
 
   const handleDeleteCustomer = (customerId: string) => {
-    if (window.confirm("Opravdu si přejete smazat tohoto zákazníka a všechny jeho audity?")) {
-      const auditsToDelete = audits.filter(a => a.customerId === customerId).map(a => a.id);
-      setCustomers(prev => prev.filter(c => c.id !== customerId));
-      setAudits(prev => prev.filter(a => a.customerId !== customerId));
-      setReports(prev => prev.filter(r => !auditsToDelete.includes(r.auditId)));
-    }
+    const auditsToDelete = audits.filter(a => a.customerId === customerId).map(a => a.id);
+    setCustomers(prev => prev.filter(c => c.id !== customerId));
+    setAudits(prev => prev.filter(a => a.customerId !== customerId));
+    setReports(prev => prev.filter(r => !auditsToDelete.includes(r.auditId)));
   };
 
   const handleSelectCustomerForAudits = (customerId: string) => {
@@ -157,6 +158,7 @@ const App: React.FC = () => {
   const handleBackToAuditList = () => {
     setAppState(AppState.AUDIT_LIST);
     setActiveAuditId(null);
+    setPendingHeader(null);
   };
 
   const handlePrepareNewAudit = () => {
@@ -181,20 +183,12 @@ const App: React.FC = () => {
         auditor_email: 'sylvapolzer@avlyspol.cz',
         auditor_web: 'www.avlyspol.cz',
     };
-
-    const newAudit: Audit = {
-      id: `audit_${Date.now()}`,
-      customerId: activeCustomerId,
-      status: AuditStatus.NEW,
-      createdAt: new Date().toISOString(),
-      headerValues: prefilledHeaderValues,
-      answers: {},
-    };
-
-    setAudits(prev => [...prev, newAudit]);
-    setActiveAuditId(newAudit.id);
+    
+    setActiveAuditId(null); // Explicitly set to null for a new audit
+    setPendingHeader(prefilledHeaderValues);
     setAppState(AppState.HEADER_FORM);
   };
+  
 
   const handleDeleteAudit = (auditId: string) => {
     setAudits(prev => prev.filter(a => a.id !== auditId));
@@ -205,28 +199,57 @@ const App: React.FC = () => {
   const handleSelectAudit = (auditId: string) => {
     const selectedAudit = audits.find(a => a.id === auditId);
     if (!selectedAudit) return;
+
     setActiveAuditId(auditId);
+
     if (selectedAudit.status === AuditStatus.COMPLETED || selectedAudit.status === AuditStatus.REPORT_GENERATED) {
         setAppState(AppState.REPORT_VIEW);
     } else if (selectedAudit.status === AuditStatus.IN_PROGRESS) {
         setAppState(AppState.AUDIT_IN_PROGRESS);
-    } else {
-        setAppState(AppState.HEADER_FORM);
+    } else if (selectedAudit.status === AuditStatus.NOT_STARTED) {
+        setAudits(prev => prev.map(a => (a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a)));
+        setAppState(AppState.AUDIT_IN_PROGRESS);
     }
   };
-
+  
+  const createNewAudit = (headerValues: AuditHeaderValues, status: AuditStatus): Audit => {
+    if (!activeCustomerId) throw new Error("Customer ID is missing");
+    return {
+      id: `audit_${Date.now()}`,
+      customerId: activeCustomerId,
+      status: status,
+      createdAt: new Date().toISOString(),
+      headerValues: headerValues,
+      answers: {},
+    };
+  };
+  
   const handleHeaderUpdateAndReturn = (headerValues: AuditHeaderValues) => {
-    if (!activeAuditId) return;
-    setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
+    if (activeAuditId) {
+      // Update existing audit
+      setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
+    } else {
+      // Create new audit
+      const newAudit = createNewAudit(headerValues, AuditStatus.NOT_STARTED);
+      setAudits(prev => [...prev, newAudit]);
+    }
     handleBackToAuditList();
   };
-
+  
   const handleHeaderUpdateAndContinue = (headerValues: AuditHeaderValues) => {
-    if (!activeAuditId) {
-      return;
+    let auditIdToContinue = activeAuditId;
+    if (auditIdToContinue) {
+      // Update existing audit and set status to IN_PROGRESS
+      setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
+    } else {
+      // Create new audit with IN_PROGRESS status
+      const newAudit = createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
+      setAudits(prev => [...prev, newAudit]);
+      auditIdToContinue = newAudit.id;
     }
-    setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
+    setActiveAuditId(auditIdToContinue);
     setAppState(AppState.AUDIT_IN_PROGRESS);
+    setPendingHeader(null);
   };
 
   const handleAnswerUpdate = useCallback((itemId: string, answer: any) => {
@@ -242,7 +265,7 @@ const App: React.FC = () => {
 
   const handleFinishAudit = () => {
     if (!activeAuditId || !window.confirm("Opravdu chcete audit uzavřít a vygenerovat protokol?")) return;
-    setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: AuditStatus.COMPLETED } : a));
+    setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: AuditStatus.COMPLETED, completedAt: new Date().toISOString() } : a));
     const newReport: Report = {
       id: `report_${Date.now()}`,
       auditId: activeAuditId,
@@ -274,18 +297,19 @@ const App: React.FC = () => {
         return <AuditList customerName={activeCustomer?.premise_name || ''} audits={customerAudits} reports={reports.filter(r => customerAudits.some(a => a.id === r.auditId))} onSelectAudit={handleSelectAudit} onPrepareNewAudit={handlePrepareNewAudit} onDeleteAudit={handleDeleteAudit} onBack={handleBackToDashboard} />;
       }
       case AppState.HEADER_FORM: {
-          if (!activeAudit) return <p>Chyba: Aktivní audit nebyl nalezen.</p>
-          return <HeaderForm headerData={auditStructure.header_data} initialValues={activeAudit.headerValues} onSaveAndBack={handleHeaderUpdateAndReturn} onSaveAndContinue={handleHeaderUpdateAndContinue} onBack={handleBackToAuditList} />;
+        const initialValues = activeAudit ? activeAudit.headerValues : pendingHeader;
+        if (!initialValues) return <p>Chyba: Chybí data pro záhlaví auditu.</p>
+        return <HeaderForm headerData={auditStructure.header_data} initialValues={initialValues} onSaveAndBack={handleHeaderUpdateAndReturn} onSaveAndContinue={handleHeaderUpdateAndContinue} onBack={handleBackToAuditList} />;
       }
       case AppState.AUDIT_IN_PROGRESS: {
           if (!activeAudit) {
             return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
           }
-          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} />;
+          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onBack={handleBackToAuditList} />;
       }
       case AppState.REPORT_VIEW: {
           if (!activeAudit) return <p>Chyba: Audit pro report nebyl nalezen.</p>
-          return <ReportView report={activeReport} audit={activeAudit} onBack={handleBackToAuditList} />
+          return <ReportView report={activeReport} audit={activeAudit} auditStructure={auditStructure} onBack={handleBackToAuditList} />
       }
       case AppState.ADMIN:        
         return <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructureState} />;
@@ -296,7 +320,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col">
-      <Header appState={appState} onToggleAdmin={handleToggleAdmin} />
+      <Header appState={appState} onToggleAdmin={handleToggleAdmin} className="print:hidden" />
       <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
         {renderContent()}
       </main>
