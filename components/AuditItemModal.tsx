@@ -96,7 +96,7 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                 onClick={handleAddNonCompliance} 
                 className="mt-2 flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-blue-400 transition-colors"
               >
-                <PlusIcon />
+                <PlusIcon className="h-5 w-5" />
                 <span className="ml-2 font-semibold text-sm">Přidat další neshodu</span>
               </button>
             </div>
