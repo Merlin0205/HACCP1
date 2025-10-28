@@ -10,9 +10,10 @@ interface AuditChecklistProps {
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
   onComplete: () => void;
   onBack: () => void;
+  log: (message: string) => void; // Přidáno logování
 }
 
-const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete, onBack }) => {
+const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete, onBack, log }) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<AuditItem | null>(null);
   const [isMobileNcSidebarOpen, setIsMobileNcSidebarOpen] = useState(false);
@@ -163,6 +164,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                 answer={auditData.answers[selectedItem.id]}
                 onClose={() => setSelectedItem(null)}
                 onAnswerUpdate={onAnswerUpdate}
+                log={log}
             />
         )}
 

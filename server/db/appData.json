@@ -185,6 +185,141 @@
       },
       "answers": {},
       "completedAt": "2025-10-28T09:02:42.128Z"
+    },
+    {
+      "id": "audit_1761642644654",
+      "customerId": "customer_1761602132825",
+      "status": "Probíhá",
+      "createdAt": "2025-10-28T09:10:44.654Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {
+        "storage_cooling_eq": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "Všechno bylo ve špíně, nic se nikde neukázalo.",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "hygiene_training": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "gmp_distribution": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "infra_sinks": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "gmp_cross_contamination": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "hygiene_personal_cleanliness": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "Celkové zhodnocení všech aktiv na záchodě neodpovídá praxi a je potřeba doplnit dezinfekci.",
+              "recommendation": "Někteří zaměstnanci neměli pokrývku hlavy a bylo zjištěno nedostatečné mytí rukou. Potraviny v chladícím boxu nebyly řádně označeny datem spotřeby. Zavedené postupy nejsou plně v souladu se zásadami HACCP a správné praxe, je nutné přijmout nápravné opatření ve stanovených termínech a proškolit personál.",
+              "photos": []
+            }
+          ]
+        },
+        "hygiene_behavior": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "infra_surfaces": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "cleaning_maintenance": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        },
+        "infra_equipment": {
+          "compliant": false,
+          "nonComplianceData": [
+            {
+              "location": "",
+              "finding": "",
+              "recommendation": "",
+              "photos": []
+            }
+          ]
+        }
+      }
     }
   ],
   "reports": [

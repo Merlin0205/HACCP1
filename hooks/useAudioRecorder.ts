@@ -1,122 +1,119 @@
-import { useState, useRef, useCallback } from 'react';
-import { AIResponse } from '../types';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { usePersistentState } from './usePersistentState';
 
-const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            if (reader.result) {
-                const base64data = reader.result as string;
-                resolve(base64data.split(',')[1]);
-            } else {
-                reject(new Error("Failed to read blob as base64."));
-            }
-        };
-        reader.onerror = (error) => reject(error);
-        reader.readAsDataURL(blob);
-    });
-};
-
-export const useAudioRecorder = (
-  onTranscriptionComplete: (response: AIResponse<string>) => Promise<void>,
-  log: (message: string) => void
-) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        log("Uživatel zastavil nahrávání.");
-        mediaRecorderRef.current.stop();
-    }
-    if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-    }
-    setIsRecording(false);
-  }, [log]);
-
-  const startRecording = useCallback(async () => {
-    if (isRecording) return;
+export const useAudioRecorder = (onTranscriptionUpdate: (text: string) => void) => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [log, setLog] = usePersistentState<string[]>('log', []);
     
-    setError(null);
-    try {
-      log("Žádám o přístup k mikrofonu...");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      log("Přístup k mikrofonu udělen.");
-      streamRef.current = stream;
-      const mimeType = 'audio/webm'; 
-      
-      const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = recorder;
-      audioChunksRef.current = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
+    const socketRef = useRef<WebSocket | null>(null);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    
+    const logMessage = useCallback((message: string) => {
+        const now = new Date();
+        const timestamp = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        setLog(prev => [`[${timestamp}] ${message}`, ...prev]);
+    }, [setLog]);
+    
+    
+    const stopRecording = useCallback(() => {
+        logMessage('Příkaz k zastavení nahrávání.');
+        if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+            recorderRef.current.stop();
         }
-      };
-
-      recorder.onstop = async () => {
-        log("Nahrávání dokončeno, zpracovávám...");
-        if (audioChunksRef.current.length === 0) {
-            log("Nebyly nahrány žádné audio data. Přepis se neprovádí.");
-            setIsProcessing(false);
-            return;
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
         }
-        setIsProcessing(true);
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            socketRef.current.close();
+        }
+    }, [logMessage]);
+    
+    const startRecording = useCallback(async () => {
+        logMessage('Spouštím nahrávání a navazuji WebSocket spojení...');
+        setIsRecording(true);
         setError(null);
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        audioChunksRef.current = [];
         
         try {
-            log("Převádím audio na Base64...");
-            const base64Audio = await blobToBase64(audioBlob);
-            log(`Převod dokončen (${(audioBlob.size / 1024).toFixed(1)} kB). Odesílám k přepisu...`);
-
-            const response = await fetch('http://localhost:9000/api/transcribe-audio', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audio: base64Audio, mimeType }),
-            });
-
-            if (!response.ok) {
-                 const errorData = await response.json();
-                 throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-            }
-
-            const transcriptionResponse: AIResponse<string> = await response.json();
-
-            log("Přepis úspěšně přijat.");
-            await onTranscriptionComplete(transcriptionResponse);
-        } catch (e) {
-            console.error("Transcription process failed:", e);
-            const errorMessage = e instanceof Error ? e.message : "Zpracování nahrávky se nezdařilo.";
-            log(`CHYBA PŘI PŘEPISU: ${errorMessage}`);
-            setError(errorMessage);
-        } finally {
-            setIsProcessing(false);
-            log("Zpracování dokončeno.");
+            logMessage('Žádám o přístup k mikrofonu...');
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
+            logMessage('Přístup k mikrofonu udělen.');
+            
+            socketRef.current = new WebSocket('ws://localhost:3001');
+            
+            socketRef.current.onopen = () => {
+                logMessage('WebSocket spojení navázáno.');
+                recorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                
+                recorderRef.current.ondataavailable = event => {
+                    if (event.data.size > 0 && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                        socketRef.current.send(event.data);
+                    }
+                };
+                
+                recorderRef.current.onstop = () => {
+                    logMessage('Nahrávání fyzicky zastaveno. Ukončuji stream.');
+                    setIsRecording(false);
+                    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+                        socketRef.current.close();
+                    }
+                };
+                
+                recorderRef.current.start(500); // Posíláme data každých 500ms
+                logMessage('Nahrávání spuštěno, posílám data...');
+            };
+            
+            socketRef.current.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'final') {
+                    onTranscriptionUpdate(data.text);
+                    setIsTranscribing(false);
+                } else if (data.type === 'interim') {
+                    // Můžete zpracovat i průběžné výsledky
+                }
+            };
+            
+            socketRef.current.onclose = () => {
+                logMessage('WebSocket spojení uzavřeno.');
+                if (isRecording) {
+                    stopRecording();
+                }
+            };
+            
+            socketRef.current.onerror = (event) => {
+                logMessage(`CHYBA WebSocketu: ${JSON.stringify(event)}`);
+                setError('Chyba WebSocket spojení.');
+                if (isRecording) {
+                    stopRecording();
+                }
+            };
+            
+        } catch (err) {
+            logMessage(`CHYBA při startu nahrávání: ${err}`);
+            setError('Nepodařilo se získat přístup k mikrofonu.');
+            if (socketRef.current) socketRef.current.close();
         }
-      };
-
-      recorder.start();
-      setIsRecording(true);
-      log("Nahrávání spuštěno...");
-
-    } catch (e) {
-      console.error("Failed to start recording:", e);
-      const errMessage = e instanceof Error ? e.message : "Neznámá chyba";
-      log(`Chyba při startu nahrávání: ${errMessage}`);
-      setError("Nepodařilo se získat přístup k mikrofonu.");
-      setIsRecording(false);
-    }
-  }, [isRecording, onTranscriptionComplete, log]);
-  
-  return { isRecording, isProcessing, startRecording, stopRecording, error };
+    }, [logMessage, onTranscriptionUpdate, isRecording, stopRecording]);
+    
+    const toggleRecording = useCallback(() => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    }, [isRecording, startRecording, stopRecording]);
+    
+    useEffect(() => {
+        // Cleanup on unmount
+        return () => {
+            if (isRecording) {
+                stopRecording();
+            }
+        };
+    }, [isRecording, stopRecording]);
+    
+    return { isRecording, isTranscribing, error, log, toggleRecording, clearLog: () => setLog([]) };
 };

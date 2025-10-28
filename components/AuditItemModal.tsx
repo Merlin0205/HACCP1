@@ -8,9 +8,10 @@ interface AuditItemModalProps {
   answer: AuditAnswer;
   onClose: () => void;
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
+  log: (message: string) => void; // Přidáno logování
 }
 
-export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate }) => {
+export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate, log }) => {
   if (!item) return null;
 
   const isCompliant = !answer || answer.compliant;
@@ -88,6 +89,7 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                   index={index}
                   onChange={(field, value) => handleNonComplianceChange(index, field, value)}
                   onRemove={() => handleRemoveNonCompliance(index)}
+                  log={log}
                 />
               ))}
               <button 
