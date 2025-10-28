@@ -2,7 +2,15 @@ import React from 'react';
 import {
     HomeIcon,
     PlusIcon,
-    TrashIcon
+    TrashIcon,
+    CameraIcon,
+    CheckmarkIcon,
+    ReportIcon,
+    SettingsIcon,
+    WarningIcon,
+    InfoIcon,
+    EditIcon,
+    SaveIcon
 } from './icons';
 
 export const QuestionMarkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -12,8 +20,47 @@ export const QuestionMarkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props)
 );
 
 export const iconMap: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> } = {
-    'default-1.1': HomeIcon,
-    'default-1.2': PlusIcon,
-    'default-1.3': TrashIcon,
-    // Add other icons here as needed
+    'infra_layout': SettingsIcon,
+    'infra_equipment': SettingsIcon,
+    'infra_water': CheckmarkIcon, // Placeholder, needs specific icon
+    'infra_floors': HomeIcon, // Placeholder
+    'infra_walls': HomeIcon, // Placeholder
+    'infra_ceilings': HomeIcon, // Placeholder
+    'infra_windows': HomeIcon, // Placeholder
+    'infra_doors': HomeIcon, // Placeholder
+    'infra_surfaces': CheckmarkIcon, // Placeholder
+    'infra_sinks': CheckmarkIcon, // Placeholder
+    'infra_ventilation': SettingsIcon, // Placeholder
+    'infra_lighting': InfoIcon, // Placeholder
+    'infra_sewerage': TrashIcon,
+    'infra_changing_room': HomeIcon,
+    'infra_staff_wc': TrashIcon,
+    'infra_cleaning_room': TrashIcon,
+    'storage_entry_control': CheckmarkIcon,
+    'storage_identifiability': InfoIcon,
+    'storage_storing': HomeIcon,
+    'storage_cooling_eq': SettingsIcon,
+    'storage_freezing_eq': SettingsIcon,
+    'storage_dry_storage': HomeIcon,
+    'storage_defrosting': SettingsIcon,
+    'gmp_process_monitoring': ReportIcon,
+    'gmp_cleanliness': CheckmarkIcon,
+    'gmp_technical_equipment': SettingsIcon,
+    'gmp_cross_contamination': WarningIcon,
+    'gmp_distribution': PlusIcon, // Placeholder
+    'gmp_food_export': PlusIcon, // Placeholder
+    'gmp_allergens': WarningIcon,
+    'hygiene_health_status': CheckmarkIcon,
+    'hygiene_personal_cleanliness': CheckmarkIcon,
+    'hygiene_training': ReportIcon,
+    'hygiene_behavior': CheckmarkIcon,
+    'cleaning_sanitation_plan': ReportIcon,
+    'cleaning_products': TrashIcon, // Placeholder
+    'cleaning_conditions': CheckmarkIcon,
+    'cleaning_maintenance': SettingsIcon,
+    'cleaning_discarded_items': TrashIcon,
+    'cleaning_laundry': TrashIcon, // Placeholder
+    'cleaning_waste': TrashIcon,
+    'haccp_system': ReportIcon,
+    'haccp_documentation': ReportIcon,
 };

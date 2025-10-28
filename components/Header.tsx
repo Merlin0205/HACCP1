@@ -9,7 +9,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ appState, onToggleAdmin }) => {
   return (
-    <header className="bg-white shadow-md w-full">
+    <header className="bg-white shadow-md w-full print:hidden">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <h1 className="text-xl md:text-2xl font-bold text-blue-600">
           HACCP Audit Assistant
