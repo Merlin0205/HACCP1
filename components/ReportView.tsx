@@ -1,5 +1,5 @@
-import React from 'react';
-import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData } from '../types';
+import React, { useMemo } from 'react';
+import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData, NonComplianceData } from '../types';
 import SummaryReportContent from '../src/components/SummaryReport';
 
 interface ReportViewProps {
@@ -55,6 +55,25 @@ const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: A
         if (answer && !answer.compliant) return { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' };
         return { text: 'Vyhovuje', color: 'text-green-600 font-bold' };
     };
+
+    const nonCompliantDetails = useMemo(() => {
+        const details: (NonComplianceData & { sectionTitle: string; itemTitle: string })[] = [];
+        auditStructure.audit_sections.forEach(section => {
+            section.items.forEach(item => {
+                const answer = audit.answers[item.id];
+                if (answer && !answer.compliant && answer.nonComplianceData) {
+                    answer.nonComplianceData.forEach(ncData => {
+                        details.push({
+                            sectionTitle: section.title,
+                            itemTitle: item.title,
+                            ...ncData
+                        });
+                    });
+                }
+            });
+        });
+        return details;
+    }, [audit, auditStructure]);
 
     return (
         <div className="bg-white p-8 md:p-12 font-sans text-sm print:p-0">
@@ -129,23 +148,33 @@ const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: A
                 </table>
             </div>
 
-            {reportData?.sections && reportData.sections.some(s => s.non_compliances && s.non_compliances.length > 0) && (
+            {nonCompliantDetails.length > 0 && (
                  <div className="print:break-before-page mt-8">
                      <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESCHOD</h2>
-                     {reportData.sections.map((section, sIdx) => (
-                         section.non_compliances && section.non_compliances.length > 0 && (
-                            <div key={sIdx} className="mb-4 print:break-inside-avoid">
-                                <h3 className="font-bold text-md mb-2">{section.section_title}</h3>
-                                {section.non_compliances.map((nc, ncIdx) => (
-                                    <div key={ncIdx} className="pl-4 border-l-4 border-red-500 my-2 bg-red-50 p-3 rounded-r-lg">
-                                        <p><strong>Položka:</strong> {nc.item_title}</p>
-                                        <p><strong>Místo:</strong> {nc.location}</p>
-                                        <p><strong>Zjištění:</strong> {nc.finding}</p>
-                                        <p><strong>Doporučení:</strong> {nc.recommendation}</p>
-                                    </div>
-                                ))}
+                     {nonCompliantDetails.map((nc, index) => (
+                        <div key={index} className="mb-6 pt-4 print:break-inside-avoid border-t">
+                            <h3 className="font-bold text-md">{index + 1}. {nc.itemTitle}</h3>
+                            <p className="text-xs text-gray-500 mb-2">Sekce: {nc.sectionTitle}</p>
+                            
+                            <div className="pl-4 border-l-4 border-red-500 mb-4">
+                                <p><strong>Místo:</strong> {nc.location || '-'}</p>
+                                <p><strong>Zjištění:</strong> {nc.finding || '-'}</p>
+                                <p><strong>Doporučení:</strong> {nc.recommendation || '-'}</p>
                             </div>
-                         )
+
+                            {nc.photos && nc.photos.length > 0 && (
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                    {nc.photos.map((photo, pIndex) => (
+                                        photo.base64 && <img
+                                            key={pIndex}
+                                            src={`data:image/jpeg;base64,${photo.base64}`}
+                                            alt={`Fotografie neshody ${index + 1}`}
+                                            className="w-full h-auto rounded-md shadow-md border"
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                      ))}
                  </div>
             )}
