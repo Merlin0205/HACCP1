@@ -1,5 +1,6 @@
 import React from 'react';
-import { Audit, Report, ReportStatus, AIReportData, AuditStructure, AuditAnswer } from '../types';
+import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData } from '../types';
+import SummaryReportContent from '../src/components/SummaryReport';
 
 interface ReportViewProps {
   report: Report | undefined;
@@ -8,14 +9,28 @@ interface ReportViewProps {
   onBack: () => void;
 }
 
-const formatDate = (dateString: string | undefined): string => {
-    if (!dateString || dateString.trim() === '') return 'Neuvedeno';
+const formatDate = (dateString?: string): string => {
+    if (!dateString) return 'Neuvedeno';
     const date = new Date(dateString);
-    if (isNaN(date.getTime()) || date.getFullYear() < 2000) {
-        return 'Neuvedeno';
-    }
-    return date.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric', year: 'numeric' });
+    return isNaN(date.getTime()) ? 'Neplatné datum' : date.toLocaleDateString('cs-CZ');
 };
+
+const HeaderSection: React.FC<{ title: string; fields: {id: string, label: string}[]; values: any }> = ({ title, fields, values }) => (
+    <div className="mb-4 print:break-inside-avoid">
+        <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{title}</h2>
+        <table className="w-full text-sm">
+            <tbody>
+                {fields.map(field => (
+                    <tr key={field.id}>
+                        <td className="font-bold pr-4 py-1 align-top w-40">{field.label}</td>
+                        <td className="py-1">{values[field.id] || '-'}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
+);
+
 
 const GeneratingView: React.FC = () => (
   <div className="text-center p-12">
@@ -34,20 +49,12 @@ const ErrorView: React.FC<{ error: string }> = ({ error }) => (
   </div>
 );
 
-const FullReportContent: React.FC<{ reportData: AIReportData, audit: Audit, auditStructure: AuditStructure }> = ({ reportData, audit, auditStructure }) => {
-
-    const nonCompliantItems = auditStructure.audit_sections
-        .flatMap(section => section.items.map(item => ({ item, section, answer: audit.answers[item.id] })))
-        .filter(({ answer }) => answer && !answer.compliant && answer.nonComplianceData && answer.nonComplianceData.length > 0);
-
+const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: Audit, auditStructure: AuditStructure }> = ({ reportData, audit, auditStructure }) => {
+    
     const getAnswerStatus = (answer: AuditAnswer | undefined) => {
-        if (answer && !answer.compliant) {
-            return { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' };
-        }
+        if (answer && !answer.compliant) return { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' };
         return { text: 'Vyhovuje', color: 'text-green-600 font-bold' };
     };
-    
-    const introductionText = `Audit provedený dne ${formatDate(audit.completedAt)} v provozovně ${audit.headerValues.premise_name || '[Název provozovny]'} ${nonCompliantItems.length > 0 ? 'prokázal některé neshody' : 'neprokázal žádné neshody'}.`;
 
     return (
         <div className="bg-white p-8 md:p-12 font-sans text-sm print:p-0">
@@ -56,62 +63,43 @@ const FullReportContent: React.FC<{ reportData: AIReportData, audit: Audit, audi
                 <p><strong>Datum auditu:</strong> {formatDate(audit.completedAt)}</p>
                 <p><strong>Za provozovatele:</strong> {audit.headerValues.operator_name || 'Neuvedeno'}</p>
             </div>
-
-            {auditStructure.header_data.auditor && (
-              <div className="mb-8 print:break-inside-avoid border-y-2 border-black py-2">
-                  <h2 className="text-sm font-bold uppercase text-center mb-2">ZPRACOVATEL AUDITU</h2>
-                  <div className="grid grid-cols-4 gap-x-4 text-sm">
-                      <div className="text-left"><span className="font-bold">Auditor:</span><br/>{audit.headerValues.auditor_name || '-'}</div>
-                      <div className="text-left"><span className="font-bold">Mobil:</span><br/>{audit.headerValues.auditor_phone || '-'}</div>
-                      <div className="text-left"><span className="font-bold">E-mail:</span><br/>{audit.headerValues.auditor_email || '-'}</div>
-                      <div className="text-left"><span className="font-bold">Web:</span><br/>{audit.headerValues.auditor_web || '-'}</div>
-                  </div>
-              </div>
-            )}
+            
+            <div className="mb-8 print:break-inside-avoid border-y-2 border-black py-2">
+                <h2 className="text-sm font-bold uppercase text-center mb-2">Zpracovatel Auditu</h2>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left">
+                      {auditStructure.header_data.auditor.fields.map(field => (
+                        <th key={field.id} className="font-bold p-1">{field.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {auditStructure.header_data.auditor.fields.map(field => (
+                        <td key={field.id} className="p-1">{(audit.headerValues as any)[field.id] || '-'}</td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+            </div>
 
             <div className="grid grid-cols-2 gap-x-12 mb-8">
-                <div>
-                    {auditStructure.header_data.audited_premise && (
-                        <div className="mb-4 print:break-inside-avoid">
-                            <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{auditStructure.header_data.audited_premise.title}</h2>
-                            <table className="w-full text-sm"><tbody>
-                                {auditStructure.header_data.audited_premise.fields.map(field => (
-                                    <tr key={field.id}><td className="font-bold pr-4 py-1 align-top w-36">{field.label}</td><td className="py-1">{(audit.headerValues as any)[field.id] || '-'}</td></tr>
-                                ))}
-                            </tbody></table>
-                        </div>
-                    )}
-                </div>
-                <div>
-                    {auditStructure.header_data.operator && (
-                         <div className="mb-4 print:break-inside-avoid">
-                            <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{auditStructure.header_data.operator.title}</h2>
-                            <table className="w-full text-sm"><tbody>
-                                {auditStructure.header_data.operator.fields.map(field => (
-                                    <tr key={field.id}><td className="font-bold pr-4 py-1 align-top w-36">{field.label}</td><td className="py-1">{(audit.headerValues as any)[field.id] || '-'}</td></tr>
-                                ))}
-                            </tbody></table>
-                        </div>
-                    )}
-                </div>
+                <HeaderSection 
+                    title={auditStructure.header_data.audited_premise.title}
+                    fields={auditStructure.header_data.audited_premise.fields}
+                    values={audit.headerValues}
+                />
+                <HeaderSection 
+                    title={auditStructure.header_data.operator.title}
+                    fields={auditStructure.header_data.operator.fields}
+                    values={audit.headerValues}
+                />
             </div>
+                        
+            <SummaryReportContent reportData={reportData} />
 
-            <div className="print:break-inside-avoid">
-                <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">VÝSLEDEK AUDITU</h2>
-                <div className="space-y-4 mb-8 text-base prose prose-sm max-w-none prose-ul:list-disc prose-ul:pl-5">
-                    <p>{introductionText}</p>
-                    <h4>Celkový souhrn a doporučení:</h4>
-                    {reportData.summary.length > 0 ? (
-                        <ul>
-                            {reportData.summary.map((s, i) => <li key={i}><strong>{s.area}:</strong> {s.findings}</li>)}
-                        </ul>
-                     ) : <p>Nebyly shledány žádné významné neshody.</p>}
-                    <h4>Závěr:</h4>
-                    <p>{reportData.conclusion}</p>
-                </div>
-            </div>
-
-            <div className="print:break-before-page">
+            <div className="print:break-before-page mt-8">
                 <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">SEZNAM AUDITOVANÝCH POLOŽEK</h2>
                 <table className="w-full border-collapse border border-gray-400 mb-8 text-sm">
                     <thead className="bg-gray-100">
@@ -123,7 +111,7 @@ const FullReportContent: React.FC<{ reportData: AIReportData, audit: Audit, audi
                     <tbody>
                         {auditStructure.audit_sections.filter(s => s.active).map(section => (
                             <React.Fragment key={section.id}>
-                                <tr className={`bg-gray-50 print:break-inside-avoid-page ${section.title.trim() === 'SPRÁVNÁ VÝROBNÍ PRAXE' ? 'print:break-before-page' : ''}`}>
+                                <tr className="bg-gray-50 print:break-inside-avoid-page">
                                     <td colSpan={2} className="border border-gray-300 p-2 font-bold">{section.title}</td>
                                 </tr>
                                 {section.items.filter(i => i.active).map(item => {
@@ -141,41 +129,26 @@ const FullReportContent: React.FC<{ reportData: AIReportData, audit: Audit, audi
                 </table>
             </div>
 
-            {nonCompliantItems.length > 0 && (
-                <div className="print:break-before-page">
-                    <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESCHOD</h2>
-                    {nonCompliantItems.map(({ item, section, answer }, index) => (
-                        <div key={item.id} className="mb-6 pt-4 text-base print:break-inside-avoid-page print:border-t">
-                            <h3 className="font-bold text-lg">{index + 1}. {item.title}</h3>
-                            <p className="text-xs text-gray-500 mb-2">Sekce: {section.title}</p>
-                            <div className="pl-4 border-l-2 border-red-500">
-                                <p className="italic text-gray-700 mb-2">\"{item.description}\"</p>
-                                {answer?.nonComplianceData?.map((nc, ncIndex) => (
-                                    <div key={ncIndex} className="bg-red-50 p-3 rounded-md border border-red-100">
-                                        <p><strong>Zjištění:</strong> {nc.comment}</p>
-                                        {nc.deadline && <p><strong>Termín nápravy:</strong> {formatDate(nc.deadline)}</p>}
-                                        {nc.photos && nc.photos.length > 0 && (
-                                            <div className="mt-3">
-                                                <p className="font-semibold">Fotodokumentace:</p>
-                                                <div className="flex flex-wrap gap-4 mt-2">
-                                                    {nc.photos.map((photo, pIndex) => (
-                                                        <img key={pIndex} src={photo} alt={`Fotografie neshody`} className="max-h-56 h-auto w-auto max-w-full border rounded-md"/>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+            {reportData?.sections && reportData.sections.some(s => s.non_compliances && s.non_compliances.length > 0) && (
+                 <div className="print:break-before-page mt-8">
+                     <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESCHOD</h2>
+                     {reportData.sections.map((section, sIdx) => (
+                         section.non_compliances && section.non_compliances.length > 0 && (
+                            <div key={sIdx} className="mb-4 print:break-inside-avoid">
+                                <h3 className="font-bold text-md mb-2">{section.section_title}</h3>
+                                {section.non_compliances.map((nc, ncIdx) => (
+                                    <div key={ncIdx} className="pl-4 border-l-4 border-red-500 my-2 bg-red-50 p-3 rounded-r-lg">
+                                        <p><strong>Položka:</strong> {nc.item_title}</p>
+                                        <p><strong>Místo:</strong> {nc.location}</p>
+                                        <p><strong>Zjištění:</strong> {nc.finding}</p>
+                                        <p><strong>Doporučení:</strong> {nc.recommendation}</p>
                                     </div>
                                 ))}
                             </div>
-                        </div>
-                    ))}
-                </div>
+                         )
+                     ))}
+                 </div>
             )}
-            
-            <footer className="text-center text-xs text-gray-500 mt-12 pt-4 border-t print:break-before-page">
-                <p>Tento protokol byl vygenerován automaticky na základě dat z auditu.</p>
-                <p>Vygenerováno dne: {new Date().toLocaleDateString('cs-CZ')}</p>
-            </footer>
         </div>
     );
 };
@@ -183,12 +156,9 @@ const FullReportContent: React.FC<{ reportData: AIReportData, audit: Audit, audi
 const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack }) => {
 
   const renderContent = () => {
-    if (!audit || !auditStructure) {
-        return <ErrorView error="Přiřazený audit nebo jeho struktura nebyly nalezeny." />;
-    }
-    if (!report) {
-        return <ErrorView error="Pro tento audit neexistuje žádný záznam o reportu." />;
-    }
+    if (!audit || !auditStructure) return <ErrorView error="Přiřazený audit nebo jeho struktura nebyly nalezeny." />;
+    if (!report) return <ErrorView error="Pro tento audit neexistuje žádný záznam o reportu." />;
+
     switch (report.status) {
       case ReportStatus.PENDING:
       case ReportStatus.GENERATING:
@@ -196,10 +166,7 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
       case ReportStatus.ERROR:
         return <ErrorView error={report.error || 'Neznámá chyba'} />;
       case ReportStatus.DONE:
-        if (report.reportData) {
-          return <FullReportContent reportData={report.reportData} audit={audit} auditStructure={auditStructure} />;
-        }
-        return <ErrorView error="Report je označen jako hotový, ale neobsahuje žádná data." />;
+        return <FullReportContent reportData={report.reportData} audit={audit} auditStructure={auditStructure} />;
       default:
         return <ErrorView error={`Neznámý stav reportu: ${report.status}`} />;
     }
