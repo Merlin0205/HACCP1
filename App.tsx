@@ -9,6 +9,7 @@ import { CustomerForm } from './components/CustomerForm';
 import { AuditList } from './components/AuditList';
 import { HeaderForm } from './components/HeaderForm';
 import ReportView from './components/ReportView';
+import LogViewer from './components/LogViewer'; // Import LogViewer
 
 const App: React.FC = () => {
   // --- STATE MANAGEMENT ---
@@ -24,10 +25,18 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const isInitialLoad = useRef(true);
   const [pendingHeader, setPendingHeader] = useState<AuditHeaderValues | null>(null);
+  const [logs, setLogs] = useState<string[]>([]); // State for logs
+
+  // --- LOGGING FUNCTION ---
+  const log = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs(prevLogs => [`[${timestamp}] ${message}`, ...prevLogs]);
+  }, []);
 
 
   // --- DATA PERSISTENCE ---
   useEffect(() => {
+    log('Aplikace se spouští, načítám data...');
     const loadData = async () => {
       try {
         const response = await fetch('/api/app-data');
@@ -36,16 +45,19 @@ const App: React.FC = () => {
         setCustomers(data.customers || []);
         setAudits(data.audits || []);
         setReports(data.reports || []);
+        log('Data úspěšně načtena ze serveru.');
       } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
         console.error("Failed to load data from server:", e);
         setError("Nepodařilo se načíst data ze serveru. Zkuste prosím obnovit stránku.");
+        log(`Chyba při načítání dat: ${errorMessage}`);
       } finally {
         setIsLoading(false);
         setTimeout(() => { isInitialLoad.current = false; }, 500);
       }
     };
     loadData();
-  }, []);
+  }, [log]);
 
   useEffect(() => {
     if (isInitialLoad.current || isLoading) return;
@@ -57,12 +69,14 @@ const App: React.FC = () => {
           body: JSON.stringify({ customers, audits, reports }),
         });
       } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
         console.error("Failed to save data to server:", e);
         setError("Chyba při ukládání dat na server.");
+        log(`Chyba při ukládání dat: ${errorMessage}`);
       }
     };
     saveData();
-  }, [customers, audits, reports, isLoading]);
+  }, [customers, audits, reports, isLoading, log]);
 
   // --- BACKGROUND REPORT GENERATION ---
     useEffect(() => {
@@ -184,7 +198,7 @@ const App: React.FC = () => {
         auditor_web: 'www.avlyspol.cz',
     };
     
-    setActiveAuditId(null); // Explicitly set to null for a new audit
+    setActiveAuditId(null);
     setPendingHeader(prefilledHeaderValues);
     setAppState(AppState.HEADER_FORM);
   };
@@ -226,10 +240,8 @@ const App: React.FC = () => {
   
   const handleHeaderUpdateAndReturn = (headerValues: AuditHeaderValues) => {
     if (activeAuditId) {
-      // Update existing audit
       setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
     } else {
-      // Create new audit
       const newAudit = createNewAudit(headerValues, AuditStatus.NOT_STARTED);
       setAudits(prev => [...prev, newAudit]);
     }
@@ -239,10 +251,8 @@ const App: React.FC = () => {
   const handleHeaderUpdateAndContinue = (headerValues: AuditHeaderValues) => {
     let auditIdToContinue = activeAuditId;
     if (auditIdToContinue) {
-      // Update existing audit and set status to IN_PROGRESS
       setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
     } else {
-      // Create new audit with IN_PROGRESS status
       const newAudit = createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
       setAudits(prev => [...prev, newAudit]);
       auditIdToContinue = newAudit.id;
@@ -305,7 +315,7 @@ const App: React.FC = () => {
           if (!activeAudit) {
             return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
           }
-          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onBack={handleBackToAuditList} />;
+          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onBack={handleBackToAuditList} log={log} />;
       }
       case AppState.REPORT_VIEW: {
           if (!activeAudit) return <p>Chyba: Audit pro report nebyl nalezen.</p>
@@ -324,6 +334,7 @@ const App: React.FC = () => {
       <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
         {renderContent()}
       </main>
+      <LogViewer logs={logs} />
     </div>
   );
 };
