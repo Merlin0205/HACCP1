@@ -89,78 +89,6 @@
       }
     },
     {
-      "id": "audit_1761606805125",
-      "customerId": "customer_1761602132825",
-      "status": "Dokončen",
-      "createdAt": "2025-10-27T23:13:25.125Z",
-      "headerValues": {
-        "premise_name": "QQQQQQQQQQQQQQQ",
-        "premise_address": "xcyx",
-        "premise_responsible_person": "cyx",
-        "premise_phone": "cyxc",
-        "premise_email": "sylvapolzer@avlyspol.cz",
-        "operator_name": "xcyx",
-        "operator_address": "xcyx",
-        "operator_ico": "cyxc",
-        "operator_statutory_body": "yxcy",
-        "operator_phone": "yxc",
-        "operator_email": "sylvapolzer@avlyspol.cz",
-        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
-        "auditor_phone": "603 398 774",
-        "auditor_email": "sylvapolzer@avlyspol.cz",
-        "auditor_web": "www.avlyspol.cz"
-      },
-      "answers": {
-        "infra_surfaces": {
-          "compliant": false,
-          "nonComplianceData": [
-            {
-              "location": "fsd",
-              "finding": "fsdf",
-              "recommendation": "sdfsdf",
-              "photos": []
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "audit_1761607369662",
-      "customerId": "customer_1761602132825",
-      "status": "Dokončen",
-      "createdAt": "2025-10-27T23:22:49.662Z",
-      "headerValues": {
-        "premise_name": "rrrrrrrrrrrrrrrrrrr",
-        "premise_address": "xcyx",
-        "premise_responsible_person": "cyx",
-        "premise_phone": "cyxc",
-        "premise_email": "yxcy",
-        "operator_name": "xcyx",
-        "operator_address": "xcyx",
-        "operator_ico": "cyxc",
-        "operator_statutory_body": "yxcy",
-        "operator_phone": "yxc",
-        "operator_email": "yxc",
-        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
-        "auditor_phone": "603 398 774",
-        "auditor_email": "sylvapolzer@avlyspol.cz",
-        "auditor_web": "www.avlyspol.cz"
-      },
-      "answers": {
-        "infra_staff_wc": {
-          "compliant": false,
-          "nonComplianceData": [
-            {
-              "location": "fsdf",
-              "finding": "sdfsdf",
-              "recommendation": "sdfsdfsd",
-              "photos": []
-            }
-          ]
-        }
-      }
-    },
-    {
       "id": "audit_1761609199678",
       "customerId": "customer_1761602132825",
       "status": "Dokončen",
@@ -232,51 +160,34 @@
       },
       "answers": {},
       "completedAt": "2025-10-28T00:14:10.078Z"
+    },
+    {
+      "id": "audit_1761642159017",
+      "customerId": "customer_1761602132825",
+      "status": "Dokončen",
+      "createdAt": "2025-10-28T09:02:39.017Z",
+      "headerValues": {
+        "premise_name": "QQQQQQQQQQQQQQQ",
+        "premise_address": "xcyx",
+        "premise_responsible_person": "cyx",
+        "premise_phone": "cyxc",
+        "premise_email": "yxcy",
+        "operator_name": "xcyx",
+        "operator_address": "xcyx",
+        "operator_ico": "cyxc",
+        "operator_statutory_body": "yxcy",
+        "operator_phone": "yxc",
+        "operator_email": "yxc",
+        "auditor_name": "Bc. Sylva Polzer, hygienický konzultant",
+        "auditor_phone": "603 398 774",
+        "auditor_email": "sylvapolzer@avlyspol.cz",
+        "auditor_web": "www.avlyspol.cz"
+      },
+      "answers": {},
+      "completedAt": "2025-10-28T09:02:42.128Z"
     }
   ],
   "reports": [
-    {
-      "id": "report_1761607243732",
-      "auditId": "audit_1761606805125",
-      "status": "Hotovo",
-      "createdAt": "2025-10-27T23:20:43.732Z",
-      "reportData": {
-        "introduction": "V blíže nespecifikovaném termínu proběhl interní hygienický audit v provozovně QQQQQQQQQQQQQQQ, provozované společností xcyx. Cílem auditu bylo ověření souladu provozu s platnými hygienickými předpisy a zásadami bezpečnosti potravin.",
-        "summary": [
-          {
-            "area": "Infrastruktura (budovy a zařízení)",
-            "findings": "Byly zjištěny nedostatky ve stavu povrchů, které neodpovídají hygienickým požadavkům. Tento stav může komplikovat účinné čištění a dezinfekci a představuje riziko křížové kontaminace."
-          }
-        ],
-        "conclusion": "Audit odhalil neshody, které dokládají, že zavedené postupy nejsou plně v souladu se zásadami systému HACCP a správné hygienické praxe. Pro zajištění bezpečnosti potravin a odstranění zjištěných rizik je nezbytné neprodleně přijmout a implementovat navržená nápravná opatření."
-      },
-      "usage": {
-        "model": "gemini-2.5-pro",
-        "totalTokens": 814,
-        "costCZK": 0
-      }
-    },
-    {
-      "id": "report_1761608256879",
-      "auditId": "audit_1761607369662",
-      "status": "Hotovo",
-      "createdAt": "2025-10-27T23:37:36.879Z",
-      "reportData": {
-        "introduction": "V provozovně rrrrrrrrrrrrrrrrrrr, provozované společností xcyx, proběhl interní hygienický audit (datum nebylo specifikováno). Audit byl zaměřen na ověření souladu s hygienickými předpisy a zásadami správné praxe.",
-        "summary": [
-          {
-            "area": "Infrastruktura (budovy a zařízení)",
-            "findings": "V prostoru WC pro zaměstnance (místo: fsdf) byla identifikována neshoda: sdfsdf. Pro odstranění tohoto nedostatku je doporučeno provést opatření: sdfsdfsd."
-          }
-        ],
-        "conclusion": "Na základě zjištěných neshod lze konstatovat, že zavedené postupy nejsou plně v souladu se zásadami systému HACCP a správné hygienické praxe. Pro zajištění bezpečnosti potravin je nezbytné bezodkladně přijmout a implementovat navržená nápravná opatření k odstranění identifikovaných nedostatků."
-      },
-      "usage": {
-        "model": "gemini-2.5-pro",
-        "totalTokens": 810,
-        "costCZK": 0
-      }
-    },
     {
       "id": "report_1761609204209",
       "auditId": "audit_1761609199678",
@@ -323,6 +234,16 @@
         "model": "gemini-2.5-pro",
         "totalTokens": 0,
         "costCZK": 0
+      }
+    },
+    {
+      "id": "report_1761642162127",
+      "auditId": "audit_1761642159017",
+      "status": "Hotovo",
+      "createdAt": "2025-10-28T09:02:42.127Z",
+      "reportData": {
+        "summary": [],
+        "conclusion": "Všechny sledované oblasti jsou v souladu s hygienickými standardy a zásadami správné praxe."
       }
     }
   ]
