@@ -1,0 +1,112 @@
+/**
+ * Print CSS pro Report Editor
+ * Zajišťuje že preview mode vypadá PŘESNĚ jako vytištěné PDF
+ */
+
+@media print {
+  /* Reset */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* A4 stránka - MINIMÁLNÍ MARGINY (3% z šířky A4 = ~6mm) */
+  @page {
+    size: A4;
+    margin: 10mm 6mm; /* Horní/dolní 10mm, levý/pravý 6mm (~3%) */
+  }
+
+  /* Body - BÍLÉ POZADÍ */
+  body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+  
+  /* Odstranit VŠECHNA šedá pozadí - včetně poslední stránky */
+  *:not(.border-red-500):not(.border-black) {
+    background-color: white !important;
+  }
+  
+  .bg-gray-50,
+  .bg-gray-100,
+  .bg-gray-200,
+  .bg-gray-300,
+  .bg-blue-50,
+  .bg-indigo-50 {
+    background: white !important;
+  }
+  
+  /* Výjimky - zachovat barevné bordery */
+  .border-red-500,
+  .border-black {
+    background: transparent !important;
+  }
+
+  /* Skrýt toolbar */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Zabránit rozdělení neshod napříč stránkami */
+  .print\\:break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Page breaks */
+  .print\\:break-before-page {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print\\:break-after-page {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  /* Obrázky */
+  img {
+    max-width: 100%;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Grid layout pro fotky */
+  .grid-cols-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  /* Zachovat barvy */
+  .border-red-500 {
+    border-color: #ef4444 !important;
+  }
+
+  .bg-gray-100 {
+    background-color: #f3f4f6 !important;
+  }
+
+  /* Tabulky */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  /* Odkazy - skrýt URL v tisku */
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+/* Screen mode - náhled před tiskem */
+@media screen {
+  .preview-mode {
+    max-width: 210mm;
+    margin: 0 auto;
+    background: white;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+}

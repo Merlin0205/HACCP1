@@ -1,0 +1,41 @@
+{
+  "usdToCzk": 21,
+  "lastCurrencyUpdate": "2025-10-29T21:32:05.803Z",
+  "models": {
+    "gemini-2.5-flash": {
+      "inputPrice": 0.3,
+      "outputPrice": 2.5,
+      "lastPriceUpdate": "2025-10-29"
+    },
+    "gemini-2.5-flash-image": {
+      "inputPrice": 0,
+      "outputPrice": 30,
+      "lastPriceUpdate": "2025-10-29"
+    },
+    "gemini-2.0-flash-exp": {
+      "inputPrice": 0,
+      "outputPrice": 0,
+      "note": "Free experimental model",
+      "lastPriceUpdate": "2025-10-29"
+    },
+    "gemini-2.5-pro": {
+      "inputPrice": 1.25,
+      "inputPriceHigh": 2.5,
+      "outputPrice": 10,
+      "outputPriceHigh": 15,
+      "threshold": 200000,
+      "note": "Price changes at 200K tokens",
+      "lastPriceUpdate": "2025-10-29"
+    },
+    "gemini-1.5-flash": {
+      "inputPrice": 0.075,
+      "outputPrice": 0.3,
+      "lastPriceUpdate": "2025-10-29"
+    },
+    "gemini-1.5-pro": {
+      "inputPrice": 1.25,
+      "outputPrice": 5,
+      "lastPriceUpdate": "2025-10-29"
+    }
+  }
+}

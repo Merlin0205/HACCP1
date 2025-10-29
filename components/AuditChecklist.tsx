@@ -84,7 +84,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
   );
 
   return (
-    <div className="relative w-full max-w-6xl">
+    <div className="relative w-full max-w-7xl px-2 md:px-0">
         <div className="flex gap-8">
             {nonCompliantItems.length > 0 && (
                 <div className="hidden md:block w-60 flex-shrink-0">

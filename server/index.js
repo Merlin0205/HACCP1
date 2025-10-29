@@ -5,12 +5,45 @@ const http = require('http');
 const WebSocket = require('ws');
 const fs = require('fs').promises;
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const puppeteer = require('puppeteer');
 
 // --- Konfigurace ---
 const PORT = process.env.PORT || 9002;
 const API_KEY = process.env.VITE_GEMINI_API_KEY;
-const REPORT_MODEL_NAME = process.env.VITE_MODEL_REPORT_GENERATION;
-const AUDIO_MODEL_NAME = process.env.VITE_MODEL_AUDIO_TRANSCRIPTION;
+
+// --- Datové soubory (musí být definovány PŘED použitím) ---
+const DATA_FILE = path.join(__dirname, 'db', 'appData.json');
+const AUDIT_STRUCTURE_FILE = path.join(__dirname, 'db', 'auditStructure.json');
+const AI_REPORT_CONFIG_FILE = path.join(__dirname, 'db', 'aiReportConfig.json');
+const AI_USAGE_LOG_FILE = path.join(__dirname, 'db', 'aiUsageLog.json');
+const AI_PRICING_CONFIG_FILE = path.join(__dirname, 'db', 'aiPricingConfig.json');
+const AI_MODELS_CONFIG_FILE = path.join(__dirname, 'db', 'aiModelsConfig.json');
+
+// Modely se načítají z JSON souboru místo .env
+let REPORT_MODEL_NAME = null;
+let AUDIO_MODEL_NAME = null;
+
+/**
+ * Načte modely z konfiguračního souboru
+ */
+async function loadModelsConfig() {
+    try {
+        const data = await fs.readFile(AI_MODELS_CONFIG_FILE, 'utf8');
+        const config = JSON.parse(data);
+        return config.models || {};
+    } catch (error) {
+        console.error('[MODELS] Chyba při načítání models config:', error);
+        return {};
+    }
+}
+
+// Načíst modely při startu serveru
+(async () => {
+    const models = await loadModelsConfig();
+    REPORT_MODEL_NAME = models['report-generation'];
+    AUDIO_MODEL_NAME = models['audio-transcription'];
+    console.log('[MODELS] Načtené modely:', { REPORT_MODEL_NAME, AUDIO_MODEL_NAME });
+})();
 
 // --- Aplikace & Server ---
 const app = express();
@@ -18,12 +51,22 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 // --- Middleware ---
+// CORS - povolit requesty z frontendu
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Preflight request
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, '../build')));
-
-// --- Datové soubory ---
-const DATA_FILE = path.join(__dirname, 'db', 'appData.json');
-const AUDIT_STRUCTURE_FILE = path.join(__dirname, 'db', 'auditStructure.json');
 
 // --- WebSocket a Gemini Stream ---
 wss.on('connection', (ws) => {
@@ -55,13 +98,41 @@ wss.on('connection', (ws) => {
                 
                 chat.sendMessageStream([{ inlineData: { mimeType: 'audio/webm', data: base64Chunk } }])
                 .then(async (result) => {
+                    let fullResponse = '';
                     for await (const chunk of result.stream) {
                         if (chunk.candidates?.[0]?.content?.parts?.[0]?.text) {
                            const text = chunk.candidates[0].content.parts[0].text;
+                           fullResponse += text;
                            if (ws.readyState === WebSocket.OPEN) {
                                ws.send(JSON.stringify({ type: 'partialTranscription', text }));
                            }
                         }
+                    }
+                    
+                    // Po dokončení streamu zkusit získat usage metadata a zalogovat
+                    try {
+                        const response = await result.response;
+                        const usage = response.usageMetadata || {};
+                        console.log('[SERVER - WS] Usage metadata:', JSON.stringify(usage));
+                        
+                        if (usage.totalTokenCount || usage.promptTokenCount || usage.candidatesTokenCount) {
+                            const promptTokens = usage.promptTokenCount || 0;
+                            const completionTokens = usage.candidatesTokenCount || 0;
+                            const totalTokens = usage.totalTokenCount || (promptTokens + completionTokens);
+                            
+                            console.log(`[SERVER - WS] Logování audio usage: ${totalTokens} tokenů`);
+                            await logAIUsage(
+                                AUDIO_MODEL_NAME,
+                                promptTokens,
+                                completionTokens,
+                                totalTokens,
+                                'audio-transcription'
+                            );
+                        } else {
+                            console.log('[SERVER - WS] Usage metadata není k dispozici nebo je prázdné');
+                        }
+                    } catch (error) {
+                        console.error('[SERVER - WS] Chyba při logování usage:', error);
                     }
                 })
                 .catch(error => {
@@ -93,9 +164,26 @@ app.get('/api/app-data', async (req, res) => {
 });
 app.post('/api/app-data', async (req, res) => {
   try {
-    await fs.writeFile(DATA_FILE, JSON.stringify(req.body, null, 2), 'utf8');
+    // Načíst stávající data pro zachování settings
+    let existingData = {};
+    try {
+      const data = await fs.readFile(DATA_FILE, 'utf8');
+      existingData = JSON.parse(data);
+    } catch (error) {
+      // Soubor neexistuje nebo je prázdný
+      console.log('[SERVER] appData.json neexistuje, vytváření nového');
+    }
+
+    // Sloučit: aktualizovat customers, audits, reports, ale zachovat settings
+    const updatedData = {
+      ...req.body,
+      settings: existingData.settings || req.body.settings || {}
+    };
+
+    await fs.writeFile(DATA_FILE, JSON.stringify(updatedData, null, 2), 'utf8');
     res.status(200).send('Data saved');
   } catch (error) {
+    console.error('[SERVER] Error saving app-data:', error);
     res.status(500).send('Error saving data');
   }
 });
@@ -112,39 +200,353 @@ app.post('/api/audit-structure', async (req, res) => {
     } catch (error) { res.status(500).send('Error saving audit structure'); }
 });
 
-const createReportPrompt = (auditData, auditStructure) => {
-    const formatNonCompliance = (ncData) => `
-        - Místo: ${ncData.location || 'Nespecifikováno'}
-        - Zjištění: ${ncData.finding || 'Nespecifikováno'}
-        - Opatření: ${ncData.recommendation || 'Nespecifikováno'}
+// API pro auditor settings
+app.get('/api/auditor-settings', async (req, res) => {
+    try {
+        const data = await fs.readFile(DATA_FILE, 'utf8');
+        const appData = JSON.parse(data);
+        const auditor = appData.settings?.auditor || {
+            name: 'Bc. Sylva Polzer, hygienický konzultant',
+            phone: '603 398 774',
+            email: 'sylvapolzer@avlyspol.cz',
+            web: 'www.avlyspol.cz'
+        };
+        res.json(auditor);
+    } catch (error) {
+        console.error('[SERVER] Error reading auditor settings:', error);
+        res.status(500).send('Error reading auditor settings');
+    }
+});
+
+app.post('/api/auditor-settings', async (req, res) => {
+    try {
+        const data = await fs.readFile(DATA_FILE, 'utf8');
+        const appData = JSON.parse(data);
+        
+        if (!appData.settings) {
+            appData.settings = {};
+        }
+        appData.settings.auditor = req.body;
+        
+        await fs.writeFile(DATA_FILE, JSON.stringify(appData, null, 2), 'utf8');
+        console.log('[SERVER] Auditor settings saved:', req.body);
+        res.status(200).send('Auditor settings saved');
+    } catch (error) {
+        console.error('[SERVER] Error saving auditor settings:', error);
+        res.status(500).send('Error saving auditor settings');
+    }
+});
+
+/**
+ * Načte AI pricing config ze souboru
+ */
+async function loadPricingConfig() {
+    try {
+        const data = await fs.readFile(AI_PRICING_CONFIG_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (error) {
+        console.error('[PRICING] Chyba při načítání pricing config, používám výchozí');
+        // Výchozí config
+        return {
+            usdToCzk: 25,
+            models: {
+                'gemini-2.0-flash-exp': { inputPrice: 0, outputPrice: 0 },
+                'gemini-2.5-flash': { inputPrice: 0.30, outputPrice: 2.50 }
+            }
+        };
+    }
+}
+
+/**
+ * Vypočítá náklady za AI volání
+ */
+async function calculateCost(model, promptTokens, completionTokens) {
+    const config = await loadPricingConfig();
+    const pricing = config.models[model];
+    const usdToCzk = config.usdToCzk || 25;
+    
+    if (!pricing) {
+        console.warn(`[PRICING] Neznámý model: ${model}, vrací 0`);
+        return { usd: 0, czk: 0 };
+    }
+
+    let inputCost = 0;
+    let outputCost = 0;
+
+    // Pro modely s threshold (např. gemini-2.5-pro)
+    if (pricing.threshold && pricing.inputPriceHigh) {
+        if (promptTokens <= pricing.threshold) {
+            inputCost = (promptTokens / 1000000) * pricing.inputPrice;
+        } else {
+            inputCost = (pricing.threshold / 1000000) * pricing.inputPrice +
+                        ((promptTokens - pricing.threshold) / 1000000) * pricing.inputPriceHigh;
+        }
+
+        if (completionTokens <= pricing.threshold) {
+            outputCost = (completionTokens / 1000000) * pricing.outputPrice;
+        } else {
+            outputCost = (pricing.threshold / 1000000) * pricing.outputPrice +
+                         ((completionTokens - pricing.threshold) / 1000000) * pricing.outputPriceHigh;
+        }
+    } else {
+        // Ostatní modely
+        inputCost = (promptTokens / 1000000) * (pricing.inputPrice || 0);
+        outputCost = (completionTokens / 1000000) * (pricing.outputPrice || 0);
+    }
+
+    const totalUsd = inputCost + outputCost;
+    const totalCzk = totalUsd * usdToCzk;
+
+    return {
+        usd: totalUsd,
+        czk: totalCzk
+    };
+}
+
+/**
+ * Zaloguje AI usage do souboru
+ */
+async function logAIUsage(model, promptTokens, completionTokens, totalTokens, operation) {
+    try {
+        console.log(`[AI-USAGE] Počítám náklady pro model: ${model}, tokeny: ${promptTokens}/${completionTokens}`);
+        const cost = await calculateCost(model, promptTokens, completionTokens);
+        console.log(`[AI-USAGE] Vypočtené náklady:`, cost);
+        
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            model,
+            operation,
+            promptTokens: promptTokens || 0,
+            completionTokens: completionTokens || 0,
+            totalTokens: totalTokens || 0,
+            costUsd: cost.usd || 0,
+            costCzk: cost.czk || 0
+        };
+
+        // Načíst existující log
+        let logData = { logs: [] };
+        try {
+            const data = await fs.readFile(AI_USAGE_LOG_FILE, 'utf8');
+            logData = JSON.parse(data);
+        } catch (error) {
+            // Soubor neexistuje, vytvoříme nový
+            console.log('[AI-USAGE] Log soubor neexistuje, vytváření nového');
+        }
+
+        // Přidat nový záznam
+        logData.logs.push(logEntry);
+
+        // Uložit zpět
+        await fs.writeFile(AI_USAGE_LOG_FILE, JSON.stringify(logData, null, 2), 'utf8');
+        console.log(`[AI-USAGE] Zalogováno: ${model}, ${totalTokens} tokens, $${cost.usd.toFixed(4)} (${cost.czk.toFixed(2)} Kč)`);
+    } catch (error) {
+        console.error('[AI-USAGE] Chyba při logování:', error);
+    }
+}
+
+// API pro AI report config
+app.get('/api/ai-report-config', async (req, res) => {
+    try {
+        const data = await fs.readFile(AI_REPORT_CONFIG_FILE, 'utf8');
+        const config = JSON.parse(data);
+        res.json(config);
+    } catch (error) {
+        console.error('[SERVER] Error reading AI report config:', error);
+        // Vrátit výchozí config pokud soubor neexistuje
+        res.json({
+            staticPositiveReport: {
+                evaluation_text: "Audit prokázal výborný hygienický stav provozovny.",
+                key_findings: ["Všechny oblasti vyhovují"],
+                key_recommendations: ["Udržovat standard"]
+            },
+            aiPromptTemplate: "Vygeneruj report pro tyto neshody: {{neshody}}"
+        });
+    }
+});
+
+app.post('/api/ai-report-config', async (req, res) => {
+    try {
+        await fs.writeFile(AI_REPORT_CONFIG_FILE, JSON.stringify(req.body, null, 2), 'utf8');
+        console.log('[SERVER] AI report config saved');
+        res.status(200).send('AI report config saved');
+    } catch (error) {
+        console.error('[SERVER] Error saving AI report config:', error);
+        res.status(500).send('Error saving AI report config');
+    }
+});
+
+// API pro logování AI usage z frontendu
+app.post('/api/log-ai-usage', async (req, res) => {
+    try {
+        const { model, operation, promptTokens, completionTokens, totalTokens } = req.body;
+        
+        if (!model || !operation) {
+            return res.status(400).json({ error: 'Model a operation jsou povinné' });
+        }
+        
+        await logAIUsage(
+            model,
+            promptTokens || 0,
+            completionTokens || 0,
+            totalTokens || 0,
+            operation
+        );
+        
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('[SERVER] Chyba při logování AI usage:', error);
+        res.status(500).json({ error: 'Chyba při logování' });
+    }
+});
+
+// API pro AI usage statistics
+app.get('/api/ai-usage-stats', async (req, res) => {
+    try {
+        const data = await fs.readFile(AI_USAGE_LOG_FILE, 'utf8');
+        const logData = JSON.parse(data);
+        res.json(logData);
+    } catch (error) {
+        console.error('[SERVER] Error reading AI usage log:', error);
+        res.json({ logs: [] });
+    }
+});
+
+// API pro smazání AI usage log
+app.delete('/api/ai-usage-stats', async (req, res) => {
+    try {
+        await fs.writeFile(AI_USAGE_LOG_FILE, JSON.stringify({ logs: [] }, null, 2), 'utf8');
+        console.log('[SERVER] AI usage log cleared');
+        res.status(200).send('AI usage log cleared');
+    } catch (error) {
+        console.error('[SERVER] Error clearing AI usage log:', error);
+        res.status(500).send('Error clearing AI usage log');
+    }
+});
+
+// API pro získání modelů z konfiguračního souboru
+app.get('/api/ai-models-config', async (req, res) => {
+    try {
+        const data = await fs.readFile(AI_MODELS_CONFIG_FILE, 'utf8');
+        const config = JSON.parse(data);
+        res.json(config);
+    } catch (error) {
+        console.error('[SERVER] Error reading models config:', error);
+        res.status(500).json({ error: 'Error reading models config' });
+    }
+});
+
+app.post('/api/ai-models-config', async (req, res) => {
+    try {
+        await fs.writeFile(AI_MODELS_CONFIG_FILE, JSON.stringify(req.body, null, 2), 'utf8');
+        
+        // Reload modelů do paměti
+        const models = await loadModelsConfig();
+        REPORT_MODEL_NAME = models['report-generation'];
+        AUDIO_MODEL_NAME = models['audio-transcription'];
+        console.log('[MODELS] Models config saved and reloaded:', { REPORT_MODEL_NAME, AUDIO_MODEL_NAME });
+        
+        res.status(200).send('Models config saved');
+    } catch (error) {
+        console.error('[SERVER] Error saving models config:', error);
+        res.status(500).send('Error saving models config');
+    }
+});
+
+// API pro AI pricing config
+app.get('/api/ai-pricing-config', async (req, res) => {
+    try {
+        const config = await loadPricingConfig();
+        res.json(config);
+    } catch (error) {
+        console.error('[SERVER] Error reading AI pricing config:', error);
+        res.status(500).json({ error: 'Error reading pricing config' });
+    }
+});
+
+app.post('/api/ai-pricing-config', async (req, res) => {
+    try {
+        await fs.writeFile(AI_PRICING_CONFIG_FILE, JSON.stringify(req.body, null, 2), 'utf8');
+        console.log('[SERVER] AI pricing config saved');
+        res.status(200).send('AI pricing config saved');
+    } catch (error) {
+        console.error('[SERVER] Error saving AI pricing config:', error);
+        res.status(500).send('Error saving AI pricing config');
+    }
+});
+
+/**
+ * Spočítá všechny neshody v auditu
+ */
+const collectNonCompliances = (auditData, auditStructure) => {
+    const nonCompliances = [];
+    
+    auditStructure.audit_sections
+        .filter(section => section.active)
+        .forEach(section => {
+            section.items
+                .filter(item => item.active && auditData.answers[item.id])
+                .forEach(item => {
+                    const answer = auditData.answers[item.id];
+                    console.log(`[DEBUG] Položka ${item.title}: compliant=${answer.compliant}, hasNonCompliance=${!!answer.nonComplianceData}`);
+                    if (!answer.compliant && answer.nonComplianceData && answer.nonComplianceData.length > 0) {
+                        answer.nonComplianceData.forEach(nc => {
+                            nonCompliances.push({
+                                section_title: section.title,
+                                item_title: item.title,
+                                location: nc.location || 'Nespecifikováno',
+                                finding: nc.finding || 'Nespecifikováno',
+                                recommendation: nc.recommendation || 'Nespecifikováno'
+                            });
+                        });
+                    }
+                });
+        });
+    
+    console.log(`[DEBUG] Celkem sesbíráno ${nonCompliances.length} neshod`);
+    return nonCompliances;
+};
+
+/**
+ * Statický pozitivní report (když vše vyhovuje)
+ */
+const createStaticPositiveReport = (auditData, auditStructure, config) => {
+    const sections = auditStructure.audit_sections
+        .filter(section => section.active)
+        .map(section => ({
+            section_title: section.title,
+            evaluation: `Všechny kontrolované položky v této sekci vyhovují legislativním požadavkům. Provozovna udržuje vysoký hygienický standard v oblasti ${section.title.toLowerCase()}.`,
+            non_compliances: []
+        }));
+
+    return {
+        summary: {
+            title: "Souhrnné hodnocení auditu",
+            evaluation_text: config.evaluation_text,
+            key_findings: config.key_findings,
+            key_recommendations: config.key_recommendations
+        },
+        sections
+    };
+};
+
+const createReportPrompt = (auditData, auditStructure, nonCompliances, promptTemplate) => {
+    const formatNonCompliance = (nc) => `
+        Sekce: ${nc.section_title}
+        Položka: ${nc.item_title}
+        - Místo: ${nc.location}
+        - Zjištění: ${nc.finding}
+        - Doporučení: ${nc.recommendation}
     `.trim();
 
-    const auditSummary = auditStructure.audit_sections
-        .filter(section => section.active)
-        .map(section => {
-            const sectionItems = section.items
-                .filter(item => item.active && auditData.answers[item.id])
-                .map(item => {
-                    const answer = auditData.answers[item.id];
-                    if (answer.compliant) {
-                        return `  - ${item.title}: Vyhovuje`;
-                    } else {
-                        const nonCompliances = answer.nonComplianceData.map(formatNonCompliance).join('\n    ');
-                        return `  - ${item.title}: NEVYHOVUJE\n    Neshody:\n    ${nonCompliances}`;
-                    }
-                }).join('\n');
-            return `Sekce: ${section.title}\n${sectionItems}`;
-        }).join('\n\n');
+    const nonCompliancesText = nonCompliances.map(formatNonCompliance).join('\n\n');
 
-    return `
-    Jsi expert na hygienu potravin a HACCP v České republice a řídíš se výhradně platnou legislativou ČR a příslušnými nadřazenými předpisy Evropské unie. Tvým úkolem je vygenerovat strukturovaný report z auditu ve formátu JSON.
-    Na základě následujících dat z auditu vytvoř obsah pro report.
-
-    ### Základní informace o auditu:
-    ${JSON.stringify(auditData.headerValues, null, 2)}
-
-    ### Detailní výsledky auditu po sekcích:
-    ${auditSummary}
+    // Nahradit placeholdery v template
+    let prompt = promptTemplate
+        .replace('{{neshody}}', nonCompliancesText)
+        .replace('{{pocet_neshod}}', nonCompliances.length);
+    
+    // Přidat strukturu výstupu
+    prompt += `
 
     ### Požadovaný výstupní formát:
     Vrať POUZE a jedině validní JSON objekt bez jakéhokoliv dalšího textu nebo formátování (žádné markdown \`\`\`json na začátku nebo na konci).
@@ -152,39 +554,15 @@ const createReportPrompt = (auditData, auditStructure) => {
     {
       "summary": {
         "title": "Souhrnné hodnocení auditu",
-        "evaluation_text": "Stručné slovní zhodnocení celkového stavu provozovny na základě auditu. Zmiň klíčové oblasti, které jsou v pořádku, a ty, které vyžadují pozornost. Měl by to být odstavec textu.",
-        "key_findings": [
-          "Klíčové pozitivní zjištění 1",
-          "Další pozitivní zjištění"
-        ],
-        "key_recommendations": [
-          "Nejdůležitější doporučení ke zlepšení 1",
-          "Další důležité doporučení"
-        ]
+        "evaluation_text": "...",
+        "key_findings": [...],
+        "key_recommendations": [...]
       },
-      "sections": [
-        {
-          "section_title": "Název první sekce auditu (např. Infrastruktura)",
-          "evaluation": "Slovní zhodnocení této konkrétní sekce. Popiš, co bylo kontrolováno a jaké jsou hlavní závěry pro tuto oblast. Měl by to být odstavec textu.",
-          "non_compliances": [
-            {
-              "item_title": "Název kontrolované položky (např. 'Stěny')",
-              "location": "Místo neshody (např. 'Kuchyň')",
-              "finding": "Detailní popis zjištěné neshody.",
-              "recommendation": "Navrhované nápravné opatření."
-            }
-          ]
-        }
-      ]
+      "sections": [...]
     }
-
-    ### Důležité pokyny:
-    - Pro každou sekci z auditu vytvoř odpovídající objekt v poli "sections".
-    - Pokud v sekci není žádná neshoda, pole "non_compliances" pro danou sekci musí být prázdné ([]).
-    - Texty generuj v českém jazyce, profesionálně, jasně a stručně.
-    - V "summary" poskytni celkový pohled na stav provozovny.
-    - Ujisti se, že výstup je POUZE validní JSON.
     `;
+
+    return prompt;
 };
 
 app.post('/api/generate-report', async (req, res) => {
@@ -202,9 +580,82 @@ app.post('/api/generate-report', async (req, res) => {
         }
         console.log('[SERVER-INFO] Data auditu a struktura úspěšně přijata.');
         
+        // Načíst AI report config
+        let config;
+        try {
+            const configData = await fs.readFile(AI_REPORT_CONFIG_FILE, 'utf8');
+            config = JSON.parse(configData);
+            console.log('[SERVER-INFO] AI report config úspěšně načten.');
+        } catch (error) {
+            console.error('[SERVER-CHYBA] Nelze načíst AI report config, používám výchozí:', error);
+            // Výchozí config
+            config = {
+                staticPositiveReport: {
+                    evaluation_text: "Audit prokázal výborný hygienický stav provozovny.",
+                    key_findings: ["Všechny oblasti vyhovují"],
+                    key_recommendations: ["Udržovat standard"]
+                },
+                aiPromptTemplate: "Vygeneruj report pro tyto neshody: {{neshody}}"
+            };
+        }
+        
+        // Spočítat všechny neshody
+        const nonCompliances = collectNonCompliances(auditData, auditStructure);
+        console.log(`[SERVER-INFO] Nalezeno ${nonCompliances.length} neshod v auditu.`);
+        
+        // Pokud nejsou žádné neshody, vrátit statický pozitivní report
+        if (nonCompliances.length === 0) {
+            console.log('[SERVER-INFO] Žádné neshody nenalezeny. Vracím statický pozitivní report.');
+            const staticReport = createStaticPositiveReport(auditData, auditStructure, config.staticPositiveReport);
+            console.log('[SERVER-ÚSPĚCH] Statický report úspěšně vytvořen. Žádné API volání nebylo provedeno.');
+            return res.json({ 
+                result: staticReport,
+                usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+            });
+        }
+        
+        // Pokud jsou neshody, zkontrolovat jestli používat AI
+        if (!config.useAI) {
+            console.log('[SERVER-INFO] AI je vypnuto. Používám fallback text.');
+            // Použít fallback text
+            let fallbackText = config.fallbackText || "Audit byl proveden a byly zjištěny neshody.";
+            
+            // Nahradit placeholdery
+            fallbackText = fallbackText.replace('{{pocet_neshod}}', nonCompliances.length.toString());
+            const neshodySeznam = nonCompliances.map(nc => `- ${nc.questionText}`).join('\n');
+            fallbackText = fallbackText.replace('{{neshody}}', neshodySeznam);
+            
+            const fallbackReport = {
+                evaluation_text: fallbackText,
+                key_findings: nonCompliances.slice(0, 5).map(nc => nc.questionText),
+                key_recommendations: ["Provést nápravu zjištěných neshod", "Aktualizovat dokumentaci", "Proškolit zaměstnance"]
+            };
+            
+            console.log('[SERVER-ÚSPĚCH] Fallback report vytvořen.');
+            return res.json({ 
+                result: fallbackReport,
+                usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+            });
+        }
+        
+        // Pokud jsou neshody a AI je zapnuto, vygenerovat report pomocí AI
+        console.log('[SERVER-INFO] Neshody nalezeny. Generuji report pomocí AI...');
+        
+        // Načíst vybraný model z aiModelsConfig.json
+        let selectedModel = REPORT_MODEL_NAME; // fallback
+        try {
+            const modelsConfigData = await fs.readFile(AI_MODELS_CONFIG_FILE, 'utf8');
+            const modelsConfig = JSON.parse(modelsConfigData);
+            selectedModel = modelsConfig.models['report-generation'] || REPORT_MODEL_NAME;
+        } catch (error) {
+            console.warn('[SERVER] Nelze načíst models config, používám default model');
+        }
+        
+        console.log(`[SERVER-INFO] Používám model: ${selectedModel}`);
+        
         const genAI = new GoogleGenerativeAI(API_KEY);
-        const model = genAI.getGenerativeModel({ model: REPORT_MODEL_NAME });
-        const prompt = createReportPrompt(auditData, auditStructure);
+        const model = genAI.getGenerativeModel({ model: selectedModel });
+        const prompt = createReportPrompt(auditData, auditStructure, nonCompliances, config.aiPromptTemplate);
 
         // Zde logujeme pouze část promptu, aby log nebyl příliš dlouhý
         console.log('[SERVER-INFO] Prompt pro AI byl vytvořen. Začátek promptu:');
@@ -242,8 +693,29 @@ app.post('/api/generate-report', async (req, res) => {
         
         const parsedResult = JSON.parse(jsonText);
         
+        // Získat usage metriky z AI odpovědi
+        const usage = result.response.usageMetadata || {};
+        
         console.log('[SERVER-ÚSPĚCH] Report úspěšně vygenerován a zpracován. Odesílám klientovi.');
-        res.json({ result: parsedResult });
+        console.log(`[SERVER-INFO] Usage: ${usage.promptTokenCount || 0} prompt + ${usage.candidatesTokenCount || 0} completion = ${usage.totalTokenCount || 0} total tokens`);
+        
+        // Zalogovat AI usage pro tracking nákladů
+        await logAIUsage(
+            selectedModel,
+            usage.promptTokenCount || 0,
+            usage.candidatesTokenCount || 0,
+            usage.totalTokenCount || 0,
+            'report-generation'
+        );
+        
+        res.json({ 
+            result: parsedResult,
+            usage: {
+                promptTokens: usage.promptTokenCount || 0,
+                completionTokens: usage.candidatesTokenCount || 0,
+                totalTokens: usage.totalTokenCount || 0
+            }
+        });
 
     } catch (error) {
         console.error('\n--- [SERVER-KRITICKÁ CHYBA] Došlo k chybě během generování reportu ---');
@@ -265,6 +737,63 @@ app.post('/api/generate-report', async (req, res) => {
     }
 });
 
+// --- PDF Generování pomocí Puppeteer (Best Practice) ---
+app.post('/api/generate-pdf', async (req, res) => {
+    console.log('\n[SERVER-PDF] Zahájení generování PDF pomocí Puppeteer');
+    
+    try {
+        const { html, options = {} } = req.body;
+        
+        if (!html) {
+            return res.status(400).json({ error: 'HTML content je povinný' });
+        }
+
+        // Spustit headless Chrome
+        console.log('[SERVER-PDF] Spouštění Puppeteer...');
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+
+        const page = await browser.newPage();
+        
+        // Nastavit content
+        console.log('[SERVER-PDF] Načítání HTML obsahu...');
+        await page.setContent(html, {
+            waitUntil: 'networkidle0' // Počkat na všechny zdroje
+        });
+
+        // Generovat PDF s A4 rozměry
+        console.log('[SERVER-PDF] Generování PDF...');
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            margin: {
+                top: '10mm',
+                right: '6mm',
+                bottom: '10mm',
+                left: '6mm'
+            },
+            printBackground: true, // Zachovat barvy a pozadí
+            preferCSSPageSize: false, // Použít A4 formát
+            ...options // Povolit custom options z requestu
+        });
+
+        await browser.close();
+        console.log('[SERVER-PDF] PDF úspěšně vygenerováno');
+
+        // Vrátit PDF jako buffer
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="report.pdf"');
+        res.send(pdfBuffer);
+
+    } catch (error) {
+        console.error('[SERVER-PDF-CHYBA]', error);
+        res.status(500).json({ 
+            error: 'Došlo k chybě při generování PDF',
+            details: error.message 
+        });
+    }
+});
 
 // --- Fallback & Spuštění Serveru ---
 app.get('*', (req, res) => {

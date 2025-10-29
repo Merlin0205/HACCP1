@@ -69,6 +69,11 @@ export enum AppState {
   HEADER_FORM = 'header_form',
   AUDIT_IN_PROGRESS = 'audit_in_progress',
   REPORT_VIEW = 'report_view',
+  SETTINGS = 'settings',
+  AUDITOR_SETTINGS = 'auditor_settings',
+  AI_REPORT_SETTINGS = 'ai_report_settings',
+  AI_USAGE_STATS = 'ai_usage_stats',
+  AI_PRICING_CONFIG = 'ai_pricing_config',
   ADMIN = 'admin'
 }
 
@@ -132,6 +137,13 @@ export enum ReportStatus {
   ERROR = 'Chyba'
 }
 
+export interface AuditorInfo {
+  name: string;
+  phone: string;
+  email: string;
+  web: string;
+}
+
 export interface Report {
   id: string;
   auditId: string;
@@ -140,5 +152,6 @@ export interface Report {
   generatedAt?: string;
   reportData?: ReportData;
   error?: string;
-  usage?: any; 
+  usage?: any;
+  auditorSnapshot?: AuditorInfo; // Údaje auditora v době generování reportu
 }
