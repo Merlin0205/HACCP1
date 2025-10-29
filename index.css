@@ -2,11 +2,59 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Animace */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+.animate-fade-in {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out;
+}
+
 @media print {
+    /* Nastavení stránky A4 s horními marginy */
+    @page {
+        size: A4;
+        margin: 15mm 10mm 15mm 10mm; /* horní pravý dolní levý */
+    }
+
     body {
         /* Vynucení tisku barev a pozadí pro konzistentní vzhled */
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+    
+    /* První element na stránce by měl mít padding nahoře */
+    body > * {
+        margin-top: 0 !important;
     }
 
     /* Skrytí prvků, které se nemají tisknout */
@@ -17,13 +65,23 @@
     /* Kontrola zalamování stránek pro čistý výstup */
     .print\:break-before-page {
         break-before: page;
+        page-break-before: always;
+        padding-top: 15mm; /* Horní okraj na nové stránce */
     }
 
     .print\:break-inside-avoid {
         break-inside: avoid;
+        page-break-inside: avoid;
     }
 
     .print\:break-inside-avoid-page {
         break-inside: avoid-page;
+        page-break-inside: avoid;
+    }
+    
+    /* Zajistit že sekce v tabulce se nedělí mezi stránky */
+    tbody tr {
+        page-break-inside: avoid;
+        break-inside: avoid;
     }
 }

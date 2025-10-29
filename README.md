@@ -1,42 +1,87 @@
-# HACCP Asistent - Interní Hygienický Audit
+# AuditFlow - HACCP Asistent pro Interní Hygienické Audity
 
-Tato aplikace slouží jako digitální asistent pro provádění a vyhodnocování interních hygienických auditů v potravinářských podnicích v souladu se systémem HACCP.
+> **⚡ Refaktorovaná verze 1.0** - Vylepšený error handling, API layer, toast notifikace
 
-## Spuštění Aplikace
+Digitální asistent pro provádění a vyhodnocování interních hygienických auditů v potravinářských podnicích v souladu se systémem HACCP.
 
-Pro plné fungování aplikace je potřeba spustit backendový server i frontendovou část.
+## 🚀 Quick Start
 
-**1. Spuštění backend serveru**
+### 1. Instalace
+```bash
+npm install
+cd server && npm install && cd ..
+```
 
-Otevřete terminál a spusťte následující příkaz:
+### 2. Konfigurace
+Vytvořte soubor `.env` v kořenovém adresáři:
+```env
+PORT=9002
+VITE_GEMINI_API_KEY=váš_api_klíč
+VITE_MODEL_REPORT_GENERATION=gemini-1.5-flash
+VITE_MODEL_AUDIO_TRANSCRIPTION=gemini-1.5-flash
+```
 
-`node server/index.js`
+### 3. Spuštění
+```bash
+# Terminál 1 - Backend
+node server/index.js
 
-**2. Spuštění frontend aplikace**
+# Terminál 2 - Frontend
+npm run dev
+```
 
-Otevřete druhý terminál (nechte první běžet!) a spusťte:
-
-`npm run dev`
+Aplikace běží na **http://localhost:3000**
 
 ---
 
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+## 📚 Dokumentace
 
-# Run and deploy your AI Studio app
+- **[README_REFAKTORIZACE.md](README_REFAKTORIZACE.md)** - Quick start po refaktorizaci
+- **[POPIS_APLIKACE.md](POPIS_APLIKACE.md)** - Kompletní technická dokumentace
+- **[REFAKTORIZACE.md](REFAKTORIZACE.md)** - Changelog a detaily změn
 
-This contains everything you need to run your app locally.
+## ✨ Hlavní Funkce
 
-View your app in AI Studio: https://ai.studio/apps/drive/1mnjvX_YyAJVE4mv02G7O13ztfGJhrVRv
+- ✅ Správa zákazníků a auditů
+- ✅ Hlasový přepis pomocí AI (Gemini)
+- ✅ Fotodokumentace neshod
+- ✅ Automatické generování profesionálních protokolů
+- ✅ Export do PDF
+- ✅ Toast notifikace a error handling
+- ✅ Automatický retry při chybách
 
-## Run Locally
+## 🛠️ Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend:** React 19.2 + TypeScript 5.8 + Vite 6.2
+- **Backend:** Node.js + Express + WebSocket
+- **AI:** Google Gemini API
+- **Styling:** TailwindCSS (inline)
 
+---
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🔧 Pro Vývojáře
+
+### Nová Struktura
+```
+api/          - API layer s retry logikou
+utils/        - Error handling, toast systém
+hooks/        - Custom hooks (useAppData, useReportGenerator)
+components/   - React komponenty + ErrorBoundary + ToastContainer
+```
+
+### API Použití
+```typescript
+import { api } from './api';
+const data = await api.get('/api/endpoint');
+```
+
+### Toast Notifikace
+```typescript
+import { toast } from './utils/toast';
+toast.success('Hotovo!');
+toast.error('Chyba!');
+```
+
+---
+
+**Verze:** 1.0 (Refaktorováno 28.10.2025)

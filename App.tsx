@@ -1,28 +1,53 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+/**
+ * App.tsx - Hlavní komponenta aplikace (REFAKTOROVÁNO)
+ * 
+ * Změny v refaktorizaci:
+ * - Používá nový API layer s error handlingem
+ * - Custom hooks pro data management
+ * - Error Boundary pro zachytávání chyb
+ * - Toast notifikace
+ * - Lepší separace concerns
+ */
+
+import React, { useState, useCallback, useMemo } from 'react';
 import { AppState, Audit, Customer, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
 import { Header } from './components/Header';
 import AuditChecklist from './components/AuditChecklist';
 import AdminScreen from './components/AdminScreen';
+import SettingsScreen from './components/SettingsScreen';
+import AuditorSettingsScreen, { getAuditorInfo } from './components/AuditorSettingsScreen';
+import AIReportSettingsScreen from './components/AIReportSettingsScreen';
+import AIUsageStatsScreen from './components/AIUsageStatsScreen';
+import AIPricingConfigScreen from './components/AIPricingConfigScreen';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { CustomerForm } from './components/CustomerForm';
 import { AuditList } from './components/AuditList';
 import { HeaderForm } from './components/HeaderForm';
 import ReportView from './components/ReportView';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastContainer } from './components/ToastContainer';
+import { useAppData } from './hooks/useAppData';
+import { useReportGenerator } from './hooks/useReportGenerator';
 
 const App: React.FC = () => {
+  // --- DATA MANAGEMENT (using custom hooks) ---
+  const {
+    customers,
+    audits,
+    reports,
+    setCustomers,
+    setAudits,
+    setReports,
+    isLoading,
+    error,
+  } = useAppData();
+
   // --- STATE MANAGEMENT ---
   const [appState, setAppState] = useState<AppState>(AppState.CUSTOMER_DASHBOARD);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [audits, setAudits] = useState<Audit[]>([]);
-  const [reports, setReports] = useState<Report[]>([]);
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null);
   const [activeAuditId, setActiveAuditId] = useState<string | null>(null);
   const [auditStructure, setAuditStructureState] = useState<AuditStructure>(DEFAULT_AUDIT_STRUCTURE);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const isInitialLoad = useRef(true);
   const [pendingHeader, setPendingHeader] = useState<AuditHeaderValues | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
@@ -32,96 +57,17 @@ const App: React.FC = () => {
     setLogs(prevLogs => [`[${timestamp}] ${message}`, ...prevLogs]);
   }, []);
 
-
-  // --- DATA PERSISTENCE ---
-  useEffect(() => {
-    log('Aplikace se spouští, načítám data...');
-    const loadData = async () => {
-      try {
-        const response = await fetch('/api/app-data');
-        if (!response.ok) throw new Error(`Server error: ${response.status}`);
-        const data = await response.json();
-        setCustomers(data.customers || []);
-        setAudits(data.audits || []);
-        setReports(data.reports || []);
-        log('Data úspěšně načtena ze serveru.');
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        console.error("Failed to load data from server:", e);
-        setError("Nepodařilo se načíst data ze serveru. Zkuste prosím obnovit stránku.");
-        log(`Chyba při načítání dat: ${errorMessage}`);
-      } finally {
-        setIsLoading(false);
-        setTimeout(() => { isInitialLoad.current = false; }, 500);
-      }
-    };
-    loadData();
-  }, [log]);
-
-  useEffect(() => {
-    if (isInitialLoad.current || isLoading) return;
-    const saveData = async () => {
-      try {
-        await fetch('/api/app-data', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customers, audits, reports }),
-        });
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        console.error("Failed to save data to server:", e);
-        setError("Chyba při ukládání dat na server.");
-        log(`Chyba při ukládání dat: ${errorMessage}`);
-      }
-    };
-    saveData();
-  }, [customers, audits, reports, isLoading, log]);
-
   // --- BACKGROUND REPORT GENERATION ---
-    useEffect(() => {
-    const reportToGenerate = reports.find(r => r.status === ReportStatus.PENDING);
-    if (reportToGenerate && !isGenerating) {
-      setIsGenerating(true);
-      setReports(prev => prev.map(r => r.id === reportToGenerate.id ? { ...r, status: ReportStatus.GENERATING } : r));
-      
-      const auditForReport = audits.find(a => a.id === reportToGenerate.auditId);
-      if (!auditForReport) {
-          console.error("Audit for report not found!");
-          setReports(prev => prev.map(r => r.id === reportToGenerate.id ? { ...r, status: ReportStatus.ERROR, error: "Přiřazený audit nebyl nalezen." } : r));
-          setIsGenerating(false);
-          return;
-      }
-
-      fetch('/api/generate-report', { 
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ auditData: auditForReport, auditStructure: auditStructure })
-       })
-      .then(res => {
-        if (!res.ok) throw new Error(`Chyba serveru: ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-          setReports(prev => prev.map(r => 
-              r.id === reportToGenerate.id 
-              ? { ...r, status: ReportStatus.DONE, reportData: data.result, usage: data.usage }
-              : r
-          ));
-      })
-      .catch(err => {
-          console.error("Report generation failed:", err);
-          setReports(prev => prev.map(r => 
-              r.id === reportToGenerate.id 
-              ? { ...r, status: ReportStatus.ERROR, error: err.message }
-              : r
-          ));
-      })
-      .finally(() => {
-          setIsGenerating(false);
-      });
-    }
-  }, [reports, audits, isGenerating, auditStructure]);
-
+  const { isGenerating } = useReportGenerator({
+    reports,
+    audits,
+    auditStructure,
+    onReportUpdate: (reportId, updates) => {
+      setReports(prev =>
+        prev.map(r => (r.id === reportId ? { ...r, ...updates } : r))
+      );
+    },
+  });
 
   // --- DERIVED STATE ---
   const activeAudit = useMemo(() => audits.find(a => a.id === activeAuditId), [audits, activeAuditId]);
@@ -174,60 +120,61 @@ const App: React.FC = () => {
     setPendingHeader(null);
   };
 
-  const handlePrepareNewAudit = () => {
+  const handlePrepareNewAudit = async () => {
     if (!activeCustomerId) return;
     const activeCustomer = customers.find(c => c.id === activeCustomerId);
     if (!activeCustomer) return;
 
+    // Načíst aktuální údaje auditora z API
+    const auditorInfo = await getAuditorInfo();
+
     const prefilledHeaderValues: AuditHeaderValues = {
-        premise_name: activeCustomer.premise_name || '',
-        premise_address: activeCustomer.premise_address || '',
-        premise_responsible_person: activeCustomer.premise_responsible_person || '',
-        premise_phone: activeCustomer.premise_phone || '',
-        premise_email: activeCustomer.premise_email || '',
-        operator_name: activeCustomer.operator_name || '',
-        operator_address: activeCustomer.operator_address || '',
-        operator_ico: activeCustomer.operator_ico || '',
-        operator_statutory_body: activeCustomer.operator_statutory_body || '',
-        operator_phone: activeCustomer.operator_phone || '',
-        operator_email: activeCustomer.operator_email || '',
-        auditor_name: 'Bc. Sylva Polzer, hygienický konzultant',
-        auditor_phone: '603 398 774',
-        auditor_email: 'sylvapolzer@avlyspol.cz',
-        auditor_web: 'www.avlyspol.cz',
+      premise_name: activeCustomer.premise_name || '',
+      premise_address: activeCustomer.premise_address || '',
+      premise_responsible_person: activeCustomer.premise_responsible_person || '',
+      premise_phone: activeCustomer.premise_phone || '',
+      premise_email: activeCustomer.premise_email || '',
+      operator_name: activeCustomer.operator_name || '',
+      operator_address: activeCustomer.operator_address || '',
+      operator_ico: activeCustomer.operator_ico || '',
+      operator_statutory_body: activeCustomer.operator_statutory_body || '',
+      operator_phone: activeCustomer.operator_phone || '',
+      operator_email: activeCustomer.operator_email || '',
+      auditor_name: auditorInfo.name,
+      auditor_phone: auditorInfo.phone,
+      auditor_email: auditorInfo.email,
+      auditor_web: auditorInfo.web,
     };
-    
+
     setActiveAuditId(null);
     setPendingHeader(prefilledHeaderValues);
     setAppState(AppState.HEADER_FORM);
   };
-  
 
   const handleDeleteAudit = (auditId: string) => {
     setAudits(prev => prev.filter(a => a.id !== auditId));
     setReports(prev => prev.filter(r => r.auditId !== auditId));
   };
-  
-  const handleUnlockAudit = (auditId: string) => {
-      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a));
-      setActiveAuditId(auditId);
-      setAppState(AppState.AUDIT_IN_PROGRESS);
-  };
 
+  const handleUnlockAudit = (auditId: string) => {
+    setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a));
+    setActiveAuditId(auditId);
+    setAppState(AppState.AUDIT_IN_PROGRESS);
+  };
 
   const handleSelectAudit = (auditId: string) => {
     const selectedAudit = audits.find(a => a.id === auditId);
     if (!selectedAudit) return;
 
     setActiveAuditId(auditId);
-    
+
     if (selectedAudit.status === AuditStatus.LOCKED) {
-        setAppState(AppState.REPORT_VIEW);
+      setAppState(AppState.REPORT_VIEW);
     } else {
-        setAppState(AppState.AUDIT_IN_PROGRESS);
+      setAppState(AppState.AUDIT_IN_PROGRESS);
     }
   };
-  
+
   const createNewAudit = (headerValues: AuditHeaderValues, status: AuditStatus): Audit => {
     if (!activeCustomerId) throw new Error("Customer ID is missing");
     return {
@@ -239,7 +186,7 @@ const App: React.FC = () => {
       answers: {},
     };
   };
-  
+
   const handleHeaderUpdateAndReturn = (headerValues: AuditHeaderValues) => {
     if (activeAuditId) {
       setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
@@ -249,7 +196,7 @@ const App: React.FC = () => {
     }
     handleBackToAuditList();
   };
-  
+
   const handleHeaderUpdateAndContinue = (headerValues: AuditHeaderValues) => {
     let auditIdToContinue = activeAuditId;
     if (auditIdToContinue) {
@@ -267,22 +214,22 @@ const App: React.FC = () => {
   const handleAnswerUpdate = useCallback((itemId: string, answer: any) => {
     if (!activeAuditId) return;
     setAudits(prev => prev.map(audit => {
-        if (audit.id === activeAuditId) {
-            const newAnswers = { ...audit.answers, [itemId]: answer };
-            return { ...audit, answers: newAnswers };
-        }
-        return audit;
+      if (audit.id === activeAuditId) {
+        const newAnswers = { ...audit.answers, [itemId]: answer };
+        return { ...audit, answers: newAnswers };
+      }
+      return audit;
     }));
   }, [activeAuditId]);
 
   const handleFinishAudit = () => {
     if (!activeAuditId) return;
-    
-    setAudits(prev => prev.map(a => a.id === activeAuditId 
-      ? { ...a, status: AuditStatus.LOCKED, completedAt: a.completedAt || new Date().toISOString() } 
+
+    setAudits(prev => prev.map(a => a.id === activeAuditId
+      ? { ...a, status: AuditStatus.LOCKED, completedAt: a.completedAt || new Date().toISOString() }
       : a
     ));
-    
+
     // Invalidate old report if exists
     setReports(prev => prev.filter(r => r.auditId !== activeAuditId));
 
@@ -296,8 +243,52 @@ const App: React.FC = () => {
     setAppState(AppState.REPORT_VIEW);
   };
 
- const handleToggleAdmin = () => {
-    setAppState(prev => prev === AppState.ADMIN ? AppState.CUSTOMER_DASHBOARD : AppState.ADMIN)
+  const handleToggleAdmin = () => {
+    setAppState(prev => prev === AppState.SETTINGS || prev === AppState.ADMIN ? AppState.CUSTOMER_DASHBOARD : AppState.SETTINGS)
+  }
+
+  const handleNavigateToAdmin = () => {
+    setAppState(AppState.ADMIN);
+  }
+
+  const handleBackFromAdmin = () => {
+    setAppState(AppState.SETTINGS);
+  }
+
+  const handleBackFromSettings = () => {
+    setAppState(AppState.CUSTOMER_DASHBOARD);
+  }
+
+  const handleNavigateToAuditorSettings = () => {
+    setAppState(AppState.AUDITOR_SETTINGS);
+  }
+
+  const handleBackFromAuditorSettings = () => {
+    setAppState(AppState.SETTINGS);
+  }
+
+  const handleNavigateToAIReportSettings = () => {
+    setAppState(AppState.AI_REPORT_SETTINGS);
+  }
+
+  const handleBackFromAIReportSettings = () => {
+    setAppState(AppState.SETTINGS);
+  }
+
+  const handleNavigateToAIUsageStats = () => {
+    setAppState(AppState.AI_USAGE_STATS);
+  }
+
+  const handleBackFromAIUsageStats = () => {
+    setAppState(AppState.SETTINGS);
+  }
+
+  const handleNavigateToAIPricingConfig = () => {
+    setAppState(AppState.AI_PRICING_CONFIG);
+  }
+
+  const handleBackFromAIPricingConfig = () => {
+    setAppState(AppState.SETTINGS);
   }
 
   // --- RENDER LOGIC ---
@@ -314,16 +305,16 @@ const App: React.FC = () => {
       case AppState.AUDIT_LIST: {
         const activeCustomer = customers.find(c => c.id === activeCustomerId);
         const customerAudits = audits.filter(a => a.customerId === activeCustomerId);
-        return <AuditList 
-                  customerName={activeCustomer?.premise_name || ''} 
-                  audits={customerAudits} 
-                  reports={reports.filter(r => customerAudits.some(a => a.id === r.auditId))} 
-                  onSelectAudit={handleSelectAudit} 
-                  onPrepareNewAudit={handlePrepareNewAudit} 
-                  onDeleteAudit={handleDeleteAudit}
-                  onUnlockAudit={handleUnlockAudit}
-                  onBack={handleBackToDashboard} 
-                />;
+        return <AuditList
+          customerName={activeCustomer?.premise_name || ''}
+          audits={customerAudits}
+          reports={reports.filter(r => customerAudits.some(a => a.id === r.auditId))}
+          onSelectAudit={handleSelectAudit}
+          onPrepareNewAudit={handlePrepareNewAudit}
+          onDeleteAudit={handleDeleteAudit}
+          onUnlockAudit={handleUnlockAudit}
+          onBack={handleBackToDashboard}
+        />;
       }
       case AppState.HEADER_FORM: {
         const initialValues = activeAudit ? activeAudit.headerValues : pendingHeader;
@@ -331,29 +322,56 @@ const App: React.FC = () => {
         return <HeaderForm headerData={auditStructure.header_data} initialValues={initialValues} onSaveAndBack={handleHeaderUpdateAndReturn} onSaveAndContinue={handleHeaderUpdateAndContinue} onBack={handleBackToAuditList} />;
       }
       case AppState.AUDIT_IN_PROGRESS: {
-          if (!activeAudit) {
-            return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
-          }
-          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onBack={handleBackToAuditList} log={log} />;
+        if (!activeAudit) {
+          return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
+        }
+        return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onBack={handleBackToAuditList} log={log} />;
       }
       case AppState.REPORT_VIEW: {
-          if (!activeAudit) return <p>Chyba: Audit pro report nebyl nalezen.</p>
-          return <ReportView report={activeReport} audit={activeAudit} auditStructure={auditStructure} onBack={handleBackToAuditList} />
+        if (!activeAudit) return <p>Chyba: Audit pro report nebyl nalezen.</p>
+        return <ReportView report={activeReport} audit={activeAudit} auditStructure={auditStructure} onBack={handleBackToAuditList} />
       }
-      case AppState.ADMIN:        
-        return <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructureState} />;
-      default:                    
+      case AppState.SETTINGS:
+        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onBack={handleBackFromSettings} />;
+      case AppState.AUDITOR_SETTINGS:
+        return <AuditorSettingsScreen onBack={handleBackFromAuditorSettings} />;
+      case AppState.AI_REPORT_SETTINGS:
+        return <AIReportSettingsScreen onBack={handleBackFromAIReportSettings} />;
+      case AppState.AI_USAGE_STATS:
+        return <AIUsageStatsScreen onBack={handleBackFromAIUsageStats} />;
+      case AppState.AI_PRICING_CONFIG:
+        return <AIPricingConfigScreen onBack={handleBackFromAIPricingConfig} />;
+      case AppState.ADMIN:
+        return (
+          <div>
+            <div className="p-4 bg-white shadow-md mb-4">
+              <button
+                onClick={handleBackFromAdmin}
+                className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                ← Zpět na Nastavení
+              </button>
+            </div>
+            <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructureState} />
+          </div>
+        );
+      default:
         return <CustomerDashboard customers={customers} onSelectCustomer={handleSelectCustomerForAudits} onAddNewCustomer={handleAddNewCustomer} onEditCustomer={handleEditCustomer} onDeleteCustomer={handleDeleteCustomer} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col">
-      <Header appState={appState} onToggleAdmin={handleToggleAdmin} className="print:hidden" />
-      <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
-        {renderContent()}
-      </main>
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col">
+        <div className="print:hidden">
+          <Header appState={appState} onToggleAdmin={handleToggleAdmin} />
+        </div>
+        <main className="flex-grow p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
+          {renderContent()}
+        </main>
+        <ToastContainer />
+      </div>
+    </ErrorBoundary>
   );
 };
 

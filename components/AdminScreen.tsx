@@ -305,52 +305,57 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
     };
 
     return (
-        <div className="w-full max-w-4xl bg-white p-6 md:p-8 rounded-2xl shadow-xl animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-gray-800">Správa auditu</h2>
-            </div>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 md:p-6">
+            <div className="max-w-4xl mx-auto">
+                {/* Header */}
+                <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                    <h1 className="text-3xl font-bold text-gray-800">Správa bodů auditu</h1>
+                    <p className="text-gray-600 mt-2">Zde můžete zapnout nebo vypnout celé sekce nebo jednotlivé položky, které se objeví v průběhu auditu. Můžete také měnit jejich pořadí, upravovat texty, přidávat nové a mazat stávající. Změny se ukládají automaticky do vašeho prohlížeče.</p>
+                </div>
 
-            <p className="mb-6 text-gray-600">Zde můžete zapnout nebo vypnout celé sekce nebo jednotlivé položky, které se objeví v průběhu auditu. Můžete také měnit jejich pořadí, upravovat texty, přidávat nové a mazat stávající. Změny se ukládají automaticky do vašeho prohlížeče.</p>
-
-            <div className="space-y-4">
-                {auditStructure.audit_sections.map(section => (
-                    <div 
-                        key={section.id}
-                        onDragOver={handleSectionDragOver}
-                        onDrop={(e) => handleSectionDrop(e, section.id)}
-                    >
-                        <SectionAdmin
-                            section={section}
-                            onUpdateSection={handleUpdateSection}
-                            onDeleteSection={handleDeleteSection}
-                            onAddItem={handleAddItem}
-                            onEditItemRequest={handleEditItemRequest}
-                            dragProps={{
-                                draggable: true,
-                                onDragStart: (e: React.DragEvent<HTMLButtonElement>) => handleSectionDragStart(e, section.id)
-                            }}
-                        />
+                {/* Content */}
+                <div className="bg-white rounded-2xl shadow-xl p-6">
+                    <div className="space-y-4">
+                        {auditStructure.audit_sections.map(section => (
+                            <div 
+                                key={section.id}
+                                onDragOver={handleSectionDragOver}
+                                onDrop={(e) => handleSectionDrop(e, section.id)}
+                            >
+                                <SectionAdmin
+                                    section={section}
+                                    onUpdateSection={handleUpdateSection}
+                                    onDeleteSection={handleDeleteSection}
+                                    onAddItem={handleAddItem}
+                                    onEditItemRequest={handleEditItemRequest}
+                                    dragProps={{
+                                        draggable: true,
+                                        onDragStart: (e: React.DragEvent<HTMLButtonElement>) => handleSectionDragStart(e, section.id)
+                                    }}
+                                />
+                            </div>
+                        ))}
                     </div>
-                ))}
+
+                    <button 
+                        onClick={handleAddSection} 
+                        className="mt-6 flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 font-bold hover:bg-gray-50 hover:border-blue-400 transition-colors"
+                    >
+                        <PlusIcon className="w-5 h-5" />
+                        <span className="ml-2">Přidat novou sekci</span>
+                    </button>
+
+                    {editingItemInfo && (
+                        <ItemEditModal
+                            item={editingItemInfo.item}
+                            currentSectionId={editingItemInfo.sectionId}
+                            allSections={auditStructure.audit_sections}
+                            onSave={handleSaveEditedItem}
+                            onClose={handleCloseEditModal}
+                        />
+                    )}
+                </div>
             </div>
-
-             <button 
-                onClick={handleAddSection} 
-                className="mt-6 flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 font-bold hover:bg-gray-50 hover:border-blue-400 transition-colors"
-              >
-                <PlusIcon />
-                <span className="ml-2">Přidat novou sekci</span>
-              </button>
-
-            {editingItemInfo && (
-                <ItemEditModal
-                    item={editingItemInfo.item}
-                    currentSectionId={editingItemInfo.sectionId}
-                    allSections={auditStructure.audit_sections}
-                    onSave={handleSaveEditedItem}
-                    onClose={handleCloseEditModal}
-                />
-            )};
         </div>
     );
 };

@@ -49,7 +49,7 @@ const ErrorView: React.FC<{ error: string }> = ({ error }) => (
   </div>
 );
 
-const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: Audit, auditStructure: AuditStructure }> = ({ reportData, audit, auditStructure }) => {
+const FullReportContent: React.FC<{ report: Report | undefined, reportData: ReportData | undefined, audit: Audit, auditStructure: AuditStructure }> = ({ report, reportData, audit, auditStructure }) => {
     
     const getAnswerStatus = (answer: AuditAnswer | undefined) => {
         if (answer && !answer.compliant) return { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' };
@@ -95,9 +95,24 @@ const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: A
                   </thead>
                   <tbody>
                     <tr>
-                      {auditStructure.header_data.auditor.fields.map(field => (
-                        <td key={field.id} className="p-1">{(audit.headerValues as any)[field.id] || '-'}</td>
-                      ))}
+                      {auditStructure.header_data.auditor.fields.map(field => {
+                        // Používat uložené údaje z reportu (snapshot) pokud existují
+                        const auditorInfo = report?.auditorSnapshot || {
+                          name: (audit.headerValues as any)['auditor_name'] || '-',
+                          phone: (audit.headerValues as any)['auditor_phone'] || '-',
+                          email: (audit.headerValues as any)['auditor_email'] || '-',
+                          web: (audit.headerValues as any)['auditor_web'] || '-',
+                        };
+                        const auditorValueMap: { [key: string]: string } = {
+                          'auditor_name': auditorInfo.name,
+                          'auditor_phone': auditorInfo.phone,
+                          'auditor_email': auditorInfo.email,
+                          'auditor_web': auditorInfo.web
+                        };
+                        return (
+                          <td key={field.id} className="p-1">{auditorValueMap[field.id] || '-'}</td>
+                        );
+                      })}
                     </tr>
                   </tbody>
                 </table>
@@ -128,9 +143,15 @@ const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: A
                         </tr>
                     </thead>
                     <tbody>
-                        {auditStructure.audit_sections.filter(s => s.active).map(section => (
+                        {auditStructure.audit_sections.filter(s => s.active).map((section, sectionIndex) => {
+                            // NATVRDO: "SPRÁVNÁ VÝROBNÍ PRAXE" začíná na nové stránce
+                            const forcePageBreak = section.title === "SPRÁVNÁ VÝROBNÍ PRAXE";
+                            
+                            return (
                             <React.Fragment key={section.id}>
-                                <tr className="bg-gray-50 print:break-inside-avoid-page">
+                                <tr className={`bg-gray-50 print:break-inside-avoid-page ${
+                                    forcePageBreak ? 'print:break-before-page' : ''
+                                }`}>
                                     <td colSpan={2} className="border border-gray-300 p-2 font-bold">{section.title}</td>
                                 </tr>
                                 {section.items.filter(i => i.active).map(item => {
@@ -143,7 +164,8 @@ const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: A
                                     );
                                 })}
                             </React.Fragment>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -183,7 +205,6 @@ const FullReportContent: React.FC<{ reportData: ReportData | undefined, audit: A
 };
 
 const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack }) => {
-
   const renderContent = () => {
     if (!audit || !auditStructure) return <ErrorView error="Přiřazený audit nebo jeho struktura nebyly nalezeny." />;
     if (!report) return <ErrorView error="Pro tento audit neexistuje žádný záznam o reportu." />;
@@ -195,7 +216,7 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
       case ReportStatus.ERROR:
         return <ErrorView error={report.error || 'Neznámá chyba'} />;
       case ReportStatus.DONE:
-        return <FullReportContent reportData={report.reportData} audit={audit} auditStructure={auditStructure} />;
+        return <FullReportContent report={report} reportData={report.reportData} audit={audit} auditStructure={auditStructure} />;
       default:
         return <ErrorView error={`Neznámý stav reportu: ${report.status}`} />;
     }
