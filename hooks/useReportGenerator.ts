@@ -31,6 +31,14 @@ export function useReportGenerator({
       const audit = audits.find(a => a.id === report.auditId);
       if (!audit) {
         console.error('[useReportGenerator] Audit nenalezen pro report:', report.id);
+        // Smazat orphaned report
+        try {
+          const { deleteReport } = await import('../services/firestore');
+          await deleteReport(report.id);
+          console.log('[useReportGenerator] Orphaned report smazán:', report.id);
+        } catch (deleteError) {
+          console.error('[useReportGenerator] Chyba při mazání orphaned report:', deleteError);
+        }
         onReportUpdate(report.id, {
           status: ReportStatus.ERROR,
           error: 'Přiřazený audit nebyl nalezen.',

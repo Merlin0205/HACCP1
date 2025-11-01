@@ -7,9 +7,11 @@
  */
 
 import React from 'react';
+import { useUserRole } from '../hooks/useUserRole';
 
 interface SettingsScreenProps {
   onNavigateToAdmin: () => void;
+  onNavigateToUserManagement: () => void;
   onNavigateToAuditorSettings: () => void;
   onNavigateToAIReportSettings: () => void;
   onNavigateToAIUsageStats: () => void;
@@ -17,7 +19,9 @@ interface SettingsScreenProps {
   onBack: () => void;
 }
 
-const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigateToAdmin, onNavigateToAuditorSettings, onNavigateToAIReportSettings, onNavigateToAIUsageStats, onNavigateToAIPricingConfig, onBack }) => {
+const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigateToAdmin, onNavigateToUserManagement, onNavigateToAuditorSettings, onNavigateToAIReportSettings, onNavigateToAIUsageStats, onNavigateToAIPricingConfig, onBack }) => {
+  const { isAdmin } = useUserRole();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
@@ -37,6 +41,31 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onNavigateToAdmin, onNa
 
         {/* Settings Items */}
         <div className="space-y-4">
+          {/* Správa uživatelů - pouze pro adminy */}
+          {isAdmin && (
+            <button
+              onClick={onNavigateToUserManagement}
+              className="w-full bg-white rounded-xl shadow-md p-6 hover:shadow-xl transition-all duration-300 text-left group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center group-hover:bg-red-200 transition-colors">
+                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-800">Správa uživatelů</h3>
+                    <p className="text-sm text-gray-600">Schvalování uživatelů a správa rolí</p>
+                  </div>
+                </div>
+                <svg className="w-6 h-6 text-gray-400 group-hover:text-red-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+          )}
+
           {/* Správa bodů auditu */}
           <button
             onClick={onNavigateToAdmin}

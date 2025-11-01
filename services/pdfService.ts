@@ -1,9 +1,10 @@
 /**
- * PDF Service - používá Puppeteer backend podle best practices
- * Místo window.print() posíláme HTML na server kde Puppeteer generuje PDF
+ * PDF Service - používá Firebase Cloud Functions (Puppeteer)
+ * MIGRACE NA FIREBASE CLOUD FUNCTIONS
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:9002';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebaseConfig';
 
 interface GeneratePDFOptions {
   format?: 'A4' | 'Letter';
@@ -16,44 +17,60 @@ interface GeneratePDFOptions {
   printBackground?: boolean;
 }
 
+interface GeneratePDFRequest {
+  html: string;
+  options?: GeneratePDFOptions;
+}
+
+interface GeneratePDFResponse {
+  pdf: string; // base64 encoded PDF
+  contentType: string;
+}
+
+/**
+ * Callable Cloud Function reference
+ */
+const generatePdfFunction = httpsCallable<GeneratePDFRequest, GeneratePDFResponse>(
+  functions,
+  'generatePdf'
+);
+
 export const generatePDF = async (
   html: string,
   options?: GeneratePDFOptions
 ): Promise<Blob> => {
   try {
-    console.log('[PDF Service] Odesílání HTML na server pro generování PDF...');
+    console.log('[PDF Service] Odesílání HTML na Cloud Functions pro generování PDF...');
     
-    const response = await fetch(`${API_BASE_URL}/api/generate-pdf`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        html,
-        options: {
-          format: 'A4',
-          margin: {
-            top: '10mm',
-            right: '6mm',
-            bottom: '10mm',
-            left: '6mm',
-          },
-          printBackground: true,
-          ...options,
+    const result = await generatePdfFunction({
+      html,
+      options: {
+        format: 'A4',
+        margin: {
+          top: '10mm',
+          right: '6mm',
+          bottom: '10mm',
+          left: '6mm',
         },
-      }),
+        printBackground: true,
+        ...options,
+      },
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Chyba při generování PDF');
+    // Převést base64 na Blob
+    const pdfData = result.data.pdf;
+    const binaryString = atob(pdfData);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
     }
 
     console.log('[PDF Service] PDF úspěšně vygenerováno');
-    return await response.blob();
-  } catch (error) {
+    return new Blob([bytes], { type: result.data.contentType || 'application/pdf' });
+  } catch (error: any) {
     console.error('[PDF Service] Chyba:', error);
-    throw error;
+    const errorMessage = error.message || error.code || 'Chyba při generování PDF';
+    throw new Error(errorMessage);
   }
 };
 

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "emulators": "firebase emulators:start",
+    "emulators:functions": "firebase emulators:start --only functions",
+    "emulators:all": "firebase emulators:start --only functions,firestore,auth,storage"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -14,6 +17,7 @@
     "cors": "^2.8.5",
     "diff": "^5.2.0",
     "dotenv": "^17.2.3",
+    "firebase": "^12.5.0",
     "react": "^19.2.0",
     "react-beautiful-dnd": "^13.1.1",
     "react-diff-viewer-continued": "^3.4.0",

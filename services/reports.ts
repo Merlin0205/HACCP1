@@ -1,8 +1,9 @@
 /**
- * API služba pro generování reportů
+ * API služba pro generování reportů - MIGRACE NA FIREBASE CLOUD FUNCTIONS
  */
 
-import { api } from './client';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebaseConfig';
 import { Audit, AuditStructure, ReportData } from '../types';
 
 export interface GenerateReportRequest {
@@ -12,25 +13,37 @@ export interface GenerateReportRequest {
 
 export interface GenerateReportResponse {
   result: ReportData;
-  usage?: any;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 /**
- * Vygeneruje report pomocí AI
- * 
- * Timeout je nastaven na 60 sekund kvůli AI zpracování
+ * Callable Cloud Function reference
+ */
+const generateReportFunction = httpsCallable<GenerateReportRequest, GenerateReportResponse>(
+  functions,
+  'generateReport'
+);
+
+/**
+ * Vygeneruje report pomocí AI přes Cloud Functions
  */
 export async function generateReport(
   request: GenerateReportRequest
 ): Promise<GenerateReportResponse> {
-  return api.post<GenerateReportResponse>(
-    '/api/generate-report',
-    request,
-    {
-      timeout: 60000, // 60 sekund pro AI generování
-      retries: 1, // Pouze 1 retry kvůli dlouhému zpracování
-    }
-  );
+  try {
+    const result = await generateReportFunction(request);
+    return result.data;
+  } catch (error: any) {
+    console.error('[generateReport] Cloud Function error:', error);
+    
+    // Převést Firebase error na standardní Error
+    const errorMessage = error.message || error.code || 'Chyba při generování reportu';
+    throw new Error(errorMessage);
+  }
 }
 
 export const reportsApi = {

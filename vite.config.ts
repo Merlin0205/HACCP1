@@ -11,12 +11,7 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
-    proxy: {
-      '/api': {
-        target: 'http://localhost:9002',
-        changeOrigin: true,
-      },
-    },
+    // Proxy odstraněno - používáme Firebase místo Express serveru
   },
   plugins: [react()],
   resolve: {

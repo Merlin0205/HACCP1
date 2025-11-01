@@ -4,6 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { fetchAIReportConfig, saveAIReportConfig, fetchAIModelsConfig, saveAIModelsConfig } from '../services/firestore/settings';
+import { fetchAIPricingConfig } from '../services/firestore/settings';
+import { toast } from '../utils/toast';
 
 interface AIReportConfig {
   staticPositiveReport: {
@@ -51,47 +54,44 @@ interface ModelInfo {
 
 const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack }) => {
   const [config, setConfig] = useState<AIReportConfig>(DEFAULT_CONFIG);
-  const [saved, setSaved] = useState(false);
+  const [initialConfig, setInitialConfig] = useState<AIReportConfig>(DEFAULT_CONFIG);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<ModelInfo[]>([]);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Načíst z API
+  // Načíst z Firestore
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const configResponse = await fetch('/api/ai-report-config');
-        let loadedConfig = { ...DEFAULT_CONFIG };
+        const [reportConfig, modelsConfig, pricingConfig] = await Promise.all([
+          fetchAIReportConfig(),
+          fetchAIModelsConfig(),
+          fetchAIPricingConfig()
+        ]);
         
-        if (configResponse.ok) {
-          const data = await configResponse.json();
-          loadedConfig = { ...DEFAULT_CONFIG, ...data };
-        }
+        let loadedConfig = { ...DEFAULT_CONFIG, ...reportConfig };
         
-        const modelsConfigResponse = await fetch('/api/ai-models-config');
-        if (modelsConfigResponse.ok) {
-          const modelsConfigData = await modelsConfigResponse.json();
-          const reportModel = modelsConfigData.models['report-generation'];
-          if (reportModel) {
-            loadedConfig.selectedModel = reportModel;
-          }
+        // Načíst selected model z models config
+        const reportModel = modelsConfig.models?.['report-generation'];
+        if (reportModel) {
+          loadedConfig.selectedModel = reportModel;
         }
         
         setConfig(loadedConfig);
+        setInitialConfig(loadedConfig);
         
-        const pricingResponse = await fetch('/api/ai-pricing-config');
-        if (pricingResponse.ok) {
-          const pricingData = await pricingResponse.json();
-          const modelsList: ModelInfo[] = Object.entries(pricingData.models).map(([modelName, pricing]: [string, any]) => {
-            let estimatedCost = 0;
-            if (pricing) {
-              const inputCost = (787 / 1000000) * (pricing.inputPrice || 0);
-              const outputCost = (1013 / 1000000) * (pricing.outputPrice || 0);
-              estimatedCost = (inputCost + outputCost) * pricingData.usdToCzk;
-            }
-            return { name: modelName, usage: `Pro generování reportů`, estimatedCost };
-          });
-          setModels(modelsList);
-        }
+        // Načíst modely pro výběr
+        const modelsList: ModelInfo[] = Object.entries(pricingConfig.models || {}).map(([modelName, pricing]: [string, any]) => {
+          let estimatedCost = 0;
+          if (pricing) {
+            const inputCost = (787 / 1000000) * (pricing.inputPrice || 0);
+            const outputCost = (1013 / 1000000) * (pricing.outputPrice || 0);
+            estimatedCost = (inputCost + outputCost) * (pricingConfig.usdToCzk || 25);
+          }
+          return { name: modelName, usage: `Pro generování reportů`, estimatedCost };
+        });
+        setModels(modelsList);
       } catch (error) {
         console.error('Chyba při načítání:', error);
       } finally {
@@ -101,35 +101,42 @@ const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack 
     loadConfig();
   }, []);
 
+  // Detekce neuložených změn
+  const hasUnsavedChanges = JSON.stringify(config) !== JSON.stringify(initialConfig);
+
+  // Varování při odchodu pokud jsou neuložené změny
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges || saving) {
+        e.preventDefault();
+        e.returnValue = 'Máte neuložené změny. Opravdu chcete opustit stránku?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, saving]);
+
   const handleSave = async () => {
     try {
-      const reportConfigResponse = await fetch('/api/ai-report-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config)
-      });
+      setSaving(true);
+      await saveAIReportConfig(config);
       
-      if (!reportConfigResponse.ok) {
-        alert('Chyba při ukládání');
-        return;
-      }
+      // Uložit také selected model do models config
+      const modelsConfig = await fetchAIModelsConfig();
+      modelsConfig.models = modelsConfig.models || {};
+      modelsConfig.models['report-generation'] = config.selectedModel;
+      await saveAIModelsConfig(modelsConfig);
       
-      const modelsResponse = await fetch('/api/ai-models-config');
-      if (modelsResponse.ok) {
-        const modelsData = await modelsResponse.json();
-        modelsData.models['report-generation'] = config.selectedModel;
-        await fetch('/api/ai-models-config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(modelsData)
-        });
-      }
-      
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
+      setInitialConfig(config);
+      setLastSaved(new Date());
+      toast.success('Nastavení úspěšně uloženo');
     } catch (error) {
       console.error('Chyba při ukládání:', error);
-      alert('Chyba při ukládání');
+      toast.error('Chyba při ukládání');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -146,6 +153,23 @@ const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack 
             <div>
               <h1 className="text-3xl font-bold text-gray-800">🤖 Nastavení AI reportů</h1>
               <p className="text-gray-600 mt-2">Upravte texty a prompty pro generování reportů</p>
+              <div className="mt-3 flex items-center gap-3 text-sm">
+                {saving && (
+                  <span className="text-blue-600 font-semibold flex items-center gap-2">
+                    <span className="animate-spin">⏳</span> Ukládám...
+                  </span>
+                )}
+                {!saving && lastSaved && (
+                  <span className="text-green-600 font-semibold">
+                    ✓ Uloženo {lastSaved.toLocaleTimeString('cs-CZ')}
+                  </span>
+                )}
+                {hasUnsavedChanges && !saving && (
+                  <span className="text-orange-600 font-semibold">
+                    ⚠ Neuložené změny
+                  </span>
+                )}
+              </div>
             </div>
             <button
               onClick={onBack}
@@ -368,17 +392,16 @@ const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack 
         <div className="flex gap-4">
           <button
             onClick={handleSave}
-            className="flex-1 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700"
+            disabled={saving || !hasUnsavedChanges}
+            className={`flex-1 font-bold py-3 px-6 rounded-lg transition-colors ${
+              saving || !hasUnsavedChanges
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            💾 Uložit
+            {saving ? '⏳ Ukládám...' : '💾 Uložit'}
           </button>
         </div>
-
-        {saved && (
-          <div className="mt-6 p-4 bg-green-100 border-2 border-green-500 rounded-lg text-green-800 font-semibold text-center">
-            ✅ Nastavení úspěšně uloženo
-          </div>
-        )}
       </div>
     </div>
   );

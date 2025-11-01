@@ -10,10 +10,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuditorInfo } from '../types';
-
-// Prázdný string = použije relativní URL přes Vite proxy (/api → localhost:9002)
-// Vite proxy je definovaná v vite.config.ts
-const API_URL = '';
+import { fetchAuditorInfo, saveAuditorInfo } from '../services/firestore/settings';
+import { toast } from '../utils/toast';
 
 const DEFAULT_AUDITOR: AuditorInfo = {
   name: 'Bc. Sylva Polzer, hygienický konzultant',
@@ -28,18 +26,18 @@ interface AuditorSettingsScreenProps {
 
 const AuditorSettingsScreen: React.FC<AuditorSettingsScreenProps> = ({ onBack }) => {
   const [auditorInfo, setAuditorInfo] = useState<AuditorInfo>(DEFAULT_AUDITOR);
-  const [saved, setSaved] = useState(false);
+  const [initialAuditorInfo, setInitialAuditorInfo] = useState<AuditorInfo>(DEFAULT_AUDITOR);
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Načíst z API při prvním načtení
+  // Načíst z Firestore při prvním načtení
   useEffect(() => {
     const loadAuditorInfo = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/auditor-settings`);
-        if (response.ok) {
-          const data = await response.json();
-          setAuditorInfo(data);
-        }
+        const data = await fetchAuditorInfo();
+        setAuditorInfo(data);
+        setInitialAuditorInfo(data);
       } catch (error) {
         console.error('Chyba při načítání údajů auditora:', error);
       } finally {
@@ -49,47 +47,56 @@ const AuditorSettingsScreen: React.FC<AuditorSettingsScreenProps> = ({ onBack })
     loadAuditorInfo();
   }, []);
 
+  // Detekce neuložených změn
+  const hasUnsavedChanges = JSON.stringify(auditorInfo) !== JSON.stringify(initialAuditorInfo);
+
+  // Varování při odchodu pokud jsou neuložené změny
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges || saving) {
+        e.preventDefault();
+        e.returnValue = 'Máte neuložené změny. Opravdu chcete opustit stránku?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, saving]);
+
   const handleChange = (field: keyof AuditorInfo, value: string) => {
     setAuditorInfo(prev => ({ ...prev, [field]: value }));
-    setSaved(false);
   };
 
   const handleSave = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/auditor-settings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(auditorInfo)
-      });
-      
-      if (response.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      } else {
-        alert('Chyba při ukládání údajů auditora');
-      }
+      setSaving(true);
+      await saveAuditorInfo(auditorInfo);
+      setInitialAuditorInfo(auditorInfo);
+      setLastSaved(new Date());
+      toast.success('Údaje byly úspěšně uloženy');
     } catch (error) {
       console.error('Chyba při ukládání:', error);
-      alert('Chyba při ukládání údajů auditora');
+      toast.error('Chyba při ukládání údajů auditora');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleReset = async () => {
     if (confirm('Opravdu chcete obnovit výchozí údaje auditora?')) {
       try {
-        const response = await fetch(`${API_URL}/api/auditor-settings`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(DEFAULT_AUDITOR)
-        });
-        
-        if (response.ok) {
-          setAuditorInfo(DEFAULT_AUDITOR);
-          setSaved(true);
-          setTimeout(() => setSaved(false), 3000);
-        }
+        setSaving(true);
+        await saveAuditorInfo(DEFAULT_AUDITOR);
+        setAuditorInfo(DEFAULT_AUDITOR);
+        setInitialAuditorInfo(DEFAULT_AUDITOR);
+        setLastSaved(new Date());
+        toast.success('Údaje byly obnoveny na výchozí hodnoty');
       } catch (error) {
         console.error('Chyba při resetu:', error);
+        toast.error('Chyba při resetu');
+      } finally {
+        setSaving(false);
       }
     }
   };
@@ -103,6 +110,23 @@ const AuditorSettingsScreen: React.FC<AuditorSettingsScreenProps> = ({ onBack })
             <div>
               <h1 className="text-3xl font-bold text-gray-800">⚙️ Nastavení auditora</h1>
               <p className="text-gray-600 mt-2">Údaje, které se zobrazí v reportech</p>
+              <div className="mt-3 flex items-center gap-3 text-sm">
+                {saving && (
+                  <span className="text-blue-600 font-semibold flex items-center gap-2">
+                    <span className="animate-spin">⏳</span> Ukládám...
+                  </span>
+                )}
+                {!saving && lastSaved && (
+                  <span className="text-green-600 font-semibold">
+                    ✓ Uloženo {lastSaved.toLocaleTimeString('cs-CZ')}
+                  </span>
+                )}
+                {hasUnsavedChanges && !saving && (
+                  <span className="text-orange-600 font-semibold">
+                    ⚠ Neuložené změny
+                  </span>
+                )}
+              </div>
             </div>
             <button
               onClick={onBack}
@@ -195,24 +219,27 @@ const AuditorSettingsScreen: React.FC<AuditorSettingsScreenProps> = ({ onBack })
             <div className="flex gap-4 pt-6">
               <button
                 onClick={handleSave}
-                className="flex-1 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={saving || !hasUnsavedChanges}
+                className={`flex-1 font-bold py-3 px-6 rounded-lg transition-colors ${
+                  saving || !hasUnsavedChanges
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                💾 Uložit
+                {saving ? '⏳ Ukládám...' : '💾 Uložit'}
               </button>
               <button
                 onClick={handleReset}
-                className="bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-lg hover:bg-gray-300 transition-colors"
+                disabled={saving}
+                className={`font-semibold py-3 px-6 rounded-lg transition-colors ${
+                  saving
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                }`}
               >
                 🔄 Výchozí hodnoty
               </button>
             </div>
-
-            {/* Potvrzení */}
-            {saved && (
-              <div className="p-4 bg-green-100 border-2 border-green-500 rounded-lg text-green-800 font-semibold text-center animate-fade-in">
-                ✅ Údaje byly úspěšně uloženy
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -222,15 +249,12 @@ const AuditorSettingsScreen: React.FC<AuditorSettingsScreenProps> = ({ onBack })
 
 export default AuditorSettingsScreen;
 
-// Helper funkce pro získání údajů auditora z API (použitelná v celé aplikaci)
+// Helper funkce pro získání údajů auditora z Firestore (použitelná v celé aplikaci)
 export const getAuditorInfo = async (): Promise<AuditorInfo> => {
   try {
-    const response = await fetch(`${API_URL}/api/auditor-settings`);
-    if (response.ok) {
-      return await response.json();
-    }
+    return await fetchAuditorInfo();
   } catch (error) {
     console.error('[getAuditorInfo] Chyba při načítání:', error);
+    return DEFAULT_AUDITOR;
   }
-  return DEFAULT_AUDITOR;
 };

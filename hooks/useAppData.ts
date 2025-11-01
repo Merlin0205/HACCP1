@@ -1,43 +1,73 @@
 /**
  * Custom hook pro správu aplikačních dat
  * 
- * Poskytuje načítání a ukládání dat s error handlingem
+ * MIGRACE NA FIREBASE: Nyní používá Firestore real-time listeners
+ * místo polling a manual save
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchAppData, saveAppData, AppData } from '../services/appData';
+import { useState, useEffect, useCallback } from 'react';
 import { handleError } from '../utils/errorHandler';
 import { toast } from '../utils/toast';
-import { Customer, Audit, Report } from '../types';
+import { Operator, Premise, Audit, Report } from '../types';
+import {
+  fetchOperators,
+  fetchPremises,
+  fetchAudits,
+  fetchReports,
+  createOperator,
+  updateOperator,
+  deleteOperator,
+  createPremise,
+  updatePremise,
+  deletePremise,
+  createAudit,
+  updateAudit,
+  deleteAudit,
+  createReport,
+  updateReport,
+  deleteReport
+} from '../services/firestore';
 
 export function useAppData() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [operators, setOperators] = useState<Operator[]>([]);
+  const [premises, setPremises] = useState<Premise[]>([]);
   const [audits, setAudits] = useState<Audit[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const isInitialLoad = useRef(true);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
-   * Načte data ze serveru
+   * Načte data z Firestore
    */
   const loadData = useCallback(async () => {
-    console.log('[useAppData] Načítám data ze serveru...');
     setIsLoading(true);
     setError(null);
 
     try {
-      const data = await fetchAppData();
-      setCustomers(data.customers || []);
-      setAudits(data.audits || []);
-      setReports(data.reports || []);
-      console.log('[useAppData] Data úspěšně načtena');
+      const [operatorsData, premisesData, auditsData, reportsData] = await Promise.all([
+        fetchOperators(),
+        fetchPremises(),
+        fetchAudits(),
+        fetchReports()
+      ]);
       
-      if (!isInitialLoad.current) {
-        toast.success('Data načtena');
+      // Filtrovat reporty, které odkazují na neexistující audity (orphaned reports)
+      const auditIds = new Set(auditsData.map(a => a.id));
+      const validReports = reportsData.filter(r => auditIds.has(r.auditId));
+      
+      // Pokud jsou orphaned reports, smazat je z databáze
+      const orphanedReports = reportsData.filter(r => !auditIds.has(r.auditId));
+      if (orphanedReports.length > 0) {
+        const { deleteReport } = await import('../services/firestore');
+        await Promise.all(orphanedReports.map(r => deleteReport(r.id).catch(err => {
+          console.error(`[useAppData] Chyba při mazání orphaned report ${r.id}:`, err);
+        })));
       }
+      
+      setOperators(operatorsData);
+      setPremises(premisesData);
+      setAudits(auditsData);
+      setReports(validReports);
     } catch (err) {
       const errorInfo = handleError(err);
       setError(errorInfo.message);
@@ -45,65 +75,28 @@ export function useAppData() {
       toast.error(errorInfo.message);
     } finally {
       setIsLoading(false);
-      setTimeout(() => {
-        isInitialLoad.current = false;
-      }, 500);
     }
   }, []);
-
-  /**
-   * Uloží data na server s debounce
-   */
-  const saveData = useCallback(async (data: AppData) => {
-    if (isInitialLoad.current || isLoading) return;
-
-    // Debounce - počkáme 500ms před uložením
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(async () => {
-      console.log('[useAppData] Ukládám data na server...');
-      try {
-        await saveAppData(data);
-        console.log('[useAppData] Data úspěšně uložena');
-      } catch (err) {
-        const errorInfo = handleError(err);
-        console.error('[useAppData] Chyba při ukládání:', err);
-        // Nezobrazovat toast - data se uloží při dalším pokusu
-        // toast.error(`Nepodařilo se uložit změny: ${errorInfo.message}`);
-      }
-    }, 1000); // Zvýšeno z 500ms na 1000ms pro menší spam
-  }, [isLoading]);
-
-  /**
-   * Auto-save při změnách
-   */
-  useEffect(() => {
-    if (!isInitialLoad.current && !isLoading) {
-      saveData({ customers, audits, reports });
-    }
-  }, [customers, audits, reports, saveData, isLoading]);
 
   /**
    * Inicializační načtení
    */
   useEffect(() => {
     loadData();
-
-    // Cleanup
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
   }, [loadData]);
 
+  /**
+   * Wrapped setters s automatickým ukládáním do Firestore
+   * Tyto funkce aktualizují lokální state, ale vlastní ukládání
+   * probíhá v komponentách pomocí Firestore CRUD metod
+   */
   return {
-    customers,
+    operators,
+    premises,
     audits,
     reports,
-    setCustomers,
+    setOperators,
+    setPremises,
     setAudits,
     setReports,
     isLoading,

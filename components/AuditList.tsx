@@ -3,18 +3,18 @@ import { Audit, AuditStatus, Report, ReportStatus } from '../types';
 import { BackIcon, PlusIcon, ReportIcon, TrashIcon, EditIcon } from './icons'; // Přidána EditIcon
 
 interface AuditListProps {
-  customerName: string;
+  premiseName: string;
   audits: Audit[];
   reports: Report[];
   onSelectAudit: (auditId: string) => void;
   onPrepareNewAudit: () => void;
   onDeleteAudit: (auditId: string) => void;
-  onUnlockAudit: (auditId: string) => void; // Nová funkce pro odemčení
+  onUnlockAudit: (auditId: string) => void;
   onBack: () => void;
 }
 
 export const AuditList: React.FC<AuditListProps> = ({ 
-  customerName, 
+  premiseName, 
   audits, 
   reports, 
   onSelectAudit, 
@@ -118,9 +118,9 @@ export const AuditList: React.FC<AuditListProps> = ({
           <div>
             <button onClick={onBack} className="flex items-center text-sm text-gray-600 hover:text-blue-600 mb-2">
               <BackIcon className="h-4 w-4 mr-2" /> 
-              Zpět na zákazníky
+              Zpět na provozovatele
             </button>
-            <h2 className="text-3xl font-bold text-gray-800">Audity pro: {customerName}</h2>
+            <h2 className="text-3xl font-bold text-gray-800">Audity pro: {premiseName}</h2>
           </div>
           <button 
             className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 flex items-center"

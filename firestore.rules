@@ -1,0 +1,149 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper funkce pro kontrolu autentifikace
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Helper funkce pro získání user documentu
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    // Helper funkce pro kontrolu schválení uživatele
+    function isApproved() {
+      return isAuthenticated() && 
+             getUserDoc() != null &&
+             getUserDoc().data.approved == true;
+    }
+    
+    // Helper funkce pro kontrolu admin role
+    function isAdmin() {
+      return isAuthenticated() && 
+             getUserDoc() != null &&
+             getUserDoc().data.role == 'admin' &&
+             getUserDoc().data.approved == true;
+    }
+    
+    // Helper funkce pro čtení (vlastník nebo admin)
+    // POZNÁMKA: Pro queries (getDocs) se resource kontroluje pro každý dokument
+    // Admin může číst všechny dokumenty, běžný uživatel jen své
+    function canRead() {
+      return isApproved() && (
+        isAdmin() || 
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
+    }
+    
+    // Helper funkce pro čtení při vytváření (vlastník nebo admin)
+    function canReadCreate() {
+      return isApproved() && (
+        isAdmin() || 
+        request.resource.data.userId == request.auth.uid
+      );
+    }
+    
+    // Helper funkce pro update (vlastník nebo admin)
+    function canUpdate() {
+      return isApproved() && (
+        isAdmin() ||
+        (resource.data.userId == request.auth.uid &&
+         request.resource.data.userId == resource.data.userId)
+      );
+    }
+    
+    // Helper funkce pro delete (vlastník nebo admin)
+    function canDelete() {
+      return isApproved() && (
+        isAdmin() ||
+        (resource != null && resource.data.userId == request.auth.uid)
+      );
+    }
+    
+    // Operators - schválené uživatele vidí své, admini vidí všechna
+    match /operators/{operatorId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
+    // Premises - schválené uživatele vidí své, admini vidí všechna
+    match /premises/{premiseId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
+    // Customers - deprecated, ponecháno pro zpětnou kompatibilitu
+    match /customers/{customerId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
+    // Audits - schválené uživatele vidí své, admini vidí všechna
+    match /audits/{auditId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
+    // Reports - schválené uživatele vidí své, admini vidí všechna
+    match /reports/{reportId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
+    // Settings - čtení pro schválené uživatele, zápis pouze pro adminy
+    match /settings/{document=**} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+    
+    // Users - vlastní profil může číst/zapisovat, admin může číst všechny a upravovat role
+    match /users/{userId} {
+      // Čtení: vlastní profil (i když není approved) nebo admin
+      allow read: if isAuthenticated() && (
+        isOwner(userId) || 
+        (isAdmin())
+      );
+      
+      // Vytvoření: vlastní profil může vytvořit (bez kontroly approved, protože ještě neexistuje)
+      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid;
+      
+      // Update: vlastní profil může upravit pouze některá pole (displayName, email), admin může vše
+      allow update: if isAuthenticated() && (
+        // Vlastní profil může upravit pouze displayName a email, ne role ani approved
+        (isOwner(userId) && 
+         request.resource.data.userId == resource.data.userId &&
+         request.resource.data.role == resource.data.role &&
+         request.resource.data.approved == resource.data.approved) ||
+        // Admin může upravit vše
+        (isAdmin())
+      );
+    }
+    
+    // AI Usage Logs - pouze pro schválené uživatele, vidí jen své
+    match /aiUsageLogs/{logId} {
+      allow read: if isApproved() && 
+                     (resource == null || resource.data.userId == request.auth.uid);
+      allow create: if isApproved() && 
+                      request.resource.data.userId == request.auth.uid;
+      allow delete: if isApproved() && 
+                       (resource == null || resource.data.userId == request.auth.uid);
+    }
+  }
+}

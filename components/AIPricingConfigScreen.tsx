@@ -3,6 +3,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { fetchAIModelsConfig, fetchAIPricingConfig, saveAIPricingConfig } from '../services/firestore/settings';
+import { toast } from '../utils/toast';
 
 interface ModelPricing {
   inputPrice: number;
@@ -26,10 +28,12 @@ interface AIPricingConfigScreenProps {
 
 const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack }) => {
   const [config, setConfig] = useState<PricingConfig>({ usdToCzk: 25, models: {} });
+  const [initialConfig, setInitialConfig] = useState<PricingConfig>({ usdToCzk: 25, models: {} });
   const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newModelName, setNewModelName] = useState('');
   const [showAddModel, setShowAddModel] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -37,40 +41,41 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
 
   const loadConfig = async () => {
     try {
-      // Načíst modely z JSON configu
-      const modelsResponse = await fetch('/api/ai-models-config');
-      const modelsConfig = modelsResponse.ok ? await modelsResponse.json() : { models: {} };
+      // Načíst modely a pricing config z Firestore
+      const [modelsConfig, pricingConfig] = await Promise.all([
+        fetchAIModelsConfig(),
+        fetchAIPricingConfig()
+      ]);
       
-      // Načíst pricing config
-      const configResponse = await fetch('/api/ai-pricing-config');
-      const pricingConfig = configResponse.ok ? await configResponse.json() : { usdToCzk: 25, models: {} };
-      
-      // Sloučit: modely z JSON config + jejich ceny z pricing configu
+      // Sloučit: modely z models config + jejich ceny z pricing configu
       const mergedModels: Record<string, ModelPricing> = {};
       
-      // Projít všechny modely z JSON configu
-      Object.entries(modelsConfig.models).forEach(([usage, modelName]: [string, any]) => {
-        const existingPricing = pricingConfig.models[modelName];
+      // Projít všechny modely z models config
+      Object.entries(modelsConfig.models || {}).forEach(([usage, modelName]: [string, any]) => {
+        const existingPricing = pricingConfig.models?.[modelName];
         mergedModels[modelName] = existingPricing || {
           inputPrice: 0,
           outputPrice: 0,
-          note: `Model z aiModelsConfig.json (${usage})`,
+          note: `Model z aiModelsConfig (${usage})`,
           lastPriceUpdate: new Date().toISOString().split('T')[0]
         };
       });
       
       // Přidat i modely z pricing configu které nejsou v models config (vlastní modely)
-      Object.keys(pricingConfig.models).forEach(modelName => {
+      Object.keys(pricingConfig.models || {}).forEach(modelName => {
         if (!mergedModels[modelName]) {
           mergedModels[modelName] = pricingConfig.models[modelName];
         }
       });
       
-      setConfig({
+      const loadedConfig = {
         usdToCzk: pricingConfig.usdToCzk || 25,
         lastCurrencyUpdate: pricingConfig.lastCurrencyUpdate,
         models: mergedModels
-      });
+      };
+      
+      setConfig(loadedConfig);
+      setInitialConfig(loadedConfig);
     } catch (error) {
       console.error('Chyba při načítání pricing config:', error);
     } finally {
@@ -78,26 +83,39 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     }
   };
 
+  // Detekce neuložených změn
+  const hasUnsavedChanges = JSON.stringify(config) !== JSON.stringify(initialConfig);
+
+  // Varování při odchodu pokud jsou neuložené změny
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges || saving) {
+        e.preventDefault();
+        e.returnValue = 'Máte neuložené změny. Opravdu chcete opustit stránku?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, saving]);
+
   const handleSave = async () => {
     try {
-      const response = await fetch('/api/ai-pricing-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...config,
-          lastCurrencyUpdate: new Date().toISOString()
-        })
+      setSaving(true);
+      await saveAIPricingConfig({
+        ...config,
+        lastCurrencyUpdate: new Date().toISOString()
       });
       
-      if (response.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-      } else {
-        alert('Chyba při ukládání pricing configu');
-      }
+      setInitialConfig(config);
+      setLastSaved(new Date());
+      toast.success('Pricing config úspěšně uložen');
     } catch (error) {
       console.error('Chyba při ukládání:', error);
-      alert('Chyba při ukládání pricing configu');
+      toast.error('Chyba při ukládání pricing configu');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -173,6 +191,23 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
             <div>
               <h1 className="text-3xl font-bold text-gray-800">💵 Ceny AI modelů</h1>
               <p className="text-gray-600 mt-2">Nastavte kurz a ceny pro jednotlivé modely</p>
+              <div className="mt-3 flex items-center gap-3 text-sm">
+                {saving && (
+                  <span className="text-blue-600 font-semibold flex items-center gap-2">
+                    <span className="animate-spin">⏳</span> Ukládám...
+                  </span>
+                )}
+                {!saving && lastSaved && (
+                  <span className="text-green-600 font-semibold">
+                    ✓ Uloženo {lastSaved.toLocaleTimeString('cs-CZ')}
+                  </span>
+                )}
+                {hasUnsavedChanges && !saving && (
+                  <span className="text-orange-600 font-semibold">
+                    ⚠ Neuložené změny
+                  </span>
+                )}
+              </div>
             </div>
             <button
               onClick={onBack}
@@ -340,18 +375,16 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
         <div className="flex gap-4">
           <button
             onClick={handleSave}
-            className="flex-1 bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={saving || !hasUnsavedChanges}
+            className={`flex-1 font-bold py-3 px-6 rounded-lg transition-colors ${
+              saving || !hasUnsavedChanges
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            💾 Uložit
+            {saving ? '⏳ Ukládám...' : '💾 Uložit'}
           </button>
         </div>
-
-        {/* Success message */}
-        {saved && (
-          <div className="mt-4 p-4 bg-green-100 border-2 border-green-500 rounded-lg text-green-800 font-semibold text-center animate-fade-in">
-            ✅ Pricing config úspěšně uložen
-          </div>
-        )}
       </div>
     </div>
   );

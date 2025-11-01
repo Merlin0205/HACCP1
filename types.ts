@@ -62,9 +62,11 @@ export interface AuditHeaderValues {
 }
 
 export enum AppState {
-  CUSTOMER_DASHBOARD = 'customer_dashboard',
-  ADD_CUSTOMER = 'add_customer',
-  EDIT_CUSTOMER = 'edit_customer',
+  OPERATOR_DASHBOARD = 'operator_dashboard',
+  ADD_OPERATOR = 'add_operator',
+  EDIT_OPERATOR = 'edit_operator',
+  ADD_PREMISE = 'add_premise',
+  EDIT_PREMISE = 'edit_premise',
   AUDIT_LIST = 'audit_list',
   HEADER_FORM = 'header_form',
   AUDIT_IN_PROGRESS = 'audit_in_progress',
@@ -74,7 +76,8 @@ export enum AppState {
   AI_REPORT_SETTINGS = 'ai_report_settings',
   AI_USAGE_STATS = 'ai_usage_stats',
   AI_PRICING_CONFIG = 'ai_pricing_config',
-  ADMIN = 'admin'
+  ADMIN = 'admin',
+  USER_MANAGEMENT = 'user_management'
 }
 
 export interface ReportData {
@@ -96,7 +99,7 @@ export interface ReportData {
   }[];
 }
 
-export interface Customer {
+export interface Operator {
   id: string; 
   operator_name: string;
   operator_address: string;
@@ -104,12 +107,20 @@ export interface Customer {
   operator_statutory_body: string;
   operator_phone: string;
   operator_email: string;
+}
+
+export interface Premise {
+  id: string;
+  operatorId: string;
   premise_name: string;
   premise_address: string;
   premise_responsible_person: string;
   premise_phone: string;
   premise_email: string;
 }
+
+// Zpětná kompatibilita - deprecated, použijte Operator
+export type Customer = Operator;
 
 export enum AuditStatus {
   NOT_STARTED = 'Nový',
@@ -120,7 +131,7 @@ export enum AuditStatus {
 
 export interface Audit {
   id: string;
-  customerId: string;
+  premiseId: string;
   status: AuditStatus;
   createdAt: string;
   completedAt?: string;
@@ -142,6 +153,22 @@ export interface AuditorInfo {
   phone: string;
   email: string;
   web: string;
+}
+
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user'
+}
+
+export interface UserMetadata {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  approved: boolean;
+  createdAt: string;
+  approvedAt?: string;
+  approvedBy?: string; // userId admina který schválil
 }
 
 export interface Report {

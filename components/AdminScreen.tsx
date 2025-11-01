@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AuditStructure, AuditSection, AuditItem } from '../types';
 import { 
     ArrowUpIcon, 
@@ -10,6 +10,8 @@ import {
     DragHandleIcon 
 } from './icons';
 import { ItemEditModal } from './ItemEditModal';
+import { saveAuditStructure } from '../services/firestore/settings';
+import { toast } from '../utils/toast';
 
 interface AdminScreenProps {
   auditStructure: AuditStructure;
@@ -143,7 +145,7 @@ const SectionAdmin: React.FC<{
                         onClick={() => onAddItem(section.id)} 
                         className="mt-2 flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-blue-400 transition-colors"
                       >
-                        <PlusIcon />
+                        <PlusIcon className="w-5 h-5" />
                         <span className="ml-2 font-semibold text-sm">Přidat položku</span>
                       </button>
                 </div>
@@ -180,22 +182,76 @@ const ItemAdmin: React.FC<{
 const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStructure }) => {
     const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
     const [editingItemInfo, setEditingItemInfo] = useState<{ item: AuditItem; sectionId: string } | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const [initialStructure, setInitialStructure] = useState<AuditStructure>(auditStructure);
+
+    // Aktualizovat initialStructure když se auditStructure načte z Firestore
+    useEffect(() => {
+        setInitialStructure(auditStructure);
+        setHasUnsavedChanges(false);
+    }, []); // Pouze při prvním načtení
+
+    // Detekce neuložených změn
+    const hasChanges = JSON.stringify(auditStructure) !== JSON.stringify(initialStructure);
+    useEffect(() => {
+        setHasUnsavedChanges(hasChanges);
+    }, [hasChanges]);
+
+    // Uložit do Firestore při kliknutí na tlačítko Uložit
+    const saveToFirestore = useCallback(async (newStructure: AuditStructure) => {
+        try {
+            setSaving(true);
+            await saveAuditStructure(newStructure);
+            setInitialStructure(newStructure);
+            setHasUnsavedChanges(false);
+            setLastSaved(new Date());
+            toast.success('Změny byly uloženy');
+        } catch (error) {
+            console.error('[AdminScreen] Error saving audit structure:', error);
+            toast.error('Chyba při ukládání struktury auditu');
+            setHasUnsavedChanges(true);
+        } finally {
+            setSaving(false);
+        }
+    }, []);
+
+    // Varování při odchodu pokud jsou neuložené změny
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasUnsavedChanges || saving) {
+                e.preventDefault();
+                e.returnValue = 'Máte neuložené změny. Opravdu chcete opustit stránku?';
+                return e.returnValue;
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [hasUnsavedChanges, saving]);
 
     const handleUpdateSection = (updatedSection: AuditSection) => {
-        setAuditStructure(prev => ({
-            ...prev,
-            audit_sections: prev.audit_sections.map(sec =>
+        const newStructure = {
+            ...auditStructure,
+            audit_sections: auditStructure.audit_sections.map(sec =>
                 sec.id === updatedSection.id ? updatedSection : sec
             )
-        }));
+        };
+        setAuditStructure(newStructure);
+        setHasUnsavedChanges(true);
+        // Neukládá se automaticky - pouze při kliknutí na Uložit
     };
 
     const handleDeleteSection = (sectionId: string) => {
         if (window.confirm('Opravdu si přejete smazat celou sekci včetně všech jejích položek?')) {
-            setAuditStructure(prev => ({
-                ...prev,
-                audit_sections: prev.audit_sections.filter(sec => sec.id !== sectionId)
-            }));
+            const newStructure = {
+                ...auditStructure,
+                audit_sections: auditStructure.audit_sections.filter(sec => sec.id !== sectionId)
+            };
+            setAuditStructure(newStructure);
+            setHasUnsavedChanges(true);
+            // Neukládá se automaticky - pouze při kliknutí na Uložit
         }
     };
     
@@ -206,12 +262,15 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
             description: "",
             active: true
         };
-        setAuditStructure(prev => ({
-            ...prev,
-            audit_sections: prev.audit_sections.map(sec =>
+        const newStructure = {
+            ...auditStructure,
+            audit_sections: auditStructure.audit_sections.map(sec =>
                 sec.id === sectionId ? {...sec, items: [...sec.items, newItem]} : sec
             )
-        }));
+        };
+        setAuditStructure(newStructure);
+        setHasUnsavedChanges(true);
+        // Neukládá se automaticky - pouze při kliknutí na Uložit
     };
 
     const handleAddSection = () => {
@@ -221,10 +280,13 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
             items: [],
             active: true,
         };
-        setAuditStructure(prev => ({
-            ...prev,
-            audit_sections: [...prev.audit_sections, newSection]
-        }));
+        const newStructure = {
+            ...auditStructure,
+            audit_sections: [...auditStructure.audit_sections, newSection]
+        };
+        setAuditStructure(newStructure);
+        setHasUnsavedChanges(true);
+        // Neukládá se automaticky - pouze při kliknutí na Uložit
     };
 
     const handleSectionDragStart = (e: React.DragEvent<HTMLButtonElement>, sectionId: string) => {
@@ -240,17 +302,23 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
         e.preventDefault();
         if (!draggedSectionId || draggedSectionId === targetSectionId) return;
 
-        setAuditStructure(prev => {
-            const sections = [...prev.audit_sections];
-            const draggedIndex = sections.findIndex(sec => sec.id === draggedSectionId);
-            const targetIndex = sections.findIndex(sec => sec.id === targetSectionId);
-            
-            const [removed] = sections.splice(draggedIndex, 1);
-            sections.splice(targetIndex, 0, removed);
-            
-            return { ...prev, audit_sections: sections };
-        });
+        const newStructure = {
+            ...auditStructure,
+            audit_sections: (() => {
+                const sections = [...auditStructure.audit_sections];
+                const draggedIndex = sections.findIndex(sec => sec.id === draggedSectionId);
+                const targetIndex = sections.findIndex(sec => sec.id === targetSectionId);
+                
+                const [removed] = sections.splice(draggedIndex, 1);
+                sections.splice(targetIndex, 0, removed);
+                
+                return sections;
+            })()
+        };
+        setAuditStructure(newStructure);
+        setHasUnsavedChanges(true);
         setDraggedSectionId(null);
+        // Neukládá se automaticky - pouze při kliknutí na Uložit
     };
 
     const handleEditItemRequest = (itemToEdit: AuditItem) => {
@@ -263,41 +331,51 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
     const handleSaveEditedItem = (updatedItem: AuditItem, newSectionId: string) => {
         const oldSectionId = editingItemInfo!.sectionId;
         
-        setAuditStructure(prev => {
-            let newSections = [...prev.audit_sections];
+        const newStructure = {
+            ...auditStructure,
+            audit_sections: (() => {
+                let newSections = [...auditStructure.audit_sections];
 
-            if (oldSectionId === newSectionId) {
-                // Just update item in the same section
-                newSections = newSections.map(section => 
-                    section.id === oldSectionId
-                        ? {
-                            ...section,
-                            items: section.items.map(item =>
-                                item.id === updatedItem.id ? updatedItem : item
-                            ),
-                          }
-                        : section
-                );
-            } else {
-                // Move item to a new section
-                // 1. Remove from old section
-                newSections = newSections.map(section => 
-                    section.id === oldSectionId
-                        ? { ...section, items: section.items.filter(item => item.id !== updatedItem.id) } 
-                        : section
-                );
+                if (oldSectionId === newSectionId) {
+                    // Just update item in the same section
+                    newSections = newSections.map(section => 
+                        section.id === oldSectionId
+                            ? {
+                                ...section,
+                                items: section.items.map(item =>
+                                    item.id === updatedItem.id ? updatedItem : item
+                                ),
+                              }
+                            : section
+                    );
+                } else {
+                    // Move item to a new section
+                    // 1. Remove from old section
+                    newSections = newSections.map(section => 
+                        section.id === oldSectionId
+                            ? { ...section, items: section.items.filter(item => item.id !== updatedItem.id) } 
+                            : section
+                    );
 
-                // 2. Add to new section
-                newSections = newSections.map(section => 
-                    section.id === newSectionId
-                        ? { ...section, items: [...section.items, updatedItem] }
-                        : section
-                );
-            }
-            return {...prev, audit_sections: newSections };
-        });
+                    // 2. Add to new section
+                    newSections = newSections.map(section => 
+                        section.id === newSectionId
+                            ? { ...section, items: [...section.items, updatedItem] }
+                            : section
+                    );
+                }
+                return newSections;
+            })()
+        };
         
+        setAuditStructure(newStructure);
+        setHasUnsavedChanges(true);
         setEditingItemInfo(null);
+        // Neukládá se automaticky - pouze při kliknutí na Uložit
+    };
+
+    const handleManualSave = async () => {
+        await saveToFirestore(auditStructure);
     };
 
     const handleCloseEditModal = () => {
@@ -309,8 +387,29 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
             <div className="max-w-4xl mx-auto">
                 {/* Header */}
                 <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                    <h1 className="text-3xl font-bold text-gray-800">Správa bodů auditu</h1>
-                    <p className="text-gray-600 mt-2">Zde můžete zapnout nebo vypnout celé sekce nebo jednotlivé položky, které se objeví v průběhu auditu. Můžete také měnit jejich pořadí, upravovat texty, přidávat nové a mazat stávající. Změny se ukládají automaticky do vašeho prohlížeče.</p>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-800">Správa bodů auditu</h1>
+                            <p className="text-gray-600 mt-2">Zde můžete zapnout nebo vypnout celé sekce nebo jednotlivé položky, které se objeví v průběhu auditu. Můžete také měnit jejich pořadí, upravovat texty, přidávat nové a mazat stávající. Po dokončení změn klikněte na tlačítko "Uložit".</p>
+                            <div className="mt-3 flex items-center gap-3 text-sm">
+                                {saving && (
+                                    <span className="text-blue-600 font-semibold flex items-center gap-2">
+                                        <span className="animate-spin">⏳</span> Ukládám...
+                                    </span>
+                                )}
+                                {!saving && lastSaved && (
+                                    <span className="text-green-600 font-semibold">
+                                        ✓ Uloženo {lastSaved.toLocaleTimeString('cs-CZ')}
+                                    </span>
+                                )}
+                                {hasUnsavedChanges && !saving && (
+                                    <span className="text-orange-600 font-semibold">
+                                        ⚠ Neuložené změny
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Content */}
@@ -344,6 +443,21 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                         <PlusIcon className="w-5 h-5" />
                         <span className="ml-2">Přidat novou sekci</span>
                     </button>
+
+                    {/* Tlačítko Uložit */}
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                        <button
+                            onClick={handleManualSave}
+                            disabled={saving || !hasUnsavedChanges}
+                            className={`w-full font-bold py-3 px-6 rounded-lg transition-colors ${
+                                saving || !hasUnsavedChanges
+                                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }`}
+                        >
+                            {saving ? '⏳ Ukládám...' : '💾 Uložit změny'}
+                        </button>
+                    </div>
 
                     {editingItemInfo && (
                         <ItemEditModal

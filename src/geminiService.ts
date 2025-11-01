@@ -1,9 +1,10 @@
 import { GoogleGenerativeAI, Part } from "@google/generative-ai";
+import { fetchAIModelsConfig } from "../services/firestore/settings";
 
 // Načtení API klíče z proměnných prostředí
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-// Modely se načítají z API místo .env
+// Modely se načítají z Firestore místo API
 let imageModelName: string | null = null;
 let textModelName: string | null = null;
 let audioModelName: string | null = null;
@@ -15,17 +16,17 @@ const genAI = new GoogleGenerativeAI(apiKey);
 // Promise pro načítání modelů
 const modelsPromise = (async () => {
   try {
-    const response = await fetch('/api/ai-models-config');
-    if (response.ok) {
-      const config = await response.json();
-      imageModelName = config.models['image-analysis'];
-      textModelName = config.models['text-generation'];
-      audioModelName = config.models['audio-transcription'];
-      modelsLoaded = true;
-      console.log('[GEMINI] Načtené modely:', { imageModelName, textModelName, audioModelName });
-    }
+    const config = await fetchAIModelsConfig();
+    imageModelName = config.models['image-analysis'] || null;
+    textModelName = config.models['text-generation'] || null;
+    audioModelName = config.models['audio-transcription'] || null;
+    modelsLoaded = true;
+    console.log('[GEMINI] Načtené modely:', { imageModelName, textModelName, audioModelName });
   } catch (error) {
     console.error('[GEMINI] Chyba při načítání modelů:', error);
+    // Fallback na default modely
+    audioModelName = 'gemini-2.0-flash-exp';
+    modelsLoaded = true;
   }
 })();
 
@@ -58,26 +59,8 @@ export const transcribeAudio = async (audioPart: Part): Promise<string> => {
     const response = result.response;
     const text = response.text();
     
-    // Zalogovat usage na server
-    try {
-      const usage = response.usageMetadata;
-      if (usage && (usage.totalTokenCount || usage.promptTokenCount)) {
-        await fetch('/api/log-ai-usage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: audioModelName,
-            operation: 'audio-transcription',
-            promptTokens: usage.promptTokenCount || 0,
-            completionTokens: usage.candidatesTokenCount || 0,
-            totalTokens: usage.totalTokenCount || (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0)
-          })
-        });
-      }
-    } catch (logError) {
-      console.error('Chyba při logování usage:', logError);
-      // Pokračujeme i když se logování nezdaří
-    }
+    // Poznámka: Logování usage se nyní dělá v Cloud Functions při použití transcribeAudio Cloud Function
+    // Pokud používáte tuto frontend verzi, logování není dostupné
     
     return text.trim();
   } catch (error) {
@@ -99,25 +82,8 @@ export const analyzeImageWithAI = async (photo: Part): Promise<string> => {
     const prompt = "Analyzuj tuto fotografii z potravinářského provozu. Popiš, co na ní je, a identifikuj případná hygienická rizika nebo neshody s HACCP. Buď stručný a věcný.";
     const result = await model.generateContent([prompt, photo]);
     
-    // Zalogovat usage na server
-    try {
-      const usage = result.response.usageMetadata;
-      if (usage && (usage.totalTokenCount || usage.promptTokenCount)) {
-        await fetch('/api/log-ai-usage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: imageModelName,
-            operation: 'image-analysis',
-            promptTokens: usage.promptTokenCount || 0,
-            completionTokens: usage.candidatesTokenCount || 0,
-            totalTokens: usage.totalTokenCount || (usage.promptTokenCount || 0) + (usage.candidatesTokenCount || 0)
-          })
-        });
-      }
-    } catch (logError) {
-      console.error('Chyba při logování usage:', logError);
-    }
+    // Poznámka: Logování usage se nyní dělá v Cloud Functions
+    // Pokud používáte tuto frontend verzi, logování není dostupné
     
     return result.response.text();
 };

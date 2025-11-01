@@ -3,8 +3,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { fetchAIUsageLogs, clearAIUsageLogs } from '../services/firestore/aiUsageLogs';
+import { toast } from '../utils/toast';
 
 interface AIUsageLog {
+  id: string;
   timestamp: string;
   model: string;
   operation: string;
@@ -33,13 +36,11 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
 
   const loadStats = async () => {
     try {
-      const response = await fetch('/api/ai-usage-stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      const logs = await fetchAIUsageLogs(1000); // Načíst maximálně 1000 záznamů
+      setStats({ logs });
     } catch (error) {
       console.error('Chyba při načítání AI usage stats:', error);
+      toast.error('Chyba při načítání statistik');
     } finally {
       setLoading(false);
     }
@@ -48,12 +49,12 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
   const handleClearLog = async () => {
     if (confirm('Opravdu chcete smazat celou historii nákladů?')) {
       try {
-        const response = await fetch('/api/ai-usage-stats', { method: 'DELETE' });
-        if (response.ok) {
-          setStats({ logs: [] });
-        }
+        await clearAIUsageLogs();
+        setStats({ logs: [] });
+        toast.success('Historie byla smazána');
       } catch (error) {
         console.error('Chyba při mazání logu:', error);
+        toast.error('Chyba při mazání historie');
       }
     }
   };
