@@ -63,6 +63,56 @@
       "totalTokens": 932,
       "costUsd": 0,
       "costCzk": 0
+    },
+    {
+      "timestamp": "2025-10-30T16:37:35.550Z",
+      "model": "gemini-2.5-flash",
+      "operation": "audio-transcription",
+      "promptTokens": 145,
+      "completionTokens": 5,
+      "totalTokens": 150,
+      "costUsd": 0.000056,
+      "costCzk": 0.001176
+    },
+    {
+      "timestamp": "2025-10-30T16:38:11.226Z",
+      "model": "gemini-2.5-flash",
+      "operation": "audio-transcription",
+      "promptTokens": 166,
+      "completionTokens": 7,
+      "totalTokens": 2274,
+      "costUsd": 0.0000673,
+      "costCzk": 0.0014133
+    },
+    {
+      "timestamp": "2025-10-30T16:38:28.542Z",
+      "model": "gemini-2.5-flash",
+      "operation": "audio-transcription",
+      "promptTokens": 237,
+      "completionTokens": 25,
+      "totalTokens": 344,
+      "costUsd": 0.0001336,
+      "costCzk": 0.0028056
+    },
+    {
+      "timestamp": "2025-10-30T16:46:13.594Z",
+      "model": "gemini-2.5-flash",
+      "operation": "audio-transcription",
+      "promptTokens": 86,
+      "completionTokens": 5,
+      "totalTokens": 847,
+      "costUsd": 0.0000383,
+      "costCzk": 0.0008043000000000001
+    },
+    {
+      "timestamp": "2025-10-30T16:47:53.837Z",
+      "model": "gemini-2.0-flash-exp",
+      "operation": "report-generation",
+      "promptTokens": 694,
+      "completionTokens": 847,
+      "totalTokens": 1541,
+      "costUsd": 0,
+      "costCzk": 0
     }
   ]
 }

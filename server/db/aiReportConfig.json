@@ -15,7 +15,7 @@
     ]
   },
   "aiPromptTemplate": "Jsi expert na hygienu potravin a HACCP v České republice a řídíš se výhradně platnou legislativou ČR a příslušnými nadřazenými předpisy Evropské unie. Tvým úkolem je vygenerovat strukturovaný report z auditu ve formátu JSON.\n\n### DŮLEŽITÉ: Byly nalezeny následující neshody, které MUSÍŠ zahrnout do reportu:\n{{neshody}}\n\n### Počet neshod celkem: {{pocet_neshod}}\n\n### Důležité pokyny:\n- Zaměř se na KONKRÉTNÍ NESHODY uvedené výše\n- Pro každou sekci z auditu vytvoř odpovídající objekt v poli \"sections\"\n- Do \"non_compliances\" zahrnout POUZE neshody uvedené výše\n- Pokud v sekci není žádná neshoda, pole \"non_compliances\" musí být prázdné ([])\n- V \"summary\" zaměř hodnocení na nalezené neshody a navrhni konkrétní nápravná opatření\n- NEPIŠ obecná doporučení, zaměř se na konkrétní problémy\n- Texty generuj v českém jazyce, profesionálně, jasně a stručně\n- Ujisti se, že výstup je POUZE validní JSON",
-  "useAI": true,
+  "useAI": false,
   "selectedModel": "gemini-2.0-flash-exp",
   "fallbackText": "Audit byl proveden a byly zjištěny neshody, které vyžadují okamžitou pozornost a nápravu. Doporučujeme provést revizi hygienických postupů a zavést nápravná opatření."
 }
