@@ -9,6 +9,16 @@
  * - Lepší separace concerns
  */
 
+/**
+ * App.tsx - Hlavní komponenta aplikace (FIREBASE MIGRACE)
+ * 
+ * Změny v Firebase migraci:
+ * - Používá Firestore pro všechna data
+ * - Firebase Storage pro fotky
+ * - Firebase Authentication (zajištěno v AppWithAuth)
+ * - Cloud Functions pro AI operace
+ */
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { AppState, Audit, Customer, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
@@ -16,7 +26,7 @@ import { Header } from './components/Header';
 import AuditChecklist from './components/AuditChecklist';
 import AdminScreen from './components/AdminScreen';
 import SettingsScreen from './components/SettingsScreen';
-import AuditorSettingsScreen, { getAuditorInfo } from './components/AuditorSettingsScreen';
+import AuditorSettingsScreen from './components/AuditorSettingsScreen';
 import AIReportSettingsScreen from './components/AIReportSettingsScreen';
 import AIUsageStatsScreen from './components/AIUsageStatsScreen';
 import AIPricingConfigScreen from './components/AIPricingConfigScreen';
@@ -29,6 +39,21 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { useAppData } from './hooks/useAppData';
 import { useReportGenerator } from './hooks/useReportGenerator';
+import { useAuth } from './contexts/AuthContext';
+import {
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+  createAudit,
+  updateAudit,
+  deleteAudit,
+  deleteAuditsByCustomer,
+  createReport,
+  updateReport,
+  deleteReportByAudit,
+  deleteReportsByAuditIds,
+  fetchAuditorInfo
+} from './services/firestore';
 
 const App: React.FC = () => {
   // --- DATA MANAGEMENT (using custom hooks) ---
@@ -92,21 +117,49 @@ const App: React.FC = () => {
     setAppState(AppState.EDIT_CUSTOMER);
   };
 
-  const handleSaveCustomer = (customerData: Omit<Customer, 'id'>) => {
-    if (activeCustomerId) {
-      setCustomers(prev => prev.map(c => (c.id === activeCustomerId ? { ...c, ...customerData } : c)));
-    } else {
-      const newCustomer: Customer = { id: `customer_${Date.now()}`, ...customerData };
-      setCustomers(prev => [...prev, newCustomer]);
+  const handleSaveCustomer = async (customerData: Omit<Customer, 'id'>) => {
+    try {
+      if (activeCustomerId) {
+        // Update existujícího zákazníka
+        await updateCustomer(activeCustomerId, customerData);
+        setCustomers(prev => prev.map(c => (c.id === activeCustomerId ? { ...c, ...customerData } : c)));
+      } else {
+        // Vytvoření nového zákazníka
+        const newId = await createCustomer(customerData);
+        const newCustomer: Customer = { id: newId, ...customerData };
+        setCustomers(prev => [...prev, newCustomer]);
+      }
+      handleBackToDashboard();
+    } catch (error) {
+      console.error('[handleSaveCustomer] Error:', error);
+      // Toast je zobrazen automaticky z error handleru
     }
-    handleBackToDashboard();
   };
 
-  const handleDeleteCustomer = (customerId: string) => {
-    const auditsToDelete = audits.filter(a => a.customerId === customerId).map(a => a.id);
-    setCustomers(prev => prev.filter(c => c.id !== customerId));
-    setAudits(prev => prev.filter(a => a.customerId !== customerId));
-    setReports(prev => prev.filter(r => !auditsToDelete.includes(r.auditId)));
+  const handleDeleteCustomer = async (customerId: string) => {
+    try {
+      // Nejprve smazat všechny audity a reporty
+      const auditsToDelete = audits.filter(a => a.customerId === customerId);
+      const auditIds = auditsToDelete.map(a => a.id);
+      
+      // Smazat reporty
+      if (auditIds.length > 0) {
+        await deleteReportsByAuditIds(auditIds);
+      }
+      
+      // Smazat audity
+      await deleteAuditsByCustomer(customerId);
+      
+      // Smazat zákazníka
+      await deleteCustomer(customerId);
+      
+      // Aktualizovat lokální state
+      setCustomers(prev => prev.filter(c => c.id !== customerId));
+      setAudits(prev => prev.filter(a => a.customerId !== customerId));
+      setReports(prev => prev.filter(r => !auditIds.includes(r.auditId)));
+    } catch (error) {
+      console.error('[handleDeleteCustomer] Error:', error);
+    }
   };
 
   const handleSelectCustomerForAudits = (customerId: string) => {
@@ -125,8 +178,8 @@ const App: React.FC = () => {
     const activeCustomer = customers.find(c => c.id === activeCustomerId);
     if (!activeCustomer) return;
 
-    // Načíst aktuální údaje auditora z API
-    const auditorInfo = await getAuditorInfo();
+    // Načíst aktuální údaje auditora z Firestore
+    const auditorInfo = await fetchAuditorInfo();
 
     const prefilledHeaderValues: AuditHeaderValues = {
       premise_name: activeCustomer.premise_name || '',
@@ -151,15 +204,33 @@ const App: React.FC = () => {
     setAppState(AppState.HEADER_FORM);
   };
 
-  const handleDeleteAudit = (auditId: string) => {
-    setAudits(prev => prev.filter(a => a.id !== auditId));
-    setReports(prev => prev.filter(r => r.auditId !== auditId));
+  const handleDeleteAudit = async (auditId: string) => {
+    try {
+      // Smazat report
+      await deleteReportByAudit(auditId);
+      
+      // Smazat audit
+      await deleteAudit(auditId);
+      
+      // Aktualizovat lokální state
+      setAudits(prev => prev.filter(a => a.id !== auditId));
+      setReports(prev => prev.filter(r => r.auditId !== auditId));
+    } catch (error) {
+      console.error('[handleDeleteAudit] Error:', error);
+    }
   };
 
-  const handleUnlockAudit = (auditId: string) => {
-    setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a));
-    setActiveAuditId(auditId);
-    setAppState(AppState.AUDIT_IN_PROGRESS);
+  const handleUnlockAudit = async (auditId: string) => {
+    try {
+      const updatedData = { status: AuditStatus.IN_PROGRESS };
+      await updateAudit(auditId, updatedData);
+      
+      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, ...updatedData } : a));
+      setActiveAuditId(auditId);
+      setAppState(AppState.AUDIT_IN_PROGRESS);
+    } catch (error) {
+      console.error('[handleUnlockAudit] Error:', error);
+    }
   };
 
   const handleSelectAudit = (auditId: string) => {
@@ -187,32 +258,48 @@ const App: React.FC = () => {
     };
   };
 
-  const handleHeaderUpdateAndReturn = (headerValues: AuditHeaderValues) => {
-    if (activeAuditId) {
-      setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
-    } else {
-      const newAudit = createNewAudit(headerValues, AuditStatus.NOT_STARTED);
-      setAudits(prev => [...prev, newAudit]);
+  const handleHeaderUpdateAndReturn = async (headerValues: AuditHeaderValues) => {
+    try {
+      if (activeAuditId) {
+        await updateAudit(activeAuditId, { headerValues });
+        setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
+      } else {
+        const newAuditData = createNewAudit(headerValues, AuditStatus.NOT_STARTED);
+        const newId = await createAudit(newAuditData);
+        const newAudit = { ...newAuditData, id: newId };
+        setAudits(prev => [...prev, newAudit]);
+      }
+      handleBackToAuditList();
+    } catch (error) {
+      console.error('[handleHeaderUpdateAndReturn] Error:', error);
     }
-    handleBackToAuditList();
   };
 
-  const handleHeaderUpdateAndContinue = (headerValues: AuditHeaderValues) => {
-    let auditIdToContinue = activeAuditId;
-    if (auditIdToContinue) {
-      setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
-    } else {
-      const newAudit = createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
-      setAudits(prev => [...prev, newAudit]);
-      auditIdToContinue = newAudit.id;
+  const handleHeaderUpdateAndContinue = async (headerValues: AuditHeaderValues) => {
+    try {
+      let auditIdToContinue = activeAuditId;
+      if (auditIdToContinue) {
+        await updateAudit(auditIdToContinue, { headerValues, status: AuditStatus.IN_PROGRESS });
+        setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
+      } else {
+        const newAuditData = createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
+        const newId = await createAudit(newAuditData);
+        auditIdToContinue = newId;
+        const newAudit = { ...newAuditData, id: newId };
+        setAudits(prev => [...prev, newAudit]);
+      }
+      setActiveAuditId(auditIdToContinue);
+      setAppState(AppState.AUDIT_IN_PROGRESS);
+      setPendingHeader(null);
+    } catch (error) {
+      console.error('[handleHeaderUpdateAndContinue] Error:', error);
     }
-    setActiveAuditId(auditIdToContinue);
-    setAppState(AppState.AUDIT_IN_PROGRESS);
-    setPendingHeader(null);
   };
 
-  const handleAnswerUpdate = useCallback((itemId: string, answer: any) => {
+  const handleAnswerUpdate = useCallback(async (itemId: string, answer: any) => {
     if (!activeAuditId) return;
+    
+    // Optimisticky aktualizovat UI
     setAudits(prev => prev.map(audit => {
       if (audit.id === activeAuditId) {
         const newAnswers = { ...audit.answers, [itemId]: answer };
@@ -220,27 +307,54 @@ const App: React.FC = () => {
       }
       return audit;
     }));
-  }, [activeAuditId]);
+    
+    // Uložit do Firestore
+    try {
+      const audit = audits.find(a => a.id === activeAuditId);
+      if (audit) {
+        const newAnswers = { ...audit.answers, [itemId]: answer };
+        await updateAudit(activeAuditId, { answers: newAnswers });
+      }
+    } catch (error) {
+      console.error('[handleAnswerUpdate] Error:', error);
+    }
+  }, [activeAuditId, audits]);
 
-  const handleFinishAudit = () => {
+  const handleFinishAudit = async () => {
     if (!activeAuditId) return;
 
-    setAudits(prev => prev.map(a => a.id === activeAuditId
-      ? { ...a, status: AuditStatus.LOCKED, completedAt: a.completedAt || new Date().toISOString() }
-      : a
-    ));
+    try {
+      const completedAt = new Date().toISOString();
+      
+      // Aktualizovat audit status
+      await updateAudit(activeAuditId, {
+        status: AuditStatus.LOCKED,
+        completedAt
+      });
+      
+      setAudits(prev => prev.map(a => a.id === activeAuditId
+        ? { ...a, status: AuditStatus.LOCKED, completedAt }
+        : a
+      ));
 
-    // Invalidate old report if exists
-    setReports(prev => prev.filter(r => r.auditId !== activeAuditId));
+      // Smazat starý report pokud existuje
+      await deleteReportByAudit(activeAuditId);
+      setReports(prev => prev.filter(r => r.auditId !== activeAuditId));
 
-    const newReport: Report = {
-      id: `report_${Date.now()}`,
-      auditId: activeAuditId,
-      status: ReportStatus.PENDING,
-      createdAt: new Date().toISOString(),
-    };
-    setReports(prev => [...prev, newReport]);
-    setAppState(AppState.REPORT_VIEW);
+      // Vytvoř nový report
+      const newReportData: Omit<Report, 'id'> = {
+        auditId: activeAuditId,
+        status: ReportStatus.PENDING,
+        createdAt: new Date().toISOString(),
+      };
+      
+      const newId = await createReport(newReportData);
+      const newReport: Report = { ...newReportData, id: newId };
+      setReports(prev => [...prev, newReport]);
+      setAppState(AppState.REPORT_VIEW);
+    } catch (error) {
+      console.error('[handleFinishAudit] Error:', error);
+    }
   };
 
   const handleToggleAdmin = () => {

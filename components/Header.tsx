@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { AppState } from '../types';
 import { SettingsIcon, BackIcon } from './icons';
+import { useAuth } from '../contexts/AuthContext';
+import { calculateAIUsageStats } from '../services/firestore';
 
 interface HeaderProps {
   appState: AppState;
@@ -8,23 +10,17 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ appState, onToggleAdmin }) => {
+  const { currentUser, signOut } = useAuth();
   const [totalCost, setTotalCost] = useState({ usd: 0, czk: 0 });
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
-    // Načíst celkové náklady při načtení komponenty
+    // Načíst celkové náklady z Firestore
     const loadTotalCost = async () => {
       try {
-        const response = await fetch('/api/ai-usage-stats');
-        if (response.ok) {
-          const data = await response.json();
-          const total = data.logs.reduce((acc: any, log: any) => {
-            acc.usd += log.costUsd || 0;
-            acc.czk += log.costCzk || 0;
-            return acc;
-          }, { usd: 0, czk: 0 });
-          setTotalCost(total);
-        }
+        const stats = await calculateAIUsageStats();
+        setTotalCost({ usd: stats.totalCostUsd, czk: stats.totalCostCzk });
       } catch (error) {
         console.error('Chyba při načítání celkových nákladů:', error);
       }
@@ -93,6 +89,36 @@ export const Header: React.FC<HeaderProps> = ({ appState, onToggleAdmin }) => {
           >
             {appState === AppState.ADMIN ? <BackIcon className="h-6 w-6" /> : <SettingsIcon className="h-6 w-6" />}
           </button>
+
+          {/* Uživatelské menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
+                {currentUser?.displayName?.charAt(0).toUpperCase() || currentUser?.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            </button>
+
+            {showUserMenu && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
+                <div className="px-3 py-2 border-b border-gray-200">
+                  <p className="font-semibold text-gray-800">{currentUser?.displayName || 'Uživatel'}</p>
+                  <p className="text-sm text-gray-600 truncate">{currentUser?.email}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    signOut();
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md hover:bg-red-50 text-red-600 font-medium mt-1"
+                >
+                  Odhlásit se
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

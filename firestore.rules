@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper funkce pro kontrolu autentifikace
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Customers - pouze pro přihlášené uživatele, vidí jen své
+    match /customers/{customerId} {
+      allow read, write: if isAuthenticated() && 
+                            resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+    }
+    
+    // Audits - pouze pro přihlášené uživatele, vidí jen své
+    match /audits/{auditId} {
+      allow read, write: if isAuthenticated() && 
+                            resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+    }
+    
+    // Reports - pouze pro přihlášené uživatele, vidí jen své
+    match /reports/{reportId} {
+      allow read, write: if isAuthenticated() && 
+                            resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+    }
+    
+    // Settings - přístupné pro každého přihlášeného uživatele
+    // (sdílená konfigurace jako audit struktura, AI nastavení)
+    match /settings/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated(); // V produkci můžete omezit na admin role
+    }
+    
+    // User-specific settings - pouze vlastní profil
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // AI Usage Logs - pouze pro přihlášené uživatele, vidí jen své
+    match /aiUsageLogs/{logId} {
+      allow read: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated();
+    }
+  }
+}
+

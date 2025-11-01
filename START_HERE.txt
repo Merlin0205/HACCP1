@@ -1,0 +1,65 @@
+﻿FIREBASE MIGRACE - KOMPLETNI NAVOD
+====================================
+
+VAĹ E APLIKACE JE PĹIPRAVENA NA FIREBASE!
+
+KE SPUĹ TÄšNĂŤ POTĹEBUJETE (3 kroky):
+
+1. FIREBASE CONSOLE (5 minut)
+   - JdÄ›te na https://console.firebase.google.com
+   - Vyberte projekt
+   - Aktivujte:
+     * Firestore Database (Production mode)
+     * Storage (Get started) 
+     * Authentication (Email/Password + Google)
+   
+   - ZkopĂ­rujte config:
+     * Project Settings â†’ Your apps â†’ Web app
+     * ZkopĂ­rujte firebaseConfig objekt
+
+2. LOKĂLNĂŤ NASTAVENĂŤ (2 minuty)
+   
+   A) Upravte .firebaserc (v rootu):
+   {
+     "projects": {
+       "default": "VĂĹ _FIREBASE_PROJECT_ID"
+     }
+   }
+   
+   B) VytvoĹ™te .env (v rootu):
+   VITE_FIREBASE_API_KEY=...zkopĂ­rujte
+   VITE_FIREBASE_AUTH_DOMAIN=vas-projekt.firebaseapp.com
+   VITE_FIREBASE_PROJECT_ID=vas-projekt-id
+   VITE_FIREBASE_STORAGE_BUCKET=vas-projekt.appspot.com
+   VITE_FIREBASE_MESSAGING_SENDER_ID=123456
+   VITE_FIREBASE_APP_ID=1:123:web:abc
+   
+   C) Nastavte Gemini klĂ­ÄŤ:
+   firebase functions:config:set gemini.api_key="VĂĹ _KLĂŤÄŚ"
+
+3. DEPLOY (5 minut)
+   npm install --legacy-peer-deps
+   cd functions && npm install && cd ..
+   npm run build
+   firebase deploy
+
+HOTOVO! Aplikace bÄ›ĹľĂ­ na: https://vas-projekt.web.app
+
+CO BYLO ZMÄšNÄšNO:
+- PĹ™idĂˇna Firebase Authentication (pĹ™ihlĂˇĹˇenĂ­)
+- Data v Firestore (mĂ­sto JSON souborĹŻ)
+- Fotky v Storage (mĂ­sto base64)
+- Cloud Functions (mĂ­sto Express serveru)
+- SmazĂˇn server/ adresĂˇĹ™ (uĹľ nenĂ­ potĹ™eba)
+
+DĹ®LEĹ˝ITĂ‰ SOUBORY:
+- .firebaserc - nastavit project ID
+- .env - vytvoĹ™it s Firebase credentials
+- firebase.json - konfigurace (uĹľ hotovo)
+- firebaseConfig.ts - inicializace (uĹľ hotovo)
+- firestore.rules - security (uĹľ hotovo)
+
+TROUBLESHOOTING:
+- "Permission denied" â†’ firebase login
+- Build chyby â†’ rm -rf node_modules && npm install --legacy-peer-deps
+- Functions nefungujĂ­ â†’ firebase functions:log
