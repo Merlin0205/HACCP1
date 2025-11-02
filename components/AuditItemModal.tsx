@@ -1,14 +1,17 @@
 import React from 'react';
 import { AuditItem, AuditAnswer, NonComplianceData } from '../types';
 import NonComplianceForm from './NonComplianceForm';
-import { PlusIcon, CheckmarkIcon, XIcon } from './icons';
+import { PlusIcon, CheckmarkIcon } from './icons';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
+import { Card, CardBody } from './ui/Card';
 
 interface AuditItemModalProps {
   item: AuditItem | null;
   answer: AuditAnswer;
   onClose: () => void;
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
-  log: (message: string) => void; // Přidáno logování
+  log: (message: string) => void;
 }
 
 export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate, log }) => {
@@ -46,72 +49,72 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
   };
 
   return (
-    <div 
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4 animate-fade-in"
-      onClick={onClose}
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={item.title}
+      size="lg"
+      footer={
+        <Button variant="primary" onClick={onClose} fullWidth>
+          Zavřít
+        </Button>
+      }
     >
-      <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="p-5 border-b flex justify-between items-center flex-shrink-0">
-          <h3 className="text-xl font-bold text-gray-800">{item.title}</h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-500">
-            <XIcon className="h-6 w-6" />
-          </button>
+      <div className="space-y-6">
+        {/* Description */}
+        <div className="bg-gray-50 rounded-xl p-4">
+          <p className="text-gray-700 leading-relaxed">{item.description}</p>
         </div>
 
-        <div className="p-5 overflow-y-auto flex-grow">
-          <p className="text-gray-600 mb-6">{item.description}</p>
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            variant={isCompliant ? 'primary' : 'secondary'}
+            onClick={handleSetCompliant}
+            disabled={isCompliant}
+            fullWidth
+            leftIcon={<CheckmarkIcon className="h-5 w-5" />}
+            className={isCompliant ? 'bg-accent-success hover:bg-green-700' : ''}
+          >
+            Vyhovuje
+          </Button>
+          <Button
+            variant="danger"
+            onClick={handleAddNonCompliance}
+            fullWidth
+          >
+            Přidat neshodu
+          </Button>
+        </div>
 
-          <div className="flex items-center gap-4 mb-6">
-            <button
-              onClick={handleSetCompliant}
-              disabled={isCompliant}
-              className={`w-full px-4 py-2 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${isCompliant ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}
-            >
-              <CheckmarkIcon /> Vyhovuje
-            </button>
-            <button
+        {/* Non-Compliance Forms */}
+        {!isCompliant && answer.nonComplianceData && (
+          <div className="space-y-4">
+            {answer.nonComplianceData.map((nc, index) => (
+              <Card key={index} className="border-l-4 border-accent-error">
+                <CardBody>
+                  <NonComplianceForm
+                    data={nc}
+                    index={index}
+                    onChange={(field, value) => handleNonComplianceChange(index, field, value)}
+                    onRemove={() => handleRemoveNonCompliance(index)}
+                    log={log}
+                  />
+                </CardBody>
+              </Card>
+            ))}
+            <Button
+              variant="ghost"
               onClick={handleAddNonCompliance}
-              className="w-full px-4 py-2 text-sm font-bold rounded-lg bg-red-100 text-red-800 hover:bg-red-200 transition-colors"
+              fullWidth
+              leftIcon={<PlusIcon className="h-5 w-5" />}
+              className="border-2 border-dashed border-gray-300 hover:border-primary"
             >
-              Přidat neshodu
-            </button>
+              Přidat další neshodu
+            </Button>
           </div>
-
-          {!isCompliant && answer.nonComplianceData && (
-            <div className="space-y-4">
-              {answer.nonComplianceData.map((nc, index) => (
-                <NonComplianceForm
-                  key={index}
-                  data={nc}
-                  index={index}
-                  onChange={(field, value) => handleNonComplianceChange(index, field, value)}
-                  onRemove={() => handleRemoveNonCompliance(index)}
-                  log={log}
-                />
-              ))}
-              <button 
-                onClick={handleAddNonCompliance} 
-                className="mt-2 flex items-center justify-center w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 hover:border-blue-400 transition-colors"
-              >
-                <PlusIcon className="h-5 w-5" />
-                <span className="ml-2 font-semibold text-sm">Přidat další neshodu</span>
-              </button>
-            </div>
-          )}
-        </div>
-        
-        <div className="p-4 bg-gray-50 border-t rounded-b-2xl flex-shrink-0">
-            <button
-                onClick={onClose}
-                className="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700"
-            >
-                Zavřít
-            </button>
-        </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 };

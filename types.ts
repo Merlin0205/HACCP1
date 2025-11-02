@@ -68,6 +68,8 @@ export enum AppState {
   ADD_PREMISE = 'add_premise',
   EDIT_PREMISE = 'edit_premise',
   AUDIT_LIST = 'audit_list',
+  ALL_AUDITS = 'all_audits',
+  INCOMPLETE_AUDITS = 'incomplete_audits',
   HEADER_FORM = 'header_form',
   AUDIT_IN_PROGRESS = 'audit_in_progress',
   REPORT_VIEW = 'report_view',
@@ -123,10 +125,13 @@ export interface Premise {
 export type Customer = Operator;
 
 export enum AuditStatus {
-  NOT_STARTED = 'Nový',
+  DRAFT = 'Nezapočatý',
   IN_PROGRESS = 'Probíhá',
   COMPLETED = 'Dokončen',
-  LOCKED = 'Uzamčen' 
+  REVISED = 'Změny',
+  // Zpětná kompatibilita
+  NOT_STARTED = 'Nezapočatý', // mapuje na DRAFT
+  LOCKED = 'Dokončen' // mapuje na COMPLETED
 }
 
 export interface Audit {

@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData, NonComplianceData } from '../types';
 import SummaryReportContent from '../src/components/SummaryReport';
+import { Button } from './ui/Button';
+import { BackIcon } from './icons';
 
 interface ReportViewProps {
   report: Report | undefined;
@@ -223,27 +225,38 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
   }
 
   return (
-    <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in print:shadow-none print:w-full print:max-w-none print:rounded-none">
-        <div className="p-6 flex justify-between items-center print:hidden">
-            <h2 className="text-3xl font-bold text-gray-800">Náhled zprávy</h2>
-            <div className="flex items-center gap-4">
-              <button 
-                  onClick={() => window.print()}
-                  className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                  Tisk / Uložit do PDF
-              </button>
-              <button 
-                  onClick={onBack}
-                  className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                  &larr; Zpět na seznam
-              </button>
-            </div>
+    <div className="w-full max-w-7xl mx-auto">
+      {/* Header - pouze pro obrazovku */}
+      <div className="p-6 flex justify-between items-center print:hidden">
+        <h2 className="text-3xl font-bold text-gray-800">Náhled zprávy</h2>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="primary"
+            onClick={() => window.print()}
+            leftIcon={
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+            }
+          >
+            Tisk / Uložit do PDF
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={onBack}
+            leftIcon={<BackIcon className="h-5 w-5" />}
+          >
+            Zpět na seznam
+          </Button>
         </div>
+      </div>
+      
+      {/* Report content - stejný vzhled jako před redesignem */}
+      <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in print:shadow-none print:w-full print:max-w-none print:rounded-none">
         <div className="report-body">
           {renderContent()}
         </div>
+      </div>
     </div>
   );
 };

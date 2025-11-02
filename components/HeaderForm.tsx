@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { AuditStructure, AuditHeaderValues } from '../types';
+import { Card, CardHeader, CardBody } from './ui/Card';
+import { TextField } from './ui/Input';
+import { Button } from './ui/Button';
+import { BackIcon } from './icons';
 
 interface HeaderFormProps {
     headerData: AuditStructure['header_data'];
     initialValues: AuditHeaderValues;
-    onSaveAndBack: (headerValues: AuditHeaderValues) => void; // New handler for "Save"
-    onSaveAndContinue: (headerValues: AuditHeaderValues) => void; // Renamed for clarity
+    onSaveAndBack: (headerValues: AuditHeaderValues) => void;
+    onSaveAndContinue: (headerValues: AuditHeaderValues) => void;
     onBack: () => void;
 }
 
@@ -17,73 +21,104 @@ export const HeaderForm: React.FC<HeaderFormProps> = ({
     onBack 
 }) => {
     const [values, setValues] = useState<AuditHeaderValues>(initialValues);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (id: string, value: string) => {
         setValues(prev => ({...prev, [id]: value}));
-    }
+    };
 
-    // Handles "Save and Continue to Checklist"
-    const handleSubmitAndContinue = (e: React.FormEvent) => {
+    const handleSubmitAndContinue = async (e: React.FormEvent) => {
         e.preventDefault();
-        onSaveAndContinue(values);
-    }
+        setIsSubmitting(true);
+        try {
+            await onSaveAndContinue(values);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-    // Handles "Save and Go Back to List"
-    const handleSaveAndBack = () => {
-        onSaveAndBack(values);
-    }
+    const handleSaveAndBack = async () => {
+        setIsSubmitting(true);
+        try {
+            await onSaveAndBack(values);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const renderSection = (section: any) => (
-        <div key={section.title} className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-            <h3 className="text-xl font-bold text-gray-700 mb-4">{section.title}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {section.fields.map((field : any) => (
-                    <div key={field.id}>
-                        <label htmlFor={field.id} className="block text-sm font-medium text-gray-600 mb-1">{field.label}</label>
-                        <input
+        <Card key={section.title}>
+            <CardHeader>
+                <h3 className="text-lg font-semibold text-gray-900">{section.title}</h3>
+            </CardHeader>
+            <CardBody>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {section.fields.map((field: any) => (
+                        <TextField
+                            key={field.id}
+                            label={field.label}
                             type={field.type}
-                            id={field.id}
                             value={values[field.id] || ''}
                             onChange={(e) => handleChange(field.id, e.target.value)}
-                            className="w-full px-3 py-2 bg-white text-gray-800 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition-shadow"
                             required
                         />
-                    </div>
-                ))}
-            </div>
-        </div>
+                    ))}
+                </div>
+            </CardBody>
+        </Card>
     );
 
     return (
-        <form onSubmit={handleSubmitAndContinue} className="w-full max-w-4xl space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center flex-wrap gap-4">
-                <h2 className="text-3xl font-bold text-gray-800">Základní údaje auditu</h2>
-            </div>
-            
-            {Object.values(headerData).map(section => section.title && renderSection(section))}
-
-            <div className="flex gap-4">
-                 <button
-                    type="button"
+        <div className="w-full max-w-5xl mx-auto">
+            {/* Header */}
+            <div className="mb-6">
+                <Button
+                    variant="ghost"
                     onClick={onBack}
-                    className="w-1/4 bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                    leftIcon={<BackIcon className="h-5 w-5" />}
+                    className="mb-4"
                 >
                     Zpět
-                </button>
-                <button
-                    type="button"
-                    onClick={handleSaveAndBack} // New Save button
-                    className="w-1/2 bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors"
-                >
-                    Uložit
-                </button>
-                <button
-                    type="submit"
-                    className="w-1/2 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform transform hover:scale-105"
-                >
-                    Pokračovat na checklist
-                </button>
+                </Button>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Základní údaje auditu</h1>
+                <p className="text-gray-600">Vyplňte základní informace před zahájením auditu</p>
             </div>
-        </form>
+
+            {/* Form */}
+            <form onSubmit={handleSubmitAndContinue} className="space-y-6">
+                {Object.values(headerData).map(section => section.title && renderSection(section))}
+
+                {/* Footer Actions */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
+                    <Button
+                        variant="ghost"
+                        onClick={onBack}
+                        disabled={isSubmitting}
+                        className="sm:w-auto"
+                    >
+                        Zrušit
+                    </Button>
+                    <div className="flex gap-3 flex-1 sm:flex-initial sm:justify-end">
+                        <Button
+                            variant="secondary"
+                            type="button"
+                            onClick={handleSaveAndBack}
+                            isLoading={isSubmitting}
+                            disabled={isSubmitting}
+                        >
+                            Uložit
+                        </Button>
+                        <Button
+                            variant="primary"
+                            type="submit"
+                            isLoading={isSubmitting}
+                            disabled={isSubmitting}
+                        >
+                            Pokračovat na checklist
+                        </Button>
+                    </div>
+                </div>
+            </form>
+        </div>
     );
 };

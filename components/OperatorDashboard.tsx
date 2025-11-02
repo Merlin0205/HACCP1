@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Operator, Premise } from '../types';
+import { Card, CardHeader, CardBody, CardFooter } from './ui/Card';
+import { Button } from './ui/Button';
+import { Modal } from './ui/Modal';
+import { PlusIcon, EditIcon, TrashIcon } from './icons';
 
 interface OperatorDashboardProps {
   operators: Operator[];
@@ -28,48 +32,6 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [deletingPremiseId, setDeletingPremiseId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedOperatorIds, setExpandedOperatorIds] = useState<Set<string>>(new Set());
-
-  const handleDeleteOperatorRequest = (operatorId: string) => {
-    setDeletingOperatorId(operatorId);
-  };
-
-  const handleDeleteOperatorConfirm = () => {
-    if (deletingOperatorId) {
-      onDeleteOperator(deletingOperatorId);
-      setDeletingOperatorId(null);
-    }
-  };
-
-  const handleDeleteOperatorCancel = () => {
-    setDeletingOperatorId(null);
-  };
-
-  const handleDeletePremiseRequest = (premiseId: string) => {
-    setDeletingPremiseId(premiseId);
-  };
-
-  const handleDeletePremiseConfirm = () => {
-    if (deletingPremiseId) {
-      onDeletePremise(deletingPremiseId);
-      setDeletingPremiseId(null);
-    }
-  };
-
-  const handleDeletePremiseCancel = () => {
-    setDeletingPremiseId(null);
-  };
-
-  const toggleOperator = (operatorId: string) => {
-    setExpandedOperatorIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(operatorId)) {
-        newSet.delete(operatorId);
-      } else {
-        newSet.add(operatorId);
-      }
-      return newSet;
-    });
-  };
 
   const premisesByOperator = useMemo(() => {
     const map = new Map<string, Premise[]>();
@@ -112,361 +74,341 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     return { operators: filteredOperators, matchingPremises };
   }, [operators, premisesByOperator, searchTerm]);
 
+  const toggleOperator = (operatorId: string) => {
+    setExpandedOperatorIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(operatorId)) {
+        newSet.delete(operatorId);
+      } else {
+        newSet.add(operatorId);
+      }
+      return newSet;
+    });
+  };
+
   return (
-    <>
-      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2 text-center sm:text-left">
-            Provozovatelé a pracoviště
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600 text-center sm:text-left">
-            Spravujte provozovatele a jejich pracoviště
-          </p>
+    <div className="w-full max-w-7xl mx-auto">
+      {/* Header with Add Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Zákazníci</h1>
+          <p className="text-gray-600 text-sm sm:text-base">Správa provozovatelů a pracovišť</p>
         </div>
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={onAddNewOperator}
+          leftIcon={<PlusIcon className="h-5 w-5" />}
+        >
+          Přidat zákazníka
+        </Button>
+      </div>
 
-        {/* Search Bar */}
-        <div className="mb-6 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 sm:p-6 border border-blue-100 shadow-sm">
-          <div className="relative mb-4">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Hledat provozovatele nebo pracoviště..."
-              className="w-full pl-12 pr-12 py-3 sm:py-4 text-sm sm:text-base bg-white border-2 border-blue-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-sm"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
+      {/* Search Bar - Sticky */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-6 pt-2">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
           </div>
-
-          {/* Stats and Add Button */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="text-sm sm:text-base text-gray-700">
-              {searchTerm ? (
-                <span>
-                  Nalezeno: <span className="font-bold text-blue-600">{filteredData.operators.length}</span> provozovatelů
-                </span>
-              ) : (
-                <span>
-                  Celkem: <span className="font-bold text-gray-900">{operators.length}</span> provozovatelů, <span className="font-bold text-gray-900">{premises.length}</span> pracovišť
-                </span>
-              )}
-            </div>
-            <button 
-              onClick={onAddNewOperator}
-              className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-sm sm:text-base"
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Hledat provozovatele nebo pracoviště..."
+            className="w-full pl-12 pr-12 py-3 bg-gray-50 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              Nový provozovatel
             </button>
-          </div>
-        </div>
-
-        {/* Operators List */}
-        <div className="space-y-3 sm:space-y-4">
-          {filteredData.operators.length > 0 ? (
-            filteredData.operators.map(operator => {
-              const operatorPremises = premisesByOperator.get(operator.id) || [];
-              const isExpanded = expandedOperatorIds.has(operator.id);
-              const matchingPremises = filteredData.matchingPremises.get(operator.id);
-
-              return (
-                <div key={operator.id} className="bg-white rounded-2xl shadow-md hover:shadow-lg transition-shadow border border-gray-100 overflow-hidden">
-                  {/* Operator Header */}
-                  <div 
-                    className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => toggleOperator(operator.id)}
-                  >
-                    <div className="flex items-start sm:items-center gap-3 sm:gap-4">
-                      {/* Icon */}
-                      <div className="flex-shrink-0 mt-1 sm:mt-0">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                          <svg 
-                            className={`w-5 h-5 sm:w-6 sm:h-6 text-white transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-grow min-w-0">
-                        <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 truncate">
-                          {operator.operator_name}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600">
-                          <span className="flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            IČO: {operator.operator_ico}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            <span className="truncate max-w-[200px] sm:max-w-none">{operator.operator_address}</span>
-                          </span>
-                        </div>
-                        <div className="mt-2">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {operatorPremises.length} {operatorPremises.length === 1 ? 'pracoviště' : 'pracovišť'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex-shrink-0 flex flex-col sm:flex-row gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button 
-                          onClick={() => onEditOperator(operator.id)}
-                          className="p-2 sm:px-4 sm:py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors"
-                          title="Upravit"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteOperatorRequest(operator.id)}
-                          className="p-2 sm:px-4 sm:py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
-                          title="Smazat"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                        <button 
-                          onClick={() => onAddPremise(operator.id)}
-                          className="p-2 sm:px-4 sm:py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-                          title="Přidat pracoviště"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Premises List */}
-                  {isExpanded && (
-                    <div className="border-t border-gray-200 bg-gray-50">
-                      {operatorPremises.length > 0 ? (
-                        <div className="p-4 sm:p-6 space-y-3">
-                          {operatorPremises.map(premise => (
-                            <div 
-                              key={premise.id} 
-                              className={`p-4 rounded-xl border-2 transition-all ${
-                                matchingPremises?.some(p => p.id === premise.id) 
-                                  ? 'bg-yellow-50 border-yellow-300 shadow-md' 
-                                  : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                              }`}
-                            >
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                                <div className="flex-grow min-w-0">
-                                  <div className="flex items-start gap-3">
-                                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
-                                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                      </svg>
-                                    </div>
-                                    <div className="flex-grow min-w-0">
-                                      <h4 className="font-semibold text-gray-900 mb-1 truncate">{premise.premise_name}</h4>
-                                      <p className="text-sm text-gray-600 mb-1 truncate">{premise.premise_address}</p>
-                                      {premise.premise_responsible_person && (
-                                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                          </svg>
-                                          {premise.premise_responsible_person}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-wrap sm:flex-nowrap gap-2">
-                                  <button 
-                                    onClick={() => onEditPremise(premise.id)}
-                                    className="flex-1 sm:flex-none px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                    Upravit
-                                  </button>
-                                  <button 
-                                    onClick={() => handleDeletePremiseRequest(premise.id)}
-                                    className="flex-1 sm:flex-none px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium flex items-center justify-center gap-2"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    Smazat
-                                  </button>
-                                  <button 
-                                    onClick={() => onSelectPremise(premise.id)}
-                                    className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    Audity
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          
-                          {/* Add Premise Button */}
-                          <button
-                            onClick={() => onAddPremise(operator.id)}
-                            className="w-full py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 font-semibold text-sm sm:text-base"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            Přidat další pracoviště
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="p-8 text-center">
-                          <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
-                          <p className="text-gray-500 mb-4">Zatím žádná pracoviště</p>
-                          <button
-                            onClick={() => onAddPremise(operator.id)}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-                          >
-                            + Přidat první pracoviště
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-16 bg-gradient-to-br from-gray-50 to-blue-50 rounded-2xl border-2 border-dashed border-gray-300">
-              {searchTerm ? (
-                <>
-                  <svg className="w-20 h-20 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                  <p className="text-gray-600 text-lg font-semibold mb-2">Žádní provozovatelé nenalezeni</p>
-                  <p className="text-gray-500 mb-4">Zkuste změnit vyhledávací termín</p>
-                  <button
-                    onClick={() => setSearchTerm('')}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                  >
-                    Vymazat vyhledávání
-                  </button>
-                </>
-              ) : (
-                <>
-                  <svg className="w-20 h-20 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <p className="text-gray-600 text-lg font-semibold mb-2">Zatím nemáte žádné provozovatele</p>
-                  <p className="text-gray-500 mb-6">Začněte kliknutím na tlačítko výše</p>
-                  <button
-                    onClick={onAddNewOperator}
-                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all font-semibold shadow-lg hover:shadow-xl"
-                  >
-                    + Vytvořit prvního provozovatele
-                  </button>
-                </>
-              )}
-            </div>
           )}
         </div>
       </div>
 
-      {/* Delete Operator Modal */}
-      {deletingOperatorId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-in">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">Potvrdit smazání</h3>
-            </div>
-            <p className="text-gray-600 mb-6">
-              Opravdu si přejete smazat tohoto provozovatele a všechna jeho pracoviště včetně auditů? Tato akce je nevratná.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={handleDeleteOperatorCancel}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 rounded-xl hover:bg-gray-200 transition-colors font-medium"
-              >
-                Zrušit
-              </button>
-              <button
-                onClick={handleDeleteOperatorConfirm}
-                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold shadow-md"
-              >
-                Smazat
-              </button>
-            </div>
-          </div>
+      {/* Stats */}
+      <div className="mb-6 text-sm text-gray-600">
+        {searchTerm ? (
+          <span>Nalezeno: <span className="font-semibold text-gray-900">{filteredData.operators.length}</span> provozovatelů</span>
+        ) : (
+          <span>Celkem: <span className="font-semibold text-gray-900">{operators.length}</span> provozovatelů, <span className="font-semibold text-gray-900">{premises.length}</span> pracovišť</span>
+        )}
+      </div>
+
+      {/* Operators Grid */}
+      {filteredData.operators.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6 mb-20">
+          {filteredData.operators.map(operator => {
+            const operatorPremises = premisesByOperator.get(operator.id) || [];
+            const isExpanded = expandedOperatorIds.has(operator.id);
+
+            return (
+              <Card key={operator.id} hover className="flex flex-col">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2 truncate">
+                        {operator.operator_name}
+                      </h3>
+                      <div className="space-y-1 text-sm text-gray-600">
+                        {operator.operator_ico && (
+                          <div className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="truncate">IČO: {operator.operator_ico}</span>
+                          </div>
+                        )}
+                        {operator.operator_address && (
+                          <div className="flex items-start gap-1.5">
+                            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span className="line-clamp-2">{operator.operator_address}</span>
+                          </div>
+                        )}
+                        {operator.operator_phone && (
+                          <div className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            <span>{operator.operator_phone}</span>
+                          </div>
+                        )}
+                        {operator.operator_email && (
+                          <div className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <span className="truncate">{operator.operator_email}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditOperator(operator.id);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 hover:text-gray-900"
+                        title="Upravit"
+                      >
+                        <EditIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingOperatorId(operator.id);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-600 hover:text-red-600"
+                        title="Smazat"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardBody className="flex-1">
+                  <div className="mb-3">
+                    <button
+                      onClick={() => toggleOperator(operator.id)}
+                      className="text-sm font-medium text-primary hover:text-primary-dark flex items-center gap-1"
+                    >
+                      <span>Pracoviště ({operatorPremises.length})</span>
+                      <svg 
+                        className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="space-y-2">
+                      {operatorPremises.length > 0 ? (
+                        operatorPremises.map(premise => (
+                          <div
+                            key={premise.id}
+                            className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-primary-light hover:bg-primary-light/5 transition-all group"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">
+                                  {premise.premise_name}
+                                </h4>
+                                {premise.premise_address && (
+                                  <p className="text-xs text-gray-600 line-clamp-1 mb-1">
+                                    {premise.premise_address}
+                                  </p>
+                                )}
+                                {premise.premise_responsible_person && (
+                                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                    </svg>
+                                    {premise.premise_responsible_person}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectPremise(premise.id);
+                                }}
+                                className="flex-shrink-0 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary-dark transition-colors shadow-sm opacity-0 group-hover:opacity-100"
+                              >
+                                Audity
+                              </button>
+                            </div>
+                            <div className="flex gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditPremise(premise.id);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-blue-50 transition-colors text-gray-600 hover:text-blue-600"
+                                title="Upravit pracoviště"
+                              >
+                                <EditIcon className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingPremiseId(premise.id);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-600 hover:text-red-600"
+                                title="Smazat pracoviště"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-4 text-sm text-gray-500">
+                          Žádná pracoviště
+                        </div>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAddPremise(operator.id);
+                        }}
+                        className="w-full py-2 px-3 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-white transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <PlusIcon className="h-4 w-4" />
+                        Přidat pracoviště
+                      </button>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+          {searchTerm ? (
+            <>
+              <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <p className="text-gray-600 font-semibold mb-2">Žádní provozovatelé nenalezeni</p>
+              <p className="text-gray-500 mb-4">Zkuste změnit vyhledávací termín</p>
+              <Button variant="secondary" onClick={() => setSearchTerm('')}>
+                Vymazat vyhledávání
+              </Button>
+            </>
+          ) : (
+            <>
+              <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <p className="text-gray-600 font-semibold mb-2">Zatím nemáte žádné provozovatele</p>
+              <p className="text-gray-500 mb-6">Začněte kliknutím na tlačítko vpravo dole</p>
+            </>
+          )}
         </div>
       )}
 
+      {/* FAB Button */}
+      <button
+        onClick={onAddNewOperator}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-primary-dark to-primary text-white rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all flex items-center justify-center z-50"
+        aria-label="Přidat nového provozovatele"
+      >
+        <PlusIcon className="h-6 w-6" />
+      </button>
+
+      {/* Delete Operator Modal */}
+      <Modal
+        isOpen={!!deletingOperatorId}
+        onClose={() => setDeletingOperatorId(null)}
+        title="Smazat provozovatele?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeletingOperatorId(null)}>
+              Zrušit
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (deletingOperatorId) {
+                  onDeleteOperator(deletingOperatorId);
+                  setDeletingOperatorId(null);
+                }
+              }}
+            >
+              Smazat
+            </Button>
+          </>
+        }
+      >
+        <p className="text-gray-600">
+          Opravdu si přejete smazat tohoto provozovatele a všechna jeho pracoviště včetně auditů? Tato akce je nevratná.
+        </p>
+      </Modal>
+
       {/* Delete Premise Modal */}
-      {deletingPremiseId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-in">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">Potvrdit smazání</h3>
-            </div>
-            <p className="text-gray-600 mb-6">
-              Opravdu si přejete smazat toto pracoviště a všechny jeho audity? Tato akce je nevratná.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={handleDeletePremiseCancel}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-800 rounded-xl hover:bg-gray-200 transition-colors font-medium"
-              >
-                Zrušit
-              </button>
-              <button
-                onClick={handleDeletePremiseConfirm}
-                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold shadow-md"
-              >
-                Smazat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      <Modal
+        isOpen={!!deletingPremiseId}
+        onClose={() => setDeletingPremiseId(null)}
+        title="Smazat pracoviště?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeletingPremiseId(null)}>
+              Zrušit
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (deletingPremiseId) {
+                  onDeletePremise(deletingPremiseId);
+                  setDeletingPremiseId(null);
+                }
+              }}
+            >
+              Smazat
+            </Button>
+          </>
+        }
+      >
+        <p className="text-gray-600">
+          Opravdu si přejete smazat toto pracoviště a všechny jeho audity? Tato akce je nevratná.
+        </p>
+      </Modal>
+    </div>
   );
 };

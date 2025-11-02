@@ -22,7 +22,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AppState, Audit, Operator, Premise, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
-import { Header } from './components/Header';
+import { Layout } from './components/Layout';
 import AuditChecklist from './components/AuditChecklist';
 import AdminScreen from './components/AdminScreen';
 import SettingsScreen from './components/SettingsScreen';
@@ -35,6 +35,7 @@ import { OperatorDashboard } from './components/OperatorDashboard';
 import { OperatorForm } from './components/OperatorForm';
 import { PremiseForm } from './components/PremiseForm';
 import { AuditList } from './components/AuditList';
+import { AllAuditsScreen } from './components/AllAuditsScreen';
 import { HeaderForm } from './components/HeaderForm';
 import ReportView from './components/ReportView';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -80,7 +81,7 @@ const App: React.FC = () => {
   } = useAppData();
 
   // --- STATE MANAGEMENT ---
-  const [appState, setAppState] = useState<AppState>(AppState.OPERATOR_DASHBOARD);
+  const [appState, setAppState] = useState<AppState>(AppState.INCOMPLETE_AUDITS);
   const [activeOperatorId, setActiveOperatorId] = useState<string | null>(null);
   const [activePremiseId, setActivePremiseId] = useState<string | null>(null);
   const [activeAuditId, setActiveAuditId] = useState<string | null>(null);
@@ -346,12 +347,18 @@ const App: React.FC = () => {
         return;
       }
 
-      // Aktualizovat status na IN_PROGRESS
+      // Pokud je audit dokončen (COMPLETED nebo starý LOCKED), změnit na REVISED
+      // Jinak změnit na IN_PROGRESS
+      const newStatus = (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.LOCKED)
+        ? AuditStatus.REVISED
+        : AuditStatus.IN_PROGRESS;
+
+      // Aktualizovat status
       await updateAudit(auditId, { 
-        status: AuditStatus.IN_PROGRESS
+        status: newStatus
       });
       
-      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a));
+      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: newStatus } : a));
       setActiveAuditId(auditId);
       setAppState(AppState.AUDIT_IN_PROGRESS);
     } catch (error) {
@@ -365,8 +372,10 @@ const App: React.FC = () => {
     if (!selectedAudit) return;
 
     setActiveAuditId(auditId);
+    setActivePremiseId(selectedAudit.premiseId); // Nastavit také premiseId pro správnou navigaci
 
-    if (selectedAudit.status === AuditStatus.LOCKED) {
+    // Pokud je audit dokončen (COMPLETED nebo starý LOCKED), zobrazit report
+    if (selectedAudit.status === AuditStatus.COMPLETED || selectedAudit.status === AuditStatus.LOCKED) {
       setAppState(AppState.REPORT_VIEW);
     } else {
       setAppState(AppState.AUDIT_IN_PROGRESS);
@@ -391,7 +400,7 @@ const App: React.FC = () => {
         await updateAudit(activeAuditId, { headerValues });
         setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
       } else {
-        const newAuditData = createNewAudit(headerValues, AuditStatus.NOT_STARTED);
+        const newAuditData = createNewAudit(headerValues, AuditStatus.DRAFT);
         // Předat ID do createAudit, aby se použilo stejné ID ve Firestore
         const { id, ...auditDataWithoutId } = newAuditData;
         const newId = await createAudit({ ...auditDataWithoutId, id });
@@ -408,8 +417,15 @@ const App: React.FC = () => {
     try {
       let auditIdToContinue = activeAuditId;
       if (auditIdToContinue) {
-        await updateAudit(auditIdToContinue, { headerValues, status: AuditStatus.IN_PROGRESS });
-        setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: AuditStatus.IN_PROGRESS } : a)));
+        const audit = audits.find(a => a.id === auditIdToContinue);
+        // Pokud je audit DRAFT nebo NOT_STARTED, změnit na IN_PROGRESS
+        // Jinak zachovat aktuální status
+        const newStatus = (audit?.status === AuditStatus.DRAFT || audit?.status === AuditStatus.NOT_STARTED)
+          ? AuditStatus.IN_PROGRESS
+          : audit?.status || AuditStatus.IN_PROGRESS;
+        
+        await updateAudit(auditIdToContinue, { headerValues, status: newStatus });
+        setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: newStatus } : a)));
       } else {
         const newAuditData = createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
         // Předat ID do createAudit, aby se použilo stejné ID ve Firestore
@@ -427,25 +443,69 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveProgress = useCallback(async () => {
+    if (!activeAuditId) return;
+    
+    const audit = audits.find(a => a.id === activeAuditId);
+    if (!audit) return;
+    
+    // Pokud je audit dokončen (COMPLETED nebo starý LOCKED), změnit na REVISED
+    const shouldChangeToRevised = audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.LOCKED;
+    const newStatus = shouldChangeToRevised ? AuditStatus.REVISED : audit.status;
+    
+    // Pokud je status DRAFT a má nějaké odpovědi, změnit na IN_PROGRESS
+    const finalStatus = (audit.status === AuditStatus.DRAFT && Object.keys(audit.answers).length > 0)
+      ? AuditStatus.IN_PROGRESS
+      : newStatus;
+    
+    try {
+      await updateAudit(activeAuditId, { status: finalStatus });
+      setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: finalStatus } : a));
+      toast.success('Průběh byl uložen');
+    } catch (error) {
+      console.error('[handleSaveProgress] Error:', error);
+      toast.error('Chyba při ukládání průběhu');
+    }
+  }, [activeAuditId, audits]);
+
   const handleAnswerUpdate = useCallback(async (itemId: string, answer: any) => {
     if (!activeAuditId) return;
+    
+    const audit = audits.find(a => a.id === activeAuditId);
+    if (!audit) return;
+    
+    // Vypočítat nový status
+    let finalStatus = audit.status;
+    
+    // Pokud je audit dokončen a uživatel dělá změny, změnit na REVISED
+    if (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.LOCKED) {
+      finalStatus = AuditStatus.REVISED;
+    }
+    // Pokud je status DRAFT/NOT_STARTED a má nějaké odpovědi, změnit na IN_PROGRESS
+    else if ((audit.status === AuditStatus.DRAFT || audit.status === AuditStatus.NOT_STARTED)) {
+      const newAnswers = { ...audit.answers, [itemId]: answer };
+      // Pokud má alespoň jednu odpověď, změnit na IN_PROGRESS
+      if (Object.keys(newAnswers).length > 0) {
+        finalStatus = AuditStatus.IN_PROGRESS;
+      }
+    }
     
     // Optimisticky aktualizovat UI
     setAudits(prev => prev.map(audit => {
       if (audit.id === activeAuditId) {
         const newAnswers = { ...audit.answers, [itemId]: answer };
-        return { ...audit, answers: newAnswers };
+        return { ...audit, answers: newAnswers, status: finalStatus };
       }
       return audit;
     }));
     
     // Uložit do Firestore
     try {
-      const audit = audits.find(a => a.id === activeAuditId);
-      if (audit) {
-        const newAnswers = { ...audit.answers, [itemId]: answer };
-        await updateAudit(activeAuditId, { answers: newAnswers });
-      }
+      const newAnswers = { ...audit.answers, [itemId]: answer };
+      await updateAudit(activeAuditId, { 
+        answers: newAnswers,
+        status: finalStatus 
+      });
     } catch (error) {
       console.error('[handleAnswerUpdate] Error:', error);
     }
@@ -459,12 +519,12 @@ const App: React.FC = () => {
       
       // Aktualizovat audit status
       await updateAudit(activeAuditId, {
-        status: AuditStatus.LOCKED,
+        status: AuditStatus.COMPLETED,
         completedAt
       });
       
       setAudits(prev => prev.map(a => a.id === activeAuditId
-        ? { ...a, status: AuditStatus.LOCKED, completedAt }
+        ? { ...a, status: AuditStatus.COMPLETED, completedAt }
         : a
       ));
 
@@ -505,7 +565,7 @@ const App: React.FC = () => {
   }
 
   const handleBackFromSettings = () => {
-    setAppState(AppState.OPERATOR_DASHBOARD);
+    setAppState(AppState.INCOMPLETE_AUDITS);
   };
 
   const handleNavigateToAuditorSettings = () => {
@@ -583,6 +643,47 @@ const App: React.FC = () => {
           onBack={handleBackToDashboard}
         />;
       }
+      case AppState.ALL_AUDITS:
+        return <AllAuditsScreen
+          audits={audits}
+          operators={operators}
+          premises={premises}
+          reports={reports}
+          onSelectAudit={handleSelectAudit}
+        />;
+      case AppState.INCOMPLETE_AUDITS:
+        // Filtrovat pouze nezapočaté audity (DRAFT)
+        const incompleteAudits = audits.filter(a => 
+          a.status === AuditStatus.DRAFT || 
+          a.status === AuditStatus.NOT_STARTED // zpětná kompatibilita
+        );
+        return <AllAuditsScreen
+          audits={incompleteAudits}
+          operators={operators}
+          premises={premises}
+          reports={reports}
+          onSelectAudit={handleSelectAudit}
+          onAddNewAudit={() => {
+            // Nejprve vybrat pracoviště - pokud není žádné, musí uživatel jít do Zákazníků
+            if (premises.length === 0) {
+              toast.error('Nejprve musíte vytvořit pracoviště v sekci Zákazníci');
+              setAppState(AppState.OPERATOR_DASHBOARD);
+              return;
+            }
+            // Pokud je jen jedno pracoviště, použít ho
+            if (premises.length === 1) {
+              setActivePremiseId(premises[0].id);
+              handlePrepareNewAudit();
+            } else {
+              // Pokud je více pracovišť, jít na dashboard
+              toast.info('Vyberte pracoviště pro nový audit');
+              setAppState(AppState.OPERATOR_DASHBOARD);
+            }
+          }}
+          title="Nezapočaté audity"
+          description="Seznam auditů, které ještě nebyly započaty"
+          showStatusFilter={false}
+        />;
       case AppState.HEADER_FORM: {
         const initialValues = activeAudit ? activeAudit.headerValues : pendingHeader;
         if (!initialValues) return <p>Chyba: Chybí data pro záhlaví auditu.</p>
@@ -592,7 +693,7 @@ const App: React.FC = () => {
         if (!activeAudit) {
           return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
         }
-        return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onBack={handleBackToAuditList} log={log} />;
+        return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onBack={handleBackToAuditList} log={log} />;
       }
       case AppState.REPORT_VIEW: {
         if (!activeAudit) return <p>Chyba: Audit pro report nebyl nalezen.</p>
@@ -639,17 +740,29 @@ const App: React.FC = () => {
     }
   };
 
+  // Determine if sidebar should be shown (hide for forms and specific screens)
+  const shouldShowSidebar = ![
+    AppState.ADD_OPERATOR,
+    AppState.EDIT_OPERATOR,
+    AppState.ADD_PREMISE,
+    AppState.EDIT_PREMISE,
+    AppState.HEADER_FORM,
+  ].includes(appState);
+
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col">
-        <div className="print:hidden">
-          <Header appState={appState} onToggleAdmin={handleToggleAdmin} />
-        </div>
-        <main className="flex-grow p-4 md:p-6 lg:p-8 flex flex-col items-center justify-center">
+      <Layout
+        currentView={appState}
+        onNavigate={setAppState}
+        showSidebar={shouldShowSidebar}
+        activePremiseId={activePremiseId}
+        activeAuditId={activeAuditId}
+      >
+        <div className="p-4 sm:p-6 lg:p-8">
           {renderContent()}
-        </main>
-        <ToastContainer />
-      </div>
+        </div>
+      </Layout>
+      <ToastContainer />
     </ErrorBoundary>
   );
 };
