@@ -48,14 +48,44 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
     }
   };
 
+  const handleClose = async () => {
+    // Před zavřením uložit všechna nová místa z nonComplianceData
+    if (answer && answer.nonComplianceData) {
+      const { getNonComplianceLocations, addNonComplianceLocation } = await import('../services/firestore/nonComplianceLocations');
+      
+      for (const nc of answer.nonComplianceData) {
+        if (nc.location && nc.location.trim()) {
+          // Formátovat místo (první písmeno velké, zbytek malé, odstranit tečku)
+          let formatted = nc.location.trim().replace(/\.+$/, '');
+          if (!formatted) continue;
+          formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1).toLowerCase();
+          
+          // Zkontrolovat, jestli už existuje
+          const { available } = await getNonComplianceLocations();
+          const exists = available.some(loc => loc.toLowerCase() === formatted.toLowerCase());
+          
+          if (!exists) {
+            try {
+              await addNonComplianceLocation(formatted);
+            } catch (error) {
+              console.error('[AuditItemModal] Error saving new location:', error);
+            }
+          }
+        }
+      }
+    }
+    
+    onClose();
+  };
+
   return (
     <Modal
       isOpen={true}
-      onClose={onClose}
+      onClose={handleClose}
       title={item.title}
       size="lg"
       footer={
-        <Button variant="primary" onClick={onClose} fullWidth>
+        <Button variant="primary" onClick={handleClose} fullWidth>
           Zavřít
         </Button>
       }

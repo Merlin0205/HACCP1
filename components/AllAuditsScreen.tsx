@@ -1,16 +1,22 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Fragment } from 'react';
 import { Audit, AuditStatus, Operator, Premise, Report, ReportStatus } from '../types';
 import { Card, CardHeader, CardBody, CardFooter } from './ui/Card';
 import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
-import { PlusIcon } from './icons';
+import { Modal } from './ui/Modal';
+import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
 
 interface AllAuditsScreenProps {
   audits: Audit[];
   operators: Operator[];
   premises: Premise[];
   reports: Report[];
-  onSelectAudit: (auditId: string) => void;
+  onSelectAudit: (auditId: string, reportId?: string) => void;
+  onDeleteAudit?: (auditId: string) => void;
+  onUnlockAudit?: (auditId: string) => void;
+  onCancelReportGeneration?: (reportId: string) => void;
+  onDeleteReportVersion?: (reportId: string, auditId: string) => void;
+  onSetReportAsLatest?: (reportId: string, auditId: string) => void;
   title?: string;
   description?: string;
   onAddNewAudit?: () => void;
@@ -26,6 +32,11 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   premises,
   reports,
   onSelectAudit,
+  onDeleteAudit,
+  onUnlockAudit,
+  onCancelReportGeneration,
+  onDeleteReportVersion,
+  onSetReportAsLatest,
   title = 'Přehled všech auditů',
   description = 'Kompletní seznam všech auditů v systému',
   onAddNewAudit,
@@ -35,6 +46,11 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   const [statusFilter, setStatusFilter] = useState<AuditStatus | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [deletingAuditId, setDeletingAuditId] = useState<string | null>(null);
+  const [unlockingAuditId, setUnlockingAuditId] = useState<string | null>(null);
+  const [expandedAudits, setExpandedAudits] = useState<Set<string>>(new Set());
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  const [settingLatestReportId, setSettingLatestReportId] = useState<string | null>(null);
 
   const formatDate = (dateString?: string): string => {
     if (!dateString) return '-';
@@ -68,7 +84,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   };
 
   const getReportBadge = (auditId: string) => {
-    const report = reports.find(r => r.auditId === auditId);
+    const report = reports.find(r => r.auditId === auditId && r.isLatest);
     if (!report) return null;
 
     const badges = {
@@ -78,11 +94,48 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
       [ReportStatus.ERROR]: 'bg-red-100 text-red-800',
     };
 
+    const isGenerating = report.status === ReportStatus.GENERATING;
+
     return (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badges[report.status]}`}>
-        {report.status === ReportStatus.GENERATING ? 'Generuje se...' : report.status}
-      </span>
+      <div className="flex items-center gap-1">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badges[report.status]}`}>
+          {isGenerating ? 'Generuje se...' : report.status}
+        </span>
+        {isGenerating && onCancelReportGeneration && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancelReportGeneration(report.id);
+            }}
+            className="px-1.5 py-0.5 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors font-bold"
+            title="Zrušit generování"
+          >
+            ✕
+          </button>
+        )}
+      </div>
     );
+  };
+
+  const getAuditReportVersions = (auditId: string): Report[] => {
+    return reports
+      .filter(r => r.auditId === auditId)
+      .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
+  };
+
+  const toggleAuditExpansion = (auditId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setExpandedAudits(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(auditId)) {
+        newSet.delete(auditId);
+      } else {
+        newSet.add(auditId);
+      }
+      return newSet;
+    });
   };
 
   const filteredAndSortedAudits = useMemo(() => {
@@ -172,6 +225,17 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
       </svg>
     );
+  };
+
+  const isCompleted = (status: AuditStatus) => {
+    return status === AuditStatus.COMPLETED || status === AuditStatus.LOCKED;
+  };
+
+  const isEditable = (status: AuditStatus) => {
+    return status === AuditStatus.DRAFT || 
+           status === AuditStatus.IN_PROGRESS || 
+           status === AuditStatus.REVISED ||
+           status === AuditStatus.NOT_STARTED;
   };
 
   return (
@@ -303,13 +367,16 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                 filteredAndSortedAudits.map((audit) => {
                   const premise = premises.find(p => p.id === audit.premiseId);
                   const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
+                  const reportVersions = getAuditReportVersions(audit.id);
+                  const hasMultipleVersions = reportVersions.length > 1;
+                  const isExpanded = expandedAudits.has(audit.id);
 
                   return (
-                    <tr
-                      key={audit.id}
-                      className="hover:bg-primary-light/5 transition-colors cursor-pointer border-l-4 border-transparent hover:border-primary"
-                      onClick={() => onSelectAudit(audit.id)}
-                    >
+                    <React.Fragment key={audit.id}>
+                      <tr
+                        className="hover:bg-primary-light/5 transition-colors cursor-pointer border-l-4 border-transparent hover:border-primary"
+                        onClick={() => onSelectAudit(audit.id)}
+                      >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {operator?.operator_name || '-'}
@@ -337,18 +404,248 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                         {getReportBadge(audit.id)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectAudit(audit.id);
-                          }}
-                        >
-                          Otevřít
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Pokračovat v auditu nebo Zobrazit report */}
+                          {isCompleted(audit.status) ? (
+                            <div className="relative group">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectAudit(audit.id);
+                                }}
+                                className="p-2 rounded-lg hover:bg-primary-light/20 transition-colors text-primary hover:text-primary-dark"
+                                title="Zobrazit report"
+                              >
+                                <ReportIcon className="h-5 w-5" />
+                              </button>
+                              {/* Tooltip */}
+                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                Zobrazit report
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="relative group">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectAudit(audit.id);
+                                }}
+                                className="p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600 hover:text-green-700"
+                                title="Pokračovat v auditu"
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                              </button>
+                              {/* Tooltip */}
+                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                Pokračovat v auditu
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Editovat (pouze pokud není dokončen) */}
+                          {isEditable(audit.status) && (
+                            <div className="relative group">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectAudit(audit.id);
+                                }}
+                                className="p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
+                                title="Editovat audit"
+                              >
+                                <EditIcon className="h-5 w-5" />
+                              </button>
+                              {/* Tooltip */}
+                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                Editovat audit
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Odemknout (pouze pokud je dokončen) */}
+                          {isCompleted(audit.status) && onUnlockAudit && (
+                            <div className="relative group">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUnlockingAuditId(audit.id);
+                                }}
+                                className="p-2 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600 hover:text-yellow-700"
+                                title="Odemknout pro úpravy"
+                              >
+                                <EditIcon className="h-5 w-5" />
+                              </button>
+                              {/* Tooltip */}
+                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                Odemknout pro úpravy
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Smazat */}
+                          {onDeleteAudit && (
+                            <div className="relative group">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingAuditId(audit.id);
+                                }}
+                                className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
+                                title="Smazat audit"
+                              >
+                                <TrashIcon className="h-5 w-5" />
+                              </button>
+                              {/* Tooltip */}
+                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                Smazat audit
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
+                    {/* Collapsible sekce s historií verzí reportů */}
+                    {(() => {
+                      const reportVersions = getAuditReportVersions(audit.id);
+                      const hasMultipleVersions = reportVersions.length > 1;
+                      const isExpanded = expandedAudits.has(audit.id);
+                      
+                      if (!hasMultipleVersions) return null;
+                      
+                      return (
+                        <tr className="bg-gradient-to-r from-yellow-50 via-amber-50 to-yellow-50">
+                          <td colSpan={7} className="px-4 py-1 md:px-6 md:py-1.5">
+                            <button
+                              onClick={(e) => toggleAuditExpansion(audit.id, e)}
+                              className="w-full flex items-center justify-between text-left transition-all hover:opacity-80"
+                            >
+                              <div className="flex items-center gap-2 md:gap-3">
+                                <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 bg-yellow-400 rounded-full shadow-sm flex-shrink-0">
+                                  <svg className="h-3 w-3 md:h-4 md:w-4 text-yellow-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                </div>
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <span className="font-semibold text-yellow-900 text-xs md:text-sm whitespace-nowrap">
+                                    Historie verzí reportů
+                                  </span>
+                                  <span className="px-1.5 py-0.5 bg-yellow-200 text-yellow-900 text-xs rounded-full font-medium whitespace-nowrap">
+                                    {reportVersions.length} {reportVersions.length === 1 ? 'verze' : reportVersions.length >= 2 && reportVersions.length <= 4 ? 'verze' : 'verzí'}
+                                  </span>
+                                </div>
+                              </div>
+                              <svg
+                                className={`h-3.5 w-3.5 md:h-4 md:w-4 text-yellow-700 transition-transform duration-200 flex-shrink-0 ml-2 ${isExpanded ? 'rotate-180' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {isExpanded && (
+                              <div className="mt-1.5 md:mt-2 space-y-1 pl-7 md:pl-9">
+                                {reportVersions.map((report, index) => (
+                                  <div
+                                    key={report.id}
+                                    className="flex items-center justify-between gap-2 p-1.5 md:p-2 bg-white rounded border-2 border-yellow-200 hover:border-yellow-300 hover:shadow-sm transition-all duration-200"
+                                  >
+                                    <div className="flex items-center gap-1.5 md:gap-2 flex-1 min-w-0">
+                                      <div className={`flex items-center justify-center w-4 h-4 md:w-5 md:h-5 rounded-full font-bold text-xs flex-shrink-0 ${
+                                        report.isLatest 
+                                          ? 'bg-gradient-to-br from-green-400 to-green-500 text-white shadow-sm' 
+                                          : 'bg-gradient-to-br from-yellow-100 to-yellow-200 text-yellow-900'
+                                      }`}>
+                                        {report.versionNumber || '?'}
+                                      </div>
+                                      <span className="font-semibold text-gray-900 text-xs truncate">
+                                        Verze {report.versionNumber || 'N/A'}
+                                      </span>
+                                      {report.createdByName && (
+                                        <div className="flex items-center gap-0.5 text-xs text-gray-600 hidden sm:flex">
+                                          <svg className="h-2.5 w-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                          </svg>
+                                          <span className="font-medium truncate">{report.createdByName}</span>
+                                        </div>
+                                      )}
+                                      {report.createdAt && (
+                                        <div className="flex items-center gap-0.5 text-xs text-gray-600 hidden md:flex">
+                                          <svg className="h-2.5 w-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                          </svg>
+                                          <span className="truncate">{formatDate(report.createdAt)}</span>
+                                        </div>
+                                      )}
+                                      {report.isLatest && (
+                                        <span className="px-1 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-semibold shadow-sm flex-shrink-0">
+                                          Aktuální
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {report.status === ReportStatus.DONE ? (
+                                        <>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onSelectAudit(audit.id, report.id);
+                                            }}
+                                            className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
+                                            title="Otevřít tuto verzi reportu"
+                                          >
+                                            <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                          </button>
+                                          {!report.isLatest && onSetReportAsLatest && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSettingLatestReportId(report.id);
+                                              }}
+                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200 hover:shadow-sm transition-all duration-200 border border-green-200"
+                                              title="Nastavit jako aktuální verzi"
+                                            >
+                                              <svg className="h-3.5 w-3.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </button>
+                                          )}
+                                          {onDeleteReportVersion && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeletingReportId(report.id);
+                                              }}
+                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-red-50 to-red-100 text-red-700 hover:from-red-100 hover:to-red-200 hover:shadow-sm transition-all duration-200 border border-red-200"
+                                              title="Smazat tuto verzi"
+                                            >
+                                              <TrashIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                            </button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium border ${
+                                          report.status === ReportStatus.GENERATING 
+                                            ? 'bg-yellow-100 text-yellow-800 border-yellow-300' 
+                                            : report.status === ReportStatus.PENDING 
+                                            ? 'bg-blue-100 text-blue-800 border-blue-300'
+                                            : 'bg-red-100 text-red-800 border-red-300'
+                                        }`}>
+                                          {report.status === ReportStatus.GENERATING ? 'Generuje se...' : report.status}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                    </React.Fragment>
                   );
                 })
               )}
@@ -377,55 +674,324 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
           filteredAndSortedAudits.map((audit) => {
             const premise = premises.find(p => p.id === audit.premiseId);
             const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
+            const reportVersions = getAuditReportVersions(audit.id);
+            const hasMultipleVersions = reportVersions.length > 1;
+            const isExpanded = expandedAudits.has(audit.id);
 
             return (
-              <Card
-                key={audit.id}
-                onClick={() => onSelectAudit(audit.id)}
-                className="cursor-pointer hover:shadow-lg transition-all border-l-4 border-primary"
-              >
-                <CardBody>
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-bold text-gray-900 mb-1">{operator?.operator_name || '-'}</h3>
-                      <p className="text-sm text-gray-600 mb-2">{premise?.premise_name || '-'}</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {getStatusBadge(audit.status)}
-                        {getReportBadge(audit.id)}
+              <Fragment key={audit.id}>
+                <Card
+                  onClick={() => onSelectAudit(audit.id)}
+                  className="cursor-pointer hover:shadow-lg transition-all border-l-4 border-primary"
+                >
+                  <CardBody>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-bold text-gray-900 mb-1">{operator?.operator_name || '-'}</h3>
+                        <p className="text-sm text-gray-600 mb-2">{premise?.premise_name || '-'}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {getStatusBadge(audit.status)}
+                          {getReportBadge(audit.id)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="space-y-2 text-sm text-gray-600 border-t border-gray-100 pt-3">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Založeno:</span>
-                      <span>{formatDate(audit.createdAt)}</span>
-                    </div>
-                    {audit.completedAt && (
+                    <div className="space-y-2 text-sm text-gray-600 border-t border-gray-100 pt-3">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium">Dokončeno:</span>
-                        <span>{formatDate(audit.completedAt)}</span>
+                        <span className="font-medium">Založeno:</span>
+                        <span>{formatDate(audit.createdAt)}</span>
+                      </div>
+                      {audit.completedAt && (
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">Dokončeno:</span>
+                          <span>{formatDate(audit.completedAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                    {hasMultipleVersions && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleAuditExpansion(audit.id);
+                          }}
+                          className="w-full flex items-center justify-between p-2 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg border border-yellow-200"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-yellow-400 rounded-full flex items-center justify-center flex-shrink-0">
+                              <svg className="h-3.5 w-3.5 text-yellow-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                            <span className="text-sm font-semibold text-yellow-900">
+                              Historie verzí ({reportVersions.length} {reportVersions.length === 1 ? 'verze' : reportVersions.length >= 2 && reportVersions.length <= 4 ? 'verze' : 'verzí'})
+                            </span>
+                          </div>
+                          <svg
+                            className={`h-4 w-4 text-yellow-700 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-2 space-y-2">
+                            {reportVersions.map((report) => (
+                              <div
+                                key={report.id}
+                                className="p-2.5 bg-white rounded-lg border-2 border-yellow-200"
+                              >
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <div className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 ${
+                                    report.isLatest 
+                                      ? 'bg-gradient-to-br from-green-400 to-green-500 text-white' 
+                                      : 'bg-gradient-to-br from-yellow-100 to-yellow-200 text-yellow-900'
+                                  }`}>
+                                    {report.versionNumber || '?'}
+                                  </div>
+                                  <span className="font-semibold text-gray-900 text-sm">
+                                    Verze {report.versionNumber || 'N/A'}
+                                  </span>
+                                  {report.isLatest && (
+                                    <span className="px-1.5 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-semibold">
+                                      Aktuální
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-600 ml-8 mb-2">
+                                  {report.createdByName && <span className="mr-2">{report.createdByName}</span>}
+                                  {report.createdAt && <span>{formatDate(report.createdAt)}</span>}
+                                </div>
+                                {report.status === ReportStatus.DONE && (
+                                  <div className="flex items-center gap-2 mt-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onSelectAudit(audit.id, report.id);
+                                      }}
+                                      className="flex-1 px-3 py-1.5 bg-gradient-to-br from-primary to-primary-dark text-white text-xs rounded-lg font-medium hover:shadow-md transition-all"
+                                    >
+                                      Otevřít verzi
+                                    </button>
+                                    {!report.isLatest && onSetReportAsLatest && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSettingLatestReportId(report.id);
+                                        }}
+                                        className="px-2 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200"
+                                        title="Nastavit jako aktuální"
+                                      >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                    {onDeleteReportVersion && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeletingReportId(report.id);
+                                        }}
+                                        className="px-2 py-1.5 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200"
+                                        title="Smazat"
+                                      >
+                                        <TrashIcon className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-gray-100">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      fullWidth
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectAudit(audit.id);
-                      }}
-                    >
-                      Otevřít audit
-                    </Button>
-                  </div>
-                </CardBody>
-              </Card>
+                    <div className="mt-4 pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        {isCompleted(audit.status) ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            fullWidth
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectAudit(audit.id);
+                            }}
+                            leftIcon={<ReportIcon className="h-4 w-4" />}
+                          >
+                            Zobrazit report
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            fullWidth
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectAudit(audit.id);
+                            }}
+                            leftIcon={
+                              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                              </svg>
+                            }
+                          >
+                            Pokračovat v auditu
+                          </Button>
+                        )}
+                        {onDeleteAudit && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingAuditId(audit.id);
+                            }}
+                            className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex-shrink-0"
+                            title="Smazat audit"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </CardBody>
+                </Card>
+              </Fragment>
             );
           })
         )}
       </div>
+
+      {/* Delete Report Version Modal */}
+      {deletingReportId && onDeleteReportVersion && (
+        <Modal
+          isOpen={!!deletingReportId}
+          onClose={() => setDeletingReportId(null)}
+          title="Smazat verzi reportu?"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeletingReportId(null)}>
+                Zrušit
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (deletingReportId) {
+                    const report = reports.find(r => r.id === deletingReportId);
+                    if (report) {
+                      onDeleteReportVersion(deletingReportId, report.auditId);
+                      setDeletingReportId(null);
+                    }
+                  }
+                }}
+              >
+                Smazat
+              </Button>
+            </>
+          }
+        >
+          <p className="text-gray-600">
+            Opravdu chcete smazat tuto verzi reportu? Tato akce je nevratná a report bude trvale odstraněn.
+          </p>
+        </Modal>
+      )}
+
+      {/* Set Report as Latest Modal */}
+      {settingLatestReportId && onSetReportAsLatest && (
+        <Modal
+          isOpen={!!settingLatestReportId}
+          onClose={() => setSettingLatestReportId(null)}
+          title="Nastavit jako aktuální verzi?"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setSettingLatestReportId(null)}>
+                Zrušit
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (settingLatestReportId) {
+                    const report = reports.find(r => r.id === settingLatestReportId);
+                    if (report) {
+                      onSetReportAsLatest(settingLatestReportId, report.auditId);
+                      setSettingLatestReportId(null);
+                    }
+                  }
+                }}
+              >
+                Nastavit jako aktuální
+              </Button>
+            </>
+          }
+        >
+          <p className="text-gray-600">
+            Opravdu chcete nastavit tuto verzi jako aktuální? Původní aktuální verze bude označena jako historická.
+          </p>
+        </Modal>
+      )}
+
+      {/* Delete Audit Modal */}
+      {deletingAuditId && onDeleteAudit && (
+        <Modal
+          isOpen={!!deletingAuditId}
+          onClose={() => setDeletingAuditId(null)}
+          title="Smazat audit?"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeletingAuditId(null)}>
+                Zrušit
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (deletingAuditId) {
+                    onDeleteAudit(deletingAuditId);
+                    setDeletingAuditId(null);
+                  }
+                }}
+              >
+                Smazat
+              </Button>
+            </>
+          }
+        >
+          <p className="text-gray-600">
+            Opravdu si přejete smazat tento audit? Tato akce je nevratná.
+          </p>
+        </Modal>
+      )}
+
+      {/* Unlock Audit Modal */}
+      {unlockingAuditId && onUnlockAudit && (
+        <Modal
+          isOpen={!!unlockingAuditId}
+          onClose={() => setUnlockingAuditId(null)}
+          title="Odemknout audit?"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setUnlockingAuditId(null)}>
+                Zrušit
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (unlockingAuditId) {
+                    onUnlockAudit(unlockingAuditId);
+                    setUnlockingAuditId(null);
+                  }
+                }}
+              >
+                Odemknout
+              </Button>
+            </>
+          }
+        >
+          <p className="text-gray-600">
+            Chcete tento audit odemknout a upravit? Změny se projeví v reportu po opětovném dokončení auditu.
+          </p>
+        </Modal>
+      )}
 
       {/* FAB Button for adding new audit */}
       {onAddNewAudit && (

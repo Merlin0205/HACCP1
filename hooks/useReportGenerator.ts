@@ -15,7 +15,7 @@ interface UseReportGeneratorProps {
   reports: Report[];
   audits: Audit[];
   auditStructure: AuditStructure;
-  onReportUpdate: (reportId: string, updates: Partial<Report>) => void;
+  onReportUpdate: (reportId: string, updates: Partial<Report>) => Promise<void>;
 }
 
 export function useReportGenerator({
@@ -47,8 +47,15 @@ export function useReportGenerator({
         return;
       }
 
+      // Zkontrolovat, jestli report nebyl mezitím zrušen (status se změnil na ERROR)
+      const currentReport = reports.find(r => r.id === report.id);
+      if (currentReport && currentReport.status === ReportStatus.ERROR) {
+        console.log('[useReportGenerator] Report byl zrušen před zahájením generování:', report.id);
+        return;
+      }
+
       console.log('[useReportGenerator] Generuji report:', report.id);
-      onReportUpdate(report.id, { status: ReportStatus.GENERATING });
+      await onReportUpdate(report.id, { status: ReportStatus.GENERATING });
 
       try {
         console.log('[useReportGenerator] Volám API pro generování reportu...');
@@ -56,6 +63,13 @@ export function useReportGenerator({
           auditData: audit,
           auditStructure,
         });
+        
+        // Zkontrolovat znovu, jestli report nebyl mezitím zrušen
+        const checkReport = reports.find(r => r.id === report.id);
+        if (checkReport && checkReport.status === ReportStatus.ERROR) {
+          console.log('[useReportGenerator] Report byl zrušen během generování, ukončuji:', report.id);
+          return;
+        }
         
         console.log('[useReportGenerator] API response obdržena:', result);
 
@@ -72,7 +86,15 @@ export function useReportGenerator({
         }
 
         console.log('[useReportGenerator] Report úspěšně vygenerován, aktualizuji state...');
-        onReportUpdate(report.id, {
+        
+        // Zkontrolovat znovu před uložením výsledku, jestli report nebyl mezitím zrušen
+        const finalCheck = reports.find(r => r.id === report.id);
+        if (finalCheck && finalCheck.status === ReportStatus.ERROR) {
+          console.log('[useReportGenerator] Report byl zrušen před uložením výsledku, ukončuji:', report.id);
+          return;
+        }
+        
+        await onReportUpdate(report.id, {
           status: ReportStatus.DONE,
           reportData: result.result,
           usage: result.usage,
@@ -84,14 +106,14 @@ export function useReportGenerator({
       } catch (err) {
         const errorInfo = handleError(err);
         console.error('[useReportGenerator] Chyba při generování:', err);
-        onReportUpdate(report.id, {
+        await onReportUpdate(report.id, {
           status: ReportStatus.ERROR,
           error: errorInfo.message,
         });
         toast.error(`Chyba při generování reportu: ${errorInfo.message}`);
       }
     },
-    [audits, auditStructure, onReportUpdate]
+    [audits, auditStructure, onReportUpdate, reports]
   );
 
   /**
@@ -106,7 +128,24 @@ export function useReportGenerator({
         setIsGenerating(false);
       });
     }
-  }, [reports, isGenerating, generateSingleReport]);
+    
+    // Zkontrolovat, jestli není nějaký GENERATING report, který už nemá odpovídající audit
+    // nebo byl zrušen (status se změnil na ERROR během generování)
+    const generatingReports = reports.filter(r => r.status === ReportStatus.GENERATING);
+    if (generatingReports.length > 0 && !isGenerating) {
+      generatingReports.forEach(generatingReport => {
+        const audit = audits.find(a => a.id === generatingReport.auditId);
+        if (!audit) {
+          // Pokud audit neexistuje, označit report jako ERROR
+          console.warn('[useReportGenerator] Generující report bez auditu, označuji jako ERROR');
+          onReportUpdate(generatingReport.id, {
+            status: ReportStatus.ERROR,
+            error: 'Audit byl smazán během generování',
+          });
+        }
+      });
+    }
+  }, [reports, isGenerating, generateSingleReport, audits, onReportUpdate]);
 
   return {
     isGenerating,

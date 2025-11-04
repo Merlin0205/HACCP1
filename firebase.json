@@ -29,7 +29,8 @@
     "runtime": "nodejs20",
     "predeploy": [
       "npm --prefix \"$RESOURCE_DIR\" run build"
-    ]
+    ],
+    "secrets": ["GEMINI_API_KEY"]
   },
   "firestore": {
     "rules": "firestore.rules",

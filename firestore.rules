@@ -145,5 +145,13 @@ service cloud.firestore {
       allow delete: if isApproved() && 
                        (resource == null || resource.data.userId == request.auth.uid);
     }
+    
+    // Non-compliance Locations - schválené uživatele vidí své, admini vidí všechna
+    match /nonComplianceLocations/{locationId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
   }
 }

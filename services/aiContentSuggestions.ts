@@ -1,7 +1,7 @@
 /**
  * AI Content Suggestions Service
  * 
- * Generuje návrhy vylepšení obsahu reportu pomocí Gemini AI
+ * Generuje návrhy vylepšení obsahu reportu pomocí Gemini AI přes Cloud Functions
  * - Gramatika a pravopis
  * - Profesionalita textu
  * - Struktura a formátování
@@ -9,7 +9,10 @@
  */
 
 import { EditableNonCompliance } from '../types/reportEditor';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebaseConfig';
+
+const generateTextFunction = httpsCallable(functions, 'generateText');
 
 export interface ContentSuggestion {
   nonComplianceId: string;
@@ -33,22 +36,6 @@ export interface SuggestionsResult {
 export async function generateContentSuggestions(
   nonCompliances: EditableNonCompliance[]
 ): Promise<SuggestionsResult> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY není nastaven');
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ 
-    model: 'gemini-2.0-flash-exp',
-    generationConfig: {
-      temperature: 0.3, // Nižší teplota pro konzistentnější výstupy
-      topP: 0.95,
-      topK: 40,
-      maxOutputTokens: 8192,
-    }
-  });
 
   // Připravíme data pro AI
   const nonCompliancesData = nonCompliances.map((nc, index) => ({
@@ -102,8 +89,13 @@ Pro každou neshodu analyzuj pole "location" (místo), "finding" (zjištění) a
 VRAŤ POUZE ČISTÝ JSON BEZ MARKDOWN FORMATOVÁNÍ.`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const result = await generateTextFunction({
+      prompt,
+      operation: 'text-generation'
+    });
+    
+    const response = result.data as any;
+    const responseText = response.text || '';
     
     // Odstraníme markdown code blocks pokud existují
     const cleanedText = responseText

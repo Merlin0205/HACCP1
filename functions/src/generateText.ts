@@ -1,6 +1,5 @@
 /**
- * Cloud Function pro přepis audia pomocí Gemini
- * Nahrazuje WebSocket implementaci z server/index.js
+ * Cloud Function pro generování textu pomocí Gemini
  */
 
 import * as functions from 'firebase-functions/v1';
@@ -15,6 +14,7 @@ const db = admin.firestore();
 async function logAIUsage(
   userId: string,
   model: string,
+  operation: string,
   promptTokens: number,
   completionTokens: number,
   totalTokens: number
@@ -43,7 +43,7 @@ async function logAIUsage(
       userId,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       model,
-      operation: 'audio-transcription',
+      operation,
       promptTokens: promptTokens || 0,
       completionTokens: completionTokens || 0,
       totalTokens: totalTokens || 0,
@@ -56,9 +56,9 @@ async function logAIUsage(
 }
 
 /**
- * Callable Cloud Function pro přepis audia
+ * Callable Cloud Function pro generování textu
  */
-export const transcribeAudio = functions
+export const generateText = functions
   .region('europe-west1')
   .https.onCall(async (data: any, context: functions.https.CallableContext) => {
     // Ověření autentifikace
@@ -67,17 +67,20 @@ export const transcribeAudio = functions
     }
 
     const userId = context.auth.uid;
-    const { audioData, mimeType } = data;
+    const { prompt, operation } = data;
 
-    if (!audioData) {
-      throw new functions.https.HttpsError('invalid-argument', 'Missing audio data');
+    if (!prompt) {
+      throw new functions.https.HttpsError('invalid-argument', 'Missing prompt');
     }
 
     try {
       // Načíst model config
       const modelsDoc = await db.collection('settings').doc('aiModelsConfig').get();
       const modelsConfig = modelsDoc.data();
-      const selectedModel = modelsConfig?.models?.['audio-transcription'] || 'gemini-2.0-flash-exp';
+      
+      // Určit operaci a model
+      const operationType = operation || 'text-generation';
+      const selectedModel = modelsConfig?.models?.[operationType] || 'gemini-2.5-flash';
 
       // Inicializovat Gemini
       // Použít process.env (načte se z .env nebo Firebase Secrets)
@@ -92,19 +95,8 @@ export const transcribeAudio = functions
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: selectedModel });
 
-      // Přepsat audio
-      const prompt = "Proveďte přímý přepis následujícího zvukového záznamu na text. Neodpovídejte celou větou, neformátujte text, neuvádějte žádný doprovodný text ani poznámky. Vraťte pouze samotný přepis.";
-      
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: mimeType || 'audio/webm',
-            data: audioData
-          }
-        }
-      ]);
-
+      // Generovat text
+      const result = await model.generateContent(prompt);
       const response = result.response;
       const text = response.text();
       const usageMetadata = response.usageMetadata as any || {};
@@ -116,13 +108,14 @@ export const transcribeAudio = functions
       await logAIUsage(
         userId,
         selectedModel,
+        operationType,
         promptTokens,
         completionTokens,
         totalTokens
       );
 
       return {
-        transcription: text,
+        text,
         usage: {
           promptTokens,
           completionTokens,
@@ -130,7 +123,7 @@ export const transcribeAudio = functions
         }
       };
     } catch (error: any) {
-      console.error('[transcribeAudio] Error:', error);
+      console.error('[generateText] Error:', error);
       throw new functions.https.HttpsError('internal', error.message);
     }
   });

@@ -1,10 +1,21 @@
-# 🔥 HACCP Audit Assistant - Firebase Edition
+# 🔥 HACCP Audit Assistant
 
-> **Cloudová aplikace pro vedení HACCP auditů** - Kompletně migrována na Firebase platformu
+> **Cloudová aplikace pro vedení HACCP auditů** na Firebase platformě
 
 ## 📋 O PROJEKTU
 
-Digitální asistent pro provádění a vyhodnocování interních hygienických auditů v potravinářských podnicích podle systému HACCP. Aplikace byla **kompletně přestavěna** z lokální Express + JSON architektury na **plně cloudové Firebase řešení**.
+Digitální asistent pro provádění a vyhodnocování interních hygienických auditů v potravinářských podnicích podle systému HACCP.
+
+## 📚 DOKUMENTACE
+
+**👉 Pro kompletní návod k použití, nastavení a deploy viz [`NAVOD.md`](NAVOD.md)**
+
+V `NAVOD.md` najdeš:
+- 🧪 Lokální testování a vývoj
+- 🔐 API klíče a Secrets
+- 🌐 Jak to funguje na Firebase
+- 📦 Scripty pro deploy
+- 🔒 Bezpečnost a .gitignore
 
 ---
 

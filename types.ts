@@ -61,6 +61,16 @@ export interface AuditHeaderValues {
   [fieldId: string]: string;
 }
 
+export interface Tab {
+  id: string; // unique ID tabu
+  type: 'audit' | 'report' | 'audit_list';
+  auditId?: string; // pouze pro audit a report
+  premiseId: string;
+  operatorName: string; // název provozovatele pro zobrazení
+  premiseName?: string; // název pracoviště pro zobrazení (pro audit_list)
+  createdAt: string; // timestamp pro řazení
+}
+
 export enum AppState {
   OPERATOR_DASHBOARD = 'operator_dashboard',
   ADD_OPERATOR = 'add_operator',
@@ -186,4 +196,9 @@ export interface Report {
   error?: string;
   usage?: any;
   auditorSnapshot?: AuditorInfo; // Údaje auditora v době generování reportu
+  // Historie verzí reportů
+  versionNumber?: number; // Číslo verze (1, 2, 3, ...)
+  createdBy?: string; // userId uživatele, který vytvořil report
+  createdByName?: string; // displayName uživatele (pro zobrazení bez joinování)
+  isLatest?: boolean; // true pokud je to nejnovější verze reportu pro daný audit
 }

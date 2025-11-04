@@ -2,13 +2,15 @@ import React, { useMemo } from 'react';
 import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData, NonComplianceData } from '../types';
 import SummaryReportContent from '../src/components/SummaryReport';
 import { Button } from './ui/Button';
-import { BackIcon } from './icons';
+import { BackButton } from './BackButton';
 
 interface ReportViewProps {
   report: Report | undefined;
   audit: Audit | undefined;
   auditStructure: AuditStructure | undefined;
   onBack: () => void;
+  reportVersions?: Report[]; // Všechny verze reportů pro tento audit
+  onSelectVersion?: (reportId: string) => void; // Callback pro změnu verze
 }
 
 const formatDate = (dateString?: string): string => {
@@ -206,7 +208,19 @@ const FullReportContent: React.FC<{ report: Report | undefined, reportData: Repo
     );
 };
 
-const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack }) => {
+const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack, reportVersions = [], onSelectVersion }) => {
+  const formatDateFull = (dateString?: string): string => {
+    if (!dateString) return 'Neuvedeno';
+    const date = new Date(dateString);
+    return isNaN(date.getTime()) ? 'Neplatné datum' : date.toLocaleDateString('cs-CZ', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const renderContent = () => {
     if (!audit || !auditStructure) return <ErrorView error="Přiřazený audit nebo jeho struktura nebyly nalezeny." />;
     if (!report) return <ErrorView error="Pro tento audit neexistuje žádný záznam o reportu." />;
@@ -227,27 +241,81 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
   return (
     <div className="w-full max-w-7xl mx-auto">
       {/* Header - pouze pro obrazovku */}
-      <div className="p-6 flex justify-between items-center print:hidden">
-        <h2 className="text-3xl font-bold text-gray-800">Náhled zprávy</h2>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="primary"
-            onClick={() => window.print()}
-            leftIcon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-            }
-          >
-            Tisk / Uložit do PDF
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={onBack}
-            leftIcon={<BackIcon className="h-5 w-5" />}
-          >
-            Zpět na seznam
-          </Button>
+      <div className="p-6 bg-gradient-to-r from-gray-50 via-gray-50 to-gray-100 border-b border-gray-200 shadow-sm print:hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex-1">
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">Náhled zprávy</h2>
+            {report && (reportVersions.length > 1 || report.versionNumber) && (
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <svg className="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="text-sm font-semibold text-gray-700">
+                    Verze {report.versionNumber || 'N/A'}
+                  </span>
+                  {report.isLatest && (
+                    <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded-full font-medium">
+                      Aktuální
+                    </span>
+                  )}
+                </div>
+                {report.createdByName && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm text-sm text-gray-600">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="font-medium">{report.createdByName}</span>
+                  </div>
+                )}
+                {report.createdAt && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm text-sm text-gray-600">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span>{formatDateFull(report.createdAt)}</span>
+                  </div>
+                )}
+                {reportVersions.length > 1 && onSelectVersion && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <label className="text-sm text-gray-600 font-medium whitespace-nowrap">Přepnout verzi:</label>
+                    <select
+                      value={report.id}
+                      onChange={(e) => onSelectVersion(e.target.value)}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent hover:border-gray-400 transition-colors min-w-[200px]"
+                    >
+                      {reportVersions.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          Verze {v.versionNumber || 'N/A'}
+                          {v.isLatest ? ' (Aktuální)' : ''}
+                          {v.createdByName ? ` - ${v.createdByName}` : ''}
+                          {v.createdAt ? ` - ${formatDateFull(v.createdAt)}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3 lg:self-center">
+            <Button
+              variant="primary"
+              onClick={() => window.print()}
+              leftIcon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+              }
+              className="shadow-md hover:shadow-lg transition-all hover:scale-105"
+            >
+              Tisk / Uložit do PDF
+            </Button>
+            <BackButton
+              onClick={onBack}
+              label="Zpět"
+            />
+          </div>
         </div>
       </div>
       

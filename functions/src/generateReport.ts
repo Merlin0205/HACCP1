@@ -297,13 +297,23 @@ export const generateReport = functions
       // Načíst model config
       const modelsDoc = await db.collection('settings').doc('aiModelsConfig').get();
       const modelsConfig = modelsDoc.data();
-      const selectedModel = modelsConfig?.models?.['report-generation'] || 'gemini-2.0-flash-exp';
+      let selectedModel = modelsConfig?.models?.['report-generation'] || 'gemini-2.0-flash-exp';
+      
+      // Validace modelu - pokud je nastavený neplatný model, použít fallback
+      const deprecatedModels = ['gemini-1.5-pro', 'gemini-1.5-flash'];
+      if (deprecatedModels.includes(selectedModel)) {
+        console.warn(`[generateReport] Deprecated model "${selectedModel}" detected, using fallback "gemini-2.0-flash-exp"`);
+        selectedModel = 'gemini-2.0-flash-exp';
+      }
 
       // Generovat pomocí AI
-      // Pro emulátory použít process.env, pro produkci functions.config()
-      const apiKey = process.env.GEMINI_API_KEY || functions.config().gemini?.api_key;
+      // Použít process.env (načte se z .env nebo Firebase Secrets)
+      const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        throw new functions.https.HttpsError('failed-precondition', 'Gemini API key not configured. Set GEMINI_API_KEY in functions/.env for emulators or use firebase functions:config:set for production.');
+        throw new functions.https.HttpsError(
+          'failed-precondition', 
+          'Gemini API key not configured. Set GEMINI_API_KEY in functions/.env for local development or use Firebase Secrets for production.'
+        );
       }
 
       const genAI = new GoogleGenerativeAI(apiKey);

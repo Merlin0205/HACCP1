@@ -1,12 +1,56 @@
 /**
- * AI Layout Service - Gemini API pro optimalizaci rozložení PDF reportu
+ * AI Layout Service - wrapper pro Cloud Functions
+ * Volá Cloud Functions místo přímého Gemini API
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebaseConfig';
 import { EditableNonCompliance, ReportLayout, AILayoutSuggestion } from '../types/reportEditor';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const MODEL_NAME = import.meta.env.VITE_MODEL_TEXT_GENERATION || 'gemini-1.5-flash';
+const suggestLayoutFunction = httpsCallable(functions, 'generateText');
+
+/**
+ * Odhaduje výšku položky v pixelech - PŘESNÝ výpočet jako v editoru
+ */
+function estimateItemHeight(nc: EditableNonCompliance, pageWidth: number = 800): number {
+  let height = 0;
+  
+  // Nadpis: ~40px
+  height += 40;
+  
+  // Text pole - přesný výpočet
+  const locationLines = Math.max(2, Math.ceil((nc.location?.length || 0) / 80));
+  height += locationLines * 18 + 25;
+  
+  const findingLines = Math.max(3, Math.ceil((nc.finding?.length || 0) / 80));
+  height += findingLines * 18 + 25;
+  
+  const recommendationLines = Math.max(3, Math.ceil((nc.recommendation?.length || 0) / 80));
+  height += recommendationLines * 18 + 25;
+  
+  // Fotografie - PŘESNÝ výpočet
+  if (nc.photos.length > 0) {
+    height += 30; // Label
+    
+    if (nc.photos.length > 1) {
+      // Grid layout - 2 sloupce
+      const rows = Math.ceil(nc.photos.length / 2);
+      const photoWidth = (pageWidth * 0.48);
+      const photoHeight = photoWidth * 0.75;
+      height += rows * (photoHeight + 80) + (rows - 1) * 12;
+    } else {
+      // Stack layout
+      nc.photos.forEach(photo => {
+        const photoWidth = ((photo.width || 100) / 100) * pageWidth;
+        const photoHeight = photoWidth * 0.75;
+        height += photoHeight + 80 + 12;
+      });
+    }
+  }
+  
+  height += 30; // Extra spacing
+  return Math.round(height);
+}
 
 /**
  * Analyzuje obsah reportu a navrhne optimální rozložení stránek
@@ -16,54 +60,6 @@ export async function suggestOptimalLayout(
   pageHeight: number = 1100,
   pageWidth: number = 800
 ): Promise<AILayoutSuggestion> {
-  
-  if (!API_KEY) {
-    throw new Error('VITE_GEMINI_API_KEY není nastaven');
-  }
-
-  const genAI = new GoogleGenerativeAI(API_KEY);
-  const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-  // VYLEPŠENÝ výpočet výšky - PŘESNÝ jako v editoru
-  const estimateItemHeight = (nc: EditableNonCompliance): number => {
-    let height = 0;
-    
-    // Nadpis: ~40px
-    height += 40;
-    
-    // Text pole - přesný výpočet
-    const locationLines = Math.max(2, Math.ceil((nc.location?.length || 0) / 80));
-    height += locationLines * 18 + 25;
-    
-    const findingLines = Math.max(3, Math.ceil((nc.finding?.length || 0) / 80));
-    height += findingLines * 18 + 25;
-    
-    const recommendationLines = Math.max(3, Math.ceil((nc.recommendation?.length || 0) / 80));
-    height += recommendationLines * 18 + 25;
-    
-    // Fotografie - PŘESNÝ výpočet
-    if (nc.photos.length > 0) {
-      height += 30; // Label
-      
-      if (nc.photos.length > 1) {
-        // Grid layout - 2 sloupce
-        const rows = Math.ceil(nc.photos.length / 2);
-        const photoWidth = (pageWidth * 0.48);
-        const photoHeight = photoWidth * 0.75;
-        height += rows * (photoHeight + 80) + (rows - 1) * 12;
-      } else {
-        // Stack layout
-        nc.photos.forEach(photo => {
-          const photoWidth = ((photo.width || 100) / 100) * pageWidth;
-          const photoHeight = photoWidth * 0.75;
-          height += photoHeight + 80 + 12;
-        });
-      }
-    }
-    
-    height += 30; // Extra spacing
-    return Math.round(height);
-  };
 
   // Připravíme kontext pro AI s PŘESNÝMI výškami
   const itemsSummary = nonCompliances.map((nc, index) => ({
@@ -72,7 +68,7 @@ export async function suggestOptimalLayout(
     title: nc.itemTitle,
     textLength: (nc.location + nc.finding + nc.recommendation).length,
     photoCount: nc.photos.length,
-    estimatedHeight: estimateItemHeight(nc), // ✅ PŘESNÁ výška!
+    estimatedHeight: estimateItemHeight(nc, pageWidth), // ✅ PŘESNÁ výška!
   }));
 
   const prompt = `
@@ -113,9 +109,13 @@ Vrať mi JSON odpověď ve formátu:
 `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const result = await suggestLayoutFunction({
+      prompt,
+      operation: 'text-generation'
+    });
+    
+    const response = result.data as any;
+    const text = response.text || '';
     
     // Parsujeme JSON z odpovědi
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -145,21 +145,19 @@ Vrať mi JSON odpověď ve formátu:
     console.error('[AILayoutService] Chyba při generování layoutu:', error);
     
     // Fallback - pokud AI selže, použije se inteligentní algoritmus
-    return fallbackLayout(nonCompliances);
+    return fallbackLayout(nonCompliances, pageHeight, pageWidth);
   }
 }
 
 /**
  * Fallback - inteligentní algoritmus pro rozložení bez AI
  */
-function fallbackLayout(nonCompliances: EditableNonCompliance[]): AILayoutSuggestion {
-  const pageHeight = 1100;
-  const pageWidth = 800;
+function fallbackLayout(nonCompliances: EditableNonCompliance[], pageHeight: number = 1100, pageWidth: number = 800): AILayoutSuggestion {
   const pages: any[] = [];
   let currentPage: any = { pageNumber: 1, items: [], estimatedHeight: 0 };
 
   nonCompliances.forEach(nc => {
-    const itemHeight = estimateItemHeight(nc);
+    const itemHeight = estimateItemHeight(nc, pageWidth);
     
     if (currentPage.estimatedHeight + itemHeight > pageHeight) {
       // Nová stránka
@@ -187,31 +185,11 @@ function fallbackLayout(nonCompliances: EditableNonCompliance[]): AILayoutSugges
 }
 
 /**
- * Odhaduje výšku položky v pixelech
- */
-function estimateItemHeight(item: EditableNonCompliance): number {
-  let height = 150; // Základní výška
-  
-  // Text pole
-  height += Math.ceil((item.location?.length || 0) / 100) * 20;
-  height += Math.ceil((item.finding?.length || 0) / 100) * 30;
-  height += Math.ceil((item.recommendation?.length || 0) / 100) * 30;
-  
-  // Fotografie
-  item.photos.forEach(photo => {
-    const photoWidth = (photo.width || 100) / 100 * 700;
-    const photoHeight = photoWidth * 0.75;
-    height += photoHeight + 30;
-  });
-
-  return height;
-}
-
-/**
  * Aplikuje automatické stránkování s ohledem na výšku obsahu
  */
 export function applyAutoPageBreaks(
-  nonCompliances: EditableNonCompliance[]
+  nonCompliances: EditableNonCompliance[],
+  pageWidth: number = 800
 ): EditableNonCompliance[] {
   const A4_HEIGHT = 1123;
   const PAGE_PADDING = 120;
@@ -221,7 +199,7 @@ export function applyAutoPageBreaks(
   const result: EditableNonCompliance[] = [];
 
   nonCompliances.forEach((nc, index) => {
-    const itemHeight = estimateItemHeight(nc);
+    const itemHeight = estimateItemHeight(nc, pageWidth);
 
     if (currentPageHeight + itemHeight > AVAILABLE_HEIGHT && index > 0) {
       result.push({

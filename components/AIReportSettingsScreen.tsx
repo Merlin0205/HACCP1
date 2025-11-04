@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { fetchAIReportConfig, saveAIReportConfig, fetchAIModelsConfig, saveAIModelsConfig } from '../services/firestore/settings';
-import { fetchAIPricingConfig } from '../services/firestore/settings';
+import { fetchAIReportConfig, saveAIReportConfig, fetchAIModelsConfig } from '../services/firestore/settings';
+import { calculateModelStats } from '../services/firestore/aiUsageLogs';
 import { toast } from '../utils/toast';
 
 interface AIReportConfig {
@@ -16,7 +16,7 @@ interface AIReportConfig {
   };
   aiPromptTemplate: string;
   useAI: boolean;
-  selectedModel: string;
+  selectedModel?: string; // Nepovinné - už se nepoužívá pro výběr, jen pro kompatibilitu
   fallbackText: string;
 }
 
@@ -38,7 +38,6 @@ const DEFAULT_CONFIG: AIReportConfig = {
   },
   aiPromptTemplate: "Jsi expert na hygienu potravin a HACCP v České republice a řídíš se výhradně platnou legislativou ČR a příslušnými nadřazenými předpisy Evropské unie. Tvým úkolem je vygenerovat strukturovaný report z auditu ve formátu JSON.\n\n### DŮLEŽITÉ: Byly nalezeny následující neshody, které MUSÍŠ zahrnout do reportu:\n{{neshody}}\n\n### Počet neshod celkem: {{pocet_neshod}}",
   useAI: true,
-  selectedModel: "gemini-1.5-flash",
   fallbackText: "Audit byl proveden a byly zjištěny neshody, které vyžadují okamžitou pozornost a nápravu."
 };
 
@@ -46,28 +45,23 @@ interface AIReportSettingsScreenProps {
   onBack: () => void;
 }
 
-interface ModelInfo {
-  name: string;
-  usage: string;
-  estimatedCost: number;
-}
-
 const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack }) => {
   const [config, setConfig] = useState<AIReportConfig>(DEFAULT_CONFIG);
   const [initialConfig, setInitialConfig] = useState<AIReportConfig>(DEFAULT_CONFIG);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [models, setModels] = useState<ModelInfo[]>([]);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [currentModel, setCurrentModel] = useState<string>('');
+  const [averageCost, setAverageCost] = useState<number>(0);
+  const [totalCalls, setTotalCalls] = useState<number>(0);
 
   // Načíst z Firestore
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const [reportConfig, modelsConfig, pricingConfig] = await Promise.all([
+        const [reportConfig, modelsConfig] = await Promise.all([
           fetchAIReportConfig(),
-          fetchAIModelsConfig(),
-          fetchAIPricingConfig()
+          fetchAIModelsConfig()
         ]);
         
         let loadedConfig = { ...DEFAULT_CONFIG, ...reportConfig };
@@ -76,22 +70,29 @@ const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack 
         const reportModel = modelsConfig.models?.['report-generation'];
         if (reportModel) {
           loadedConfig.selectedModel = reportModel;
+          setCurrentModel(reportModel);
+          
+          // Načíst statistiky pro aktuální model
+          try {
+            const stats = await calculateModelStats(reportModel, 'report-generation');
+            if (stats.count > 0) {
+              setAverageCost(stats.totalCostCzk / stats.count);
+              setTotalCalls(stats.count);
+            } else {
+              setAverageCost(0);
+              setTotalCalls(0);
+            }
+          } catch (error) {
+            console.error('Chyba při načítání statistik:', error);
+            setAverageCost(0);
+            setTotalCalls(0);
+          }
+        } else {
+          setCurrentModel(loadedConfig.selectedModel || '');
         }
         
         setConfig(loadedConfig);
         setInitialConfig(loadedConfig);
-        
-        // Načíst modely pro výběr
-        const modelsList: ModelInfo[] = Object.entries(pricingConfig.models || {}).map(([modelName, pricing]: [string, any]) => {
-          let estimatedCost = 0;
-          if (pricing) {
-            const inputCost = (787 / 1000000) * (pricing.inputPrice || 0);
-            const outputCost = (1013 / 1000000) * (pricing.outputPrice || 0);
-            estimatedCost = (inputCost + outputCost) * (pricingConfig.usdToCzk || 25);
-          }
-          return { name: modelName, usage: `Pro generování reportů`, estimatedCost };
-        });
-        setModels(modelsList);
       } catch (error) {
         console.error('Chyba při načítání:', error);
       } finally {
@@ -123,11 +124,8 @@ const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack 
       setSaving(true);
       await saveAIReportConfig(config);
       
-      // Uložit také selected model do models config
-      const modelsConfig = await fetchAIModelsConfig();
-      modelsConfig.models = modelsConfig.models || {};
-      modelsConfig.models['report-generation'] = config.selectedModel;
-      await saveAIModelsConfig(modelsConfig);
+      // POZNÁMKA: Model se už neukládá zde - mění se v AIPricingConfigScreen
+      // Tato část byla odstraněna, protože výběr modelu je duplicitní
       
       setInitialConfig(config);
       setLastSaved(new Date());
@@ -324,35 +322,43 @@ const AIReportSettingsScreen: React.FC<AIReportSettingsScreenProps> = ({ onBack 
 
           {config.useAI ? (
             <div className="space-y-6">
-              {/* Modely */}
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-3">Vyberte AI model</label>
-                <div className="space-y-3">
-                  {models.map((model) => (
-                    <div
-                      key={model.name}
-                      onClick={() => setConfig(prev => ({ ...prev, selectedModel: model.name }))}
-                      className={`cursor-pointer border-2 rounded-xl p-4 transition-all ${
-                        config.selectedModel === model.name
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-blue-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          config.selectedModel === model.name ? 'border-blue-500 bg-blue-500' : 'border-gray-300'
-                        }`}>
-                          {config.selectedModel === model.name && <div className="w-2 h-2 bg-white rounded-full"></div>}
+              {/* Aktuálně vybraný model a statistiky */}
+              {currentModel && (
+                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-800">Aktuálně vybraný model</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Model se mění v nastavení{' '}
+                        <span className="font-semibold text-blue-600">"Ceny AI modelů"</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg p-4 border border-blue-200">
+                    <div className="font-bold text-xl text-gray-800 mb-2">{currentModel}</div>
+                    {totalCalls > 0 ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Průměrná cena za volání:</span>
+                          <span className="font-bold text-green-600">{averageCost.toFixed(4)} Kč</span>
                         </div>
-                        <div className="flex-1">
-                          <div className="font-bold text-gray-800">{model.name}</div>
-                          <div className="text-sm text-gray-600">Cena: {model.estimatedCost.toFixed(4)} Kč</div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Celkem volání:</span>
+                          <span className="font-semibold text-gray-800">{totalCalls}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
+                          <span className="text-gray-600">Celkové náklady:</span>
+                          <span className="font-bold text-blue-600">{(averageCost * totalCalls).toFixed(2)} Kč</span>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ) : (
+                      <div className="text-sm text-gray-500 italic">
+                        Zatím nebyla provedena žádná volání s tímto modelem
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Prompt */}
               <div>

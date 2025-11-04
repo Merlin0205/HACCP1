@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { AuditStructure, AuditData, AuditItem, AuditAnswer } from '../types';
-import { ChevronDownIcon, WarningIcon, BackIcon, SaveIcon } from './icons';
+import { ChevronDownIcon, WarningIcon, SaveIcon } from './icons';
 import { iconMap, QuestionMarkIcon } from './AuditIcons';
 import { AuditItemModal } from './AuditItemModal';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Card, CardHeader, CardBody } from './ui/Card';
+import { BackButton } from './BackButton';
 
 interface AuditChecklistProps {
   auditStructure: AuditStructure;
@@ -217,14 +218,10 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
       {/* Bottom Sticky Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-20 print:hidden lg:left-64">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <Button
-            variant="ghost"
+          <BackButton
             onClick={onBack}
-            leftIcon={<BackIcon className="h-5 w-5" />}
             className="sm:w-auto"
-          >
-            Zpět na seznam
-          </Button>
+          />
           <div className="flex gap-3 flex-1 sm:flex-initial sm:justify-end">
             <Button
               variant="secondary"

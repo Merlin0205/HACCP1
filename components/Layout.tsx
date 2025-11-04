@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { AppState } from '../types';
+import { AppState, Tab } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateAIUsageStats } from '../services/firestore';
+import { APP_VERSION, BUILD_DATE } from '../constants';
 import { HomeIcon, SettingsIcon } from './icons/index';
 import { MobileMenu } from './MobileMenu';
+import { TabBar } from './TabBar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,6 +14,10 @@ interface LayoutProps {
   showSidebar?: boolean;
   activePremiseId?: string | null;
   activeAuditId?: string | null;
+  tabs?: Tab[];
+  activeTabId?: string | null;
+  onTabClick?: (tabId: string) => void;
+  onTabClose?: (tabId: string, e?: React.MouseEvent) => void;
 }
 
 export const Layout: React.FC<LayoutProps> = ({
@@ -21,6 +27,10 @@ export const Layout: React.FC<LayoutProps> = ({
   showSidebar = true,
   activePremiseId,
   activeAuditId,
+  tabs = [],
+  activeTabId,
+  onTabClick,
+  onTabClose,
 }) => {
   const { currentUser, signOut } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -79,28 +89,6 @@ export const Layout: React.FC<LayoutProps> = ({
               currentView === AppState.EDIT_OPERATOR ||
               currentView === AppState.ADD_PREMISE ||
               currentView === AppState.EDIT_PREMISE,
-    },
-    {
-      id: AppState.AUDIT_LIST,
-      label: 'Audity (pracoviště)',
-      icon: (
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-      ),
-      active: currentView === AppState.AUDIT_LIST,
-      show: activePremiseId !== null,
-    },
-    {
-      id: AppState.REPORT_VIEW,
-      label: 'Reporty',
-      icon: (
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-      active: currentView === AppState.REPORT_VIEW,
-      show: activeAuditId !== null,
     },
     {
       id: AppState.SETTINGS,
@@ -238,6 +226,19 @@ export const Layout: React.FC<LayoutProps> = ({
         >
           {isSidebarCollapsed ? '→' : '← Schovat menu'}
         </button>
+
+        {/* Version Info */}
+        {!isSidebarCollapsed && (
+          <div className="px-4 py-2 border-t border-gray-200 text-xs text-gray-400 text-center">
+            <div>Verze: {APP_VERSION}</div>
+            <div className="text-gray-300">Build: {BUILD_DATE}</div>
+          </div>
+        )}
+        {isSidebarCollapsed && (
+          <div className="px-2 py-2 border-t border-gray-200 text-xs text-gray-400 text-center">
+            v{APP_VERSION.split('.')[0]}
+          </div>
+        )}
       </aside>
 
       {/* Main Content */}
@@ -322,6 +323,16 @@ export const Layout: React.FC<LayoutProps> = ({
             </div>
           </div>
         </header>
+
+        {/* TabBar - pouze když existují taby */}
+        {tabs.length > 0 && onTabClick && onTabClose && (
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId || null}
+            onTabClick={onTabClick}
+            onTabClose={onTabClose}
+          />
+        )}
 
         {/* Content Area */}
         <main className="flex-1 overflow-auto">

@@ -1,5 +1,14 @@
 import { AuditStructure, HeaderData } from './types';
 
+/**
+ * Verze aplikace
+ * Automaticky aktualizováno při buildu
+ */
+
+// Verze se načte z package.json při buildu přes Vite define plugin
+export const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'dev';
+export const BUILD_DATE = import.meta.env.VITE_BUILD_DATE || new Date().toISOString().split('T')[0];
+
 // Fix: Define a type for the raw structure to ensure type safety, especially for the HeaderField union type.
 type RawAuditStructure = {
   audit_title: string;
@@ -121,10 +130,10 @@ const rawStructure: RawAuditStructure = {
         { "id": "cleaning_sanitation_plan", "title": "SANITAČNÍ ŘÁD", "description": "Je sestaven trvalý písemný rozpis čistících a dezinfekčních postupů včetně používaných dezinfekčních přípravků a jejich technických údajů, aby bylo zajištěno, že veškeré prostory budou řádně čištěny a že kritickým oblastem, zařízením a materiálům bude věnována zvláštní pozornost." },
         { "id": "cleaning_products", "title": "PŘÍPRAVKY", "description": "Pracovníci jsou proškoleni o dezinfekčních postupech a přípravcích a dodržují pokyny výrobce. Střídají se dezinfekce s různými aktivními látkami jako prevence vzniku rezistence. Při manipulaci s chemickými látkami jsou používány aplikační pomůcky a ochranné pracovní pomůcky. Přípravky jsou vhodné do potravinářství. K dispozici bezpečnostní listy a technické údaje – např. účinná látka, doporučená doba působení, koncentrace, teplota vody, skladování." },
         { "id": "cleaning_conditions", "title": "PODMÍNKY PRO SANITACI", "description": "V provozních místnostech nejsou překážky bránící řádnému čištění (uložené přepravky na podlaze, nevhodné umístění zařizovacích předmětů, skladování čistících a dezinfekčních přípravků na podlaze apod.)." },
-        { "id": "cleaning_maintenance", "title": "PRAVIDELNÁ ÚDRŽBA", "description": "Podle potřeby jsou řádně čištěny stroje a zařízení včetně „mrtvých prostor“. Provádí se kontrola povrchů a pravidelná údržba." },
+        { "id": "cleaning_maintenance", "title": "PRAVIDELNÁ ÚDRŽBA", "description": "Podle potřeby jsou řádně čištěny stroje a zařízení včetně \"mrtvých prostor\". Provádí se kontrola povrchů a pravidelná údržba." },
         { "id": "cleaning_discarded_items", "title": "VYŘAZENÉ PŘEDMĚTY", "description": "Staré nepotřebné a vyřazené předměty a zařízení se v co nejkratší době odstraňují pryč z provozovny, případně se ihned likvidují." },
-        { "id": "cleaning_laundry", "title": "NAKLÁDÁNÍ S PRÁDLEM", "description": "Prádelna musí být rozdělena stavebně nebo funkčně na „nečistou“ (špinavou) a „čistou“ část. V místnostech pro praní a skladování použitého prádla musí být podlaha a stěny do výše minimálně 150 cm omyvatelné a dezinfikovatelné. Použité prádlo se ukládá do obalů, které zabraňují kontaminaci okolí nečistotami z tohoto prádla. Používají se obaly vhodné k praní nebo omyvatelné a dezinfikovatelné nebo na jedno použití. Použité prádlo v obalech se skladuje ve vyčleněném větratelném prostoru. Sušení prádla probíhá v prostorách k tomu určených mimo hygienická zařízení (WC, předsíňka, sprcha, šatna, úklidová místnost) a prostory kde je manipulováno s potravinami. Utěrky se nesuší na topení apod. Čisté prádlo se skladuje v uzavíratelných pravidelně dezinfikovaných skříních." },
-        { "id": "cleaning_waste", "title": "NAKLÁDÁNÍ S ODPADY", "description": "Potravinářské odpady, nepoživatelné vedlejší produkty - zbytky pokrmů a jiný odpad - plasty, sklo, papír (dále jen „odpady“) jsou odstraňovány z prostor, kde se nacházejí potraviny co nejrychleji, aby nedocházelo k jejich hromadění. Odpady se ukládají do označených uzavíratelných nádob, které jsou udržovány v čistotě a bezvadném technickém stavu a jsou snadno čistitelné a dezinfikovatelné. Odpadní kontejnery se uchovávají v uzavřeném dobře větratelném snadno čistitelném a dezinfikovatelném vyhrazeném prostoru odděleně od skladů potravin při co nejnižší teplotě chráněné před hmyzem a hlodavci." }
+        { "id": "cleaning_laundry", "title": "NAKLÁDÁNÍ S PRÁDLEM", "description": "Prádelna musí být rozdělena stavebně nebo funkčně na \"nečistou\" (špinavou) a \"čistou\" část. V místnostech pro praní a skladování použitého prádla musí být podlaha a stěny do výšky minimálně 150 cm omyvatelné a dezinfikovatelné. Použité prádlo se ukládá do obalů, které zabraňují kontaminaci okolí nečistotami z tohoto prádla. Používají se obaly vhodné k praní nebo omyvatelné a dezinfikovatelné nebo na jedno použití. Použité prádlo v obalech se skladuje ve vyčleněném větratelném prostoru. Sušení prádla probíhá v prostorách k tomu určených mimo hygienická zařízení (WC, předsíňka, sprcha, šatna, úklidová místnost) a prostory kde je manipulováno s potravinami. Utěrky se nesuší na topení apod. Čisté prádlo se skladuje v uzavíratelných pravidelně dezinfikovaných skříních." },
+        { "id": "cleaning_waste", "title": "NAKLÁDÁNÍ S ODPADY", "description": "Potravinářské odpady, nepoživatelné vedlejší produkty - zbytky pokrmů a jiný odpad - plasty, sklo, papír (dále jen \"odpady\") jsou odstraňovány z prostor, kde se nacházejí potraviny co nejrychleji, aby nedocházelo k jejich hromadění. Odpady se ukládají do označených uzavíratelných nádob, které jsou udržovány v čistotě a bezvadném technickém stavu a jsou snadno čistitelné a dezinfikovatelné. Odpadní kontejnery se uchovávají v uzavřeném dobře větratelném snadno čistitelném a dezinfikovatelném vyhrazeném prostoru odděleně od skladů potravin při co nejnižší teplotě chráněné před hmyzem a hlodavci." }
       ]
     },
     {
@@ -150,6 +159,5 @@ const enrichedStructure: AuditStructure = {
     })),
   })),
 };
-
 
 export const DEFAULT_AUDIT_STRUCTURE: AuditStructure = enrichedStructure;
