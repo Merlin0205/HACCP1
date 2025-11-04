@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuditItem, AuditSection } from '../types';
 import { XIcon } from './icons';
+import { iconCategories, IconOption } from './iconRegistry';
 
 interface ItemEditModalProps {
   item: AuditItem;
@@ -13,15 +14,21 @@ interface ItemEditModalProps {
 export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSectionId, allSections, onSave, onClose }) => {
   const [editedItem, setEditedItem] = useState<AuditItem>(item);
   const [selectedSectionId, setSelectedSectionId] = useState<string>(currentSectionId);
+  const [selectedIconId, setSelectedIconId] = useState<string>(item.icon || 'checkmark');
 
   useEffect(() => {
     setEditedItem(item);
     setSelectedSectionId(currentSectionId);
+    setSelectedIconId(item.icon || 'checkmark');
   }, [item, currentSectionId]);
 
   const handleSave = () => {
-    onSave(editedItem, selectedSectionId);
+    const itemToSave = { ...editedItem, icon: selectedIconId };
+    onSave(itemToSave, selectedSectionId);
   };
+
+  // Zjistit, zda je to nová položka nebo editace existující
+  const isNewItem = item.title === "Nová položka" && !item.description && item.icon === undefined;
 
   return (
     <div
@@ -33,7 +40,7 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
         onClick={e => e.stopPropagation()}
       >
         <div className="p-5 border-b flex justify-between items-center flex-shrink-0">
-          <h3 className="text-xl font-bold text-gray-800">Upravit položku auditu</h3>
+          <h3 className="text-xl font-bold text-gray-800">{isNewItem ? 'Přidat novou položku' : 'Upravit položku auditu'}</h3>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-500">
             <XIcon className="h-6 w-6" />
           </button>
@@ -84,6 +91,47 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
               ))}
             </select>
           </div>
+          
+          <div>
+            <label htmlFor="item-icon" className="block text-sm font-medium text-gray-700 mb-2">
+              Ikona
+            </label>
+            <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-96 overflow-y-auto">
+              {Object.entries(iconCategories).map(([categoryName, icons]) => (
+                <div key={categoryName} className="mb-6 last:mb-0">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2 sticky top-0 bg-white py-1 z-10">
+                    {categoryName}
+                  </h4>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                    {icons.map(icon => {
+                      const IconComponent = icon.component;
+                      const isSelected = selectedIconId === icon.id;
+                      return (
+                        <button
+                          key={icon.id}
+                          type="button"
+                          onClick={() => setSelectedIconId(icon.id)}
+                          className={`
+                            flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all
+                            ${isSelected 
+                              ? 'border-blue-500 bg-blue-50' 
+                              : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            }
+                          `}
+                          title={icon.name}
+                        >
+                          <IconComponent className={`h-5 w-5 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
+                          <span className={`text-[10px] mt-1 text-center leading-tight ${isSelected ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>
+                            {icon.name}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="p-4 bg-gray-50 border-t rounded-b-2xl flex-shrink-0 flex items-center justify-end gap-3">
@@ -97,7 +145,7 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
             onClick={handleSave}
             className="px-4 py-2 text-sm font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
-            Uložit změny
+            {isNewItem ? 'Přidat položku' : 'Uložit změny'}
           </button>
         </div>
       </div>

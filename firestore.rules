@@ -112,6 +112,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // Audit Types - čtení pro schválené uživatele, zápis pouze pro adminy
+    match /auditTypes/{auditTypeId} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+    
     // Users - vlastní profil může číst/zapisovat, admin může číst všechny a upravovat role
     match /users/{userId} {
       // Čtení: vlastní profil (i když není approved) nebo admin

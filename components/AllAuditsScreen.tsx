@@ -5,6 +5,9 @@ import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
+import { PageHeader } from './PageHeader';
+import { SECTION_THEMES } from '../constants/designSystem';
+import { AppState } from '../types';
 
 interface AllAuditsScreenProps {
   audits: Audit[];
@@ -240,11 +243,21 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
 
   return (
     <div className="w-full max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{title}</h1>
-        <p className="text-gray-600">{description}</p>
-      </div>
+      <PageHeader
+        section={SECTION_THEMES[AppState.ALL_AUDITS]}
+        title={title}
+        description={description}
+        action={onAddNewAudit && (
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={onAddNewAudit}
+            leftIcon={<PlusIcon className="h-5 w-5" />}
+          >
+            Nový audit
+          </Button>
+        )}
+      />
 
       {/* Filters */}
       <Card className="mb-6">
@@ -293,10 +306,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
       <Card className="overflow-hidden hidden md:block">
         <CardBody className="p-0 overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gradient-to-r from-primary-dark to-primary">
+            <thead className={`bg-gradient-to-r ${SECTION_THEMES[AppState.ALL_AUDITS].colors.gradient}`}>
               <tr>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-primary-dark/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors rounded-tl-lg"
                   onClick={() => handleSort('operator')}
                 >
                   <div className="flex items-center gap-2">
@@ -305,7 +318,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-primary-dark/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
                   onClick={() => handleSort('premise')}
                 >
                   <div className="flex items-center gap-2">
@@ -314,7 +327,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-primary-dark/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
                   onClick={() => handleSort('status')}
                 >
                   <div className="flex items-center gap-2">
@@ -323,7 +336,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-primary-dark/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
                   onClick={() => handleSort('createdAt')}
                 >
                   <div className="flex items-center gap-2">
@@ -332,7 +345,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-primary-dark/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
                   onClick={() => handleSort('completedAt')}
                 >
                   <div className="flex items-center gap-2">
@@ -343,7 +356,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                 <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Report
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
                   Akce
                 </th>
               </tr>
@@ -364,27 +377,100 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredAndSortedAudits.map((audit) => {
+                filteredAndSortedAudits.map((audit, index) => {
                   const premise = premises.find(p => p.id === audit.premiseId);
                   const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
                   const reportVersions = getAuditReportVersions(audit.id);
                   const hasMultipleVersions = reportVersions.length > 1;
                   const isExpanded = expandedAudits.has(audit.id);
+                  const isLastRow = index === filteredAndSortedAudits.length - 1;
 
                   return (
                     <React.Fragment key={audit.id}>
                       <tr
-                        className="hover:bg-primary-light/5 transition-colors cursor-pointer border-l-4 border-transparent hover:border-primary"
+                        className="hover:bg-primary-light/5 transition-colors cursor-pointer"
                         onClick={() => onSelectAudit(audit.id)}
                       >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {operator?.operator_name || '-'}
+                        <div className="relative group">
+                          <div className="text-sm font-medium text-gray-900 cursor-help">
+                            {operator?.operator_name || '-'}
+                          </div>
+                          {/* Tooltip s kompletními informacemi o provozovateli */}
+                          {operator && (
+                            <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
+                              <div className="space-y-1.5">
+                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
+                                {operator.operator_ico && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
+                                    <span className="text-white">{operator.operator_ico}</span>
+                                  </div>
+                                )}
+                                {operator.operator_address && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
+                                    <span className="text-white">{operator.operator_address}</span>
+                                  </div>
+                                )}
+                                {operator.operator_phone && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">Telefon:</span>
+                                    <span className="text-white">{operator.operator_phone}</span>
+                                  </div>
+                                )}
+                                {operator.operator_email && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">Email:</span>
+                                    <span className="text-white break-all">{operator.operator_email}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Šipka tooltipu */}
+                              <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {premise?.premise_name || '-'}
+                        <div className="relative group">
+                          <div className="text-sm text-gray-900 cursor-help">
+                            {premise?.premise_name || '-'}
+                          </div>
+                          {/* Tooltip s kompletními informacemi o pracovišti */}
+                          {premise && (
+                            <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
+                              <div className="space-y-1.5">
+                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
+                                {premise.premise_address && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Adresa:</span>
+                                    <span className="text-white">{premise.premise_address}</span>
+                                  </div>
+                                )}
+                                {premise.premise_responsible_person && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Odpovědná osoba:</span>
+                                    <span className="text-white">{premise.premise_responsible_person}</span>
+                                  </div>
+                                )}
+                                {premise.premise_phone && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Telefon:</span>
+                                    <span className="text-white">{premise.premise_phone}</span>
+                                  </div>
+                                )}
+                                {premise.premise_email && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Email:</span>
+                                    <span className="text-white break-all">{premise.premise_email}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Šipka tooltipu */}
+                              <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -682,13 +768,85 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
               <Fragment key={audit.id}>
                 <Card
                   onClick={() => onSelectAudit(audit.id)}
-                  className="cursor-pointer hover:shadow-lg transition-all border-l-4 border-primary"
+                  className="cursor-pointer hover:shadow-lg transition-all"
                 >
                   <CardBody>
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-gray-900 mb-1">{operator?.operator_name || '-'}</h3>
-                        <p className="text-sm text-gray-600 mb-2">{premise?.premise_name || '-'}</p>
+                        <div className="relative group mb-1">
+                          <h3 className="text-base font-bold text-gray-900 cursor-help">{operator?.operator_name || '-'}</h3>
+                          {/* Tooltip s kompletními informacemi o provozovateli */}
+                          {operator && (
+                            <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]">
+                              <div className="space-y-1.5">
+                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
+                                {operator.operator_ico && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
+                                    <span className="text-white">{operator.operator_ico}</span>
+                                  </div>
+                                )}
+                                {operator.operator_address && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
+                                    <span className="text-white">{operator.operator_address}</span>
+                                  </div>
+                                )}
+                                {operator.operator_phone && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">Telefon:</span>
+                                    <span className="text-white">{operator.operator_phone}</span>
+                                  </div>
+                                )}
+                                {operator.operator_email && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[50px]">Email:</span>
+                                    <span className="text-white break-all">{operator.operator_email}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Šipka tooltipu */}
+                              <div className="absolute bottom-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="relative group mb-2">
+                          <p className="text-sm text-gray-600 cursor-help">{premise?.premise_name || '-'}</p>
+                          {/* Tooltip s kompletními informacemi o pracovišti */}
+                          {premise && (
+                            <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]">
+                              <div className="space-y-1.5">
+                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
+                                {premise.premise_address && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Adresa:</span>
+                                    <span className="text-white">{premise.premise_address}</span>
+                                  </div>
+                                )}
+                                {premise.premise_responsible_person && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Odpovědná osoba:</span>
+                                    <span className="text-white">{premise.premise_responsible_person}</span>
+                                  </div>
+                                )}
+                                {premise.premise_phone && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Telefon:</span>
+                                    <span className="text-white">{premise.premise_phone}</span>
+                                  </div>
+                                )}
+                                {premise.premise_email && (
+                                  <div className="flex items-start gap-2">
+                                    <span className="font-semibold text-gray-300 min-w-[60px]">Email:</span>
+                                    <span className="text-white break-all">{premise.premise_email}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Šipka tooltipu */}
+                              <div className="absolute bottom-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           {getStatusBadge(audit.status)}
                           {getReportBadge(audit.id)}

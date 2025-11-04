@@ -23,6 +23,7 @@ export interface AuditItem {
   title: string;
   description: string;
   active: boolean;
+  icon?: string; // ID ikony (např. 'home', 'settings', 'checkmark', atd.)
 }
 
 export interface AuditSection {
@@ -36,6 +37,15 @@ export interface AuditStructure {
   audit_title: string;
   header_data: HeaderData;
   audit_sections: AuditSection[];
+}
+
+export interface AuditType {
+  id: string;
+  name: string;
+  active: boolean;
+  auditStructure: AuditStructure;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export interface PhotoWithAnalysis {
@@ -88,6 +98,7 @@ export enum AppState {
   AI_REPORT_SETTINGS = 'ai_report_settings',
   AI_USAGE_STATS = 'ai_usage_stats',
   AI_PRICING_CONFIG = 'ai_pricing_config',
+  AI_PROMPTS = 'ai_prompts',
   ADMIN = 'admin',
   USER_MANAGEMENT = 'user_management'
 }
@@ -154,6 +165,7 @@ export interface Audit {
   answers: {
     [itemId: string]: AuditAnswer;
   };
+  auditTypeId?: string; // ID typu auditu (optional pro zpětnou kompatibilitu)
 }
 
 export enum ReportStatus {

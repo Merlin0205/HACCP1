@@ -170,7 +170,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                           const answer = auditData.answers[item.id];
                           const isCompliant = !answer || answer.compliant;
                           const isAnswered = answer !== undefined;
-                          const IconComponent = iconMap[item.id] || QuestionMarkIcon;
+                          const IconComponent = iconMap[item.icon || item.id] || QuestionMarkIcon;
                           
                           return (
                             <button
@@ -249,6 +249,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
           onClose={() => setSelectedItem(null)}
           onAnswerUpdate={onAnswerUpdate}
           log={log}
+          auditStructure={auditStructure}
         />
       )}
 

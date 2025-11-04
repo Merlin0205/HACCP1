@@ -8,6 +8,11 @@ import { fetchAllUsers, approveUser, updateUserRole } from '../services/firestor
 import { useAuth } from '../contexts/AuthContext';
 import { useUserRole } from '../hooks/useUserRole';
 import { toast } from '../utils/toast';
+import { PageHeader } from './PageHeader';
+import { SECTION_THEMES } from '../constants/designSystem';
+import { AppState } from '../types';
+import { BackButton } from './BackButton';
+import { Card, CardBody } from './ui/Card';
 
 interface UserManagementScreenProps {
   onBack: () => void;
@@ -92,43 +97,31 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 md:p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-xl p-6">
+      <div className="w-full max-w-7xl mx-auto">
+        <Card>
+          <CardBody>
             <p className="text-red-600">Nemáte oprávnění k přístupu k této sekci.</p>
-            <button
-              onClick={onBack}
-              className="mt-4 bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              ← Zpět
-            </button>
-          </div>
-        </div>
+            <div className="mt-4">
+              <BackButton onClick={onBack} />
+            </div>
+          </CardBody>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 md:p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">👥 Správa uživatelů</h1>
-              <p className="text-gray-600 mt-2">Správa uživatelů a jejich rolí</p>
-            </div>
-            <button
-              onClick={onBack}
-              className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              ← Zpět
-            </button>
-          </div>
-        </div>
+    <div className="w-full max-w-7xl mx-auto">
+      <PageHeader
+        section={SECTION_THEMES[AppState.SETTINGS]}
+        title="Správa uživatelů"
+        description="Schvalování uživatelů a správa rolí"
+        action={<BackButton onClick={onBack} />}
+      />
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-md p-4 mb-6">
+      {/* Filters */}
+      <Card className="mb-6">
+        <CardBody>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setFilter('all')}
@@ -163,21 +156,27 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
               Uživatelé ({users.filter(u => u.role === UserRole.USER).length})
             </button>
           </div>
-        </div>
+        </CardBody>
+      </Card>
 
-        {/* Users List */}
-        {loading ? (
-          <div className="bg-white rounded-xl shadow-md p-6 text-center">
+      {/* Users List */}
+      {loading ? (
+        <Card>
+          <CardBody className="text-center">
             <p className="text-gray-600">Načítání uživatelů...</p>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-md p-6 text-center">
+          </CardBody>
+        </Card>
+      ) : filteredUsers.length === 0 ? (
+        <Card>
+          <CardBody className="text-center">
             <p className="text-gray-600">Žádní uživatelé nenalezeni</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredUsers.map(user => (
-              <div key={user.userId} className="bg-white rounded-xl shadow-md p-6">
+          </CardBody>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredUsers.map(user => (
+            <Card key={user.userId}>
+              <CardBody>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
@@ -226,11 +225,11 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
                     )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

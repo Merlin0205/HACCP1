@@ -482,5 +482,97 @@ export async function saveAllGeminiModels(modelsList: AllGeminiModels): Promise<
   });
 }
 
+/**
+ * Interface pro jeden prompt
+ */
+export interface AIPrompt {
+  name: string;
+  description: string;
+  template: string;
+  variables: string[];
+}
+
+/**
+ * Interface pro konfiguraci AI promptů
+ */
+export interface AIPromptsConfig {
+  prompts: {
+    'rewrite-finding': AIPrompt;
+    'generate-recommendation': AIPrompt;
+  };
+  updatedAt?: Timestamp;
+}
+
+/**
+ * Výchozí prompty
+ */
+const DEFAULT_AI_PROMPTS: AIPromptsConfig = {
+  prompts: {
+    'rewrite-finding': {
+      name: 'Přepis popisu neshody',
+      description: 'Přepíše text popisu neshody s opravenou gramatikou a formálním stylem',
+      template: 'Vezmi následující text popisu zjištěné neshody a přepiš ho v češtině správně pravopisně a formálně jako popis závady. Kontext: Sekce: {sectionTitle}, Položka: {itemTitle} ({itemDescription}). Text k přepsání: {finding}',
+      variables: ['sectionTitle', 'itemTitle', 'itemDescription', 'finding']
+    },
+    'generate-recommendation': {
+      name: 'Generování doporučení',
+      description: 'Vygeneruje doporučené nápravné opatření na základě popisu neshody',
+      template: 'Na základě popisu zjištěné neshody vygeneruj doporučené nápravné opatření v češtině. Kontext: Sekce: {sectionTitle}, Položka: {itemTitle} ({itemDescription}). Popis neshody: {finding}. Vygeneruj konkrétní a akční doporučení.',
+      variables: ['sectionTitle', 'itemTitle', 'itemDescription', 'finding']
+    }
+  }
+};
+
+/**
+ * Načte AI prompty config
+ */
+export async function fetchAIPromptsConfig(): Promise<AIPromptsConfig> {
+  const docRef = doc(db, COLLECTION_NAME, 'aiPromptsConfig');
+  const docSnap = await getDoc(docRef);
+  
+  if (!docSnap.exists()) {
+    // Pokud neexistuje, inicializovat s výchozími hodnotami
+    await initializeAIPromptsConfig();
+    return DEFAULT_AI_PROMPTS;
+  }
+  
+  const data = docSnap.data() as AIPromptsConfig;
+  
+  // Zajistit, že všechny výchozí prompty existují
+  const mergedPrompts: AIPromptsConfig = {
+    prompts: {
+      'rewrite-finding': data.prompts?.['rewrite-finding'] || DEFAULT_AI_PROMPTS.prompts['rewrite-finding'],
+      'generate-recommendation': data.prompts?.['generate-recommendation'] || DEFAULT_AI_PROMPTS.prompts['generate-recommendation']
+    },
+    updatedAt: data.updatedAt
+  };
+  
+  return mergedPrompts;
+}
+
+/**
+ * Uloží AI prompty config
+ */
+export async function saveAIPromptsConfig(config: AIPromptsConfig): Promise<void> {
+  const docRef = doc(db, COLLECTION_NAME, 'aiPromptsConfig');
+  await setDoc(docRef, {
+    ...config,
+    updatedAt: Timestamp.now()
+  });
+}
+
+/**
+ * Inicializuje AI prompty config s výchozími hodnotami
+ */
+export async function initializeAIPromptsConfig(): Promise<void> {
+  const docRef = doc(db, COLLECTION_NAME, 'aiPromptsConfig');
+  const docSnap = await getDoc(docRef);
+  
+  if (!docSnap.exists()) {
+    await saveAIPromptsConfig(DEFAULT_AI_PROMPTS);
+    console.log('[INIT] Inicializován AI prompty config');
+  }
+}
+
 
 

@@ -21,7 +21,8 @@
     "react": "^19.2.0",
     "react-beautiful-dnd": "^13.1.1",
     "react-diff-viewer-continued": "^3.4.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

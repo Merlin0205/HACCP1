@@ -31,6 +31,7 @@ import AuditorSettingsScreen from './components/AuditorSettingsScreen';
 import AIReportSettingsScreen from './components/AIReportSettingsScreen';
 import AIUsageStatsScreen from './components/AIUsageStatsScreen';
 import AIPricingConfigScreen from './components/AIPricingConfigScreen';
+import AIPromptsScreen from './components/AIPromptsScreen';
 import { OperatorDashboard } from './components/OperatorDashboard';
 import { OperatorForm } from './components/OperatorForm';
 import { PremiseForm } from './components/PremiseForm';
@@ -98,10 +99,30 @@ const App: React.FC = () => {
   const [loadingAuditStructure, setLoadingAuditStructure] = useState(true);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
 
-  // Načíst audit structure z Firestore při startu
+  // Načíst audit structure z Firestore při startu nebo podle typu auditu
   useEffect(() => {
     const loadAuditStructure = async () => {
       try {
+        // Pokud má aktivní audit auditTypeId, načíst strukturu z typu
+        if (activeAuditId) {
+          const audit = audits.find(a => a.id === activeAuditId);
+          if (audit?.auditTypeId) {
+            try {
+              const { fetchAuditType } = await import('./services/firestore/auditTypes');
+              const auditType = await fetchAuditType(audit.auditTypeId);
+              if (auditType) {
+                setAuditStructureState(auditType.auditStructure);
+                setLoadingAuditStructure(false);
+                return;
+              }
+            } catch (error) {
+              console.error('[App] Error loading audit type structure:', error);
+              // Pokračovat s výchozí strukturou
+            }
+          }
+        }
+        
+        // Jinak načíst výchozí strukturu z settings
         const savedStructure = await fetchAuditStructure();
         if (savedStructure) {
           setAuditStructureState(savedStructure);
@@ -109,6 +130,7 @@ const App: React.FC = () => {
           // Pokud není v databázi, uložit výchozí
           const { saveAuditStructure } = await import('./services/firestore/settings');
           await saveAuditStructure(DEFAULT_AUDIT_STRUCTURE);
+          setAuditStructureState(DEFAULT_AUDIT_STRUCTURE);
         }
       } catch (error) {
         console.error('[App] Error loading audit structure:', error);
@@ -119,7 +141,7 @@ const App: React.FC = () => {
     };
 
     loadAuditStructure();
-  }, []);
+  }, [activeAuditId, audits]);
 
   // --- LOGGING FUNCTION ---
   const log = useCallback((message: string) => {
@@ -360,7 +382,7 @@ const App: React.FC = () => {
     setAppState(previousAppState);
   };
 
-  const handlePrepareNewAudit = async () => {
+  const handlePrepareNewAudit = async (auditTypeId?: string) => {
     // Pokud je aktivní tab typu audit_list, použít premiseId z tabu
     let premiseIdToUse = activePremiseId;
     
@@ -381,6 +403,21 @@ const App: React.FC = () => {
     if (!activePremise || !activeOperator) {
       toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
       return;
+    }
+
+    // Načíst strukturu podle typu auditu
+    let structureToUse = auditStructure;
+    if (auditTypeId) {
+      try {
+        const { fetchAuditType } = await import('./services/firestore/auditTypes');
+        const auditType = await fetchAuditType(auditTypeId);
+        if (auditType) {
+          structureToUse = auditType.auditStructure;
+        }
+      } catch (error) {
+        console.error('[handlePrepareNewAudit] Error loading audit type:', error);
+        toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
+      }
     }
 
     // Načíst aktuální údaje auditora z Firestore
@@ -406,6 +443,11 @@ const App: React.FC = () => {
 
     setActiveAuditId(null);
     setPendingHeader(prefilledHeaderValues);
+    // Uložit auditTypeId do state pro pozdější vytvoření auditu
+    if (auditTypeId) {
+      // Uložit do sessionStorage nebo do state
+      sessionStorage.setItem('pendingAuditTypeId', auditTypeId);
+    }
     // Pokud je aktivní tab, nastavit také activePremiseId pro HEADER_FORM
     if (premiseIdToUse) {
       setActivePremiseId(premiseIdToUse);
@@ -414,6 +456,8 @@ const App: React.FC = () => {
     if (activeTabId) {
       setActiveTabId(null);
     }
+    // Nastavit strukturu pro HeaderForm
+    setAuditStructureState(structureToUse);
     setAppState(AppState.HEADER_FORM);
   };
 
@@ -624,6 +668,13 @@ const App: React.FC = () => {
 
   const createNewAudit = (headerValues: AuditHeaderValues, status: AuditStatus): Audit => {
     if (!activePremiseId) throw new Error("Premise ID is missing");
+    
+    // Získat auditTypeId z sessionStorage pokud existuje
+    const auditTypeId = sessionStorage.getItem('pendingAuditTypeId') || undefined;
+    if (auditTypeId) {
+      sessionStorage.removeItem('pendingAuditTypeId');
+    }
+    
     return {
       id: `audit_${Date.now()}`,
       premiseId: activePremiseId,
@@ -631,6 +682,7 @@ const App: React.FC = () => {
       createdAt: new Date().toISOString(),
       headerValues: headerValues,
       answers: {},
+      auditTypeId: auditTypeId,
     };
   };
 
@@ -1008,6 +1060,14 @@ const App: React.FC = () => {
     setAppState(AppState.SETTINGS);
   }
 
+  const handleNavigateToAIPrompts = () => {
+    setAppState(AppState.AI_PROMPTS);
+  }
+
+  const handleBackFromAIPrompts = () => {
+    setAppState(AppState.SETTINGS);
+  }
+
   const handleNavigate = (newState: AppState) => {
     // Pokud jsou otevřené taby a navigujeme na jinou obrazovku, deaktivujeme taby
     if (tabs.length > 0 && activeTabId) {
@@ -1115,10 +1175,15 @@ const App: React.FC = () => {
           premiseName={activePremise?.premise_name || ''}
           audits={premiseAudits}
           reports={reports.filter(r => premiseAudits.some(a => a.id === r.auditId))}
+          operators={operators}
+          premises={premises}
           onSelectAudit={handleSelectAudit}
           onPrepareNewAudit={handlePrepareNewAudit}
           onDeleteAudit={handleDeleteAudit}
           onUnlockAudit={handleUnlockAudit}
+          onCancelReportGeneration={handleCancelReportGeneration}
+          onDeleteReportVersion={handleDeleteReportVersion}
+          onSetReportAsLatest={handleSetReportAsLatest}
           onBack={handleBackToDashboard}
         />;
       }
@@ -1203,7 +1268,7 @@ const App: React.FC = () => {
         );
       }
       case AppState.SETTINGS:
-        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onBack={handleBackFromSettings} />;
+        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToAIPrompts={handleNavigateToAIPrompts} onBack={handleBackFromSettings} />;
       case AppState.USER_MANAGEMENT:
         return <UserManagementScreen onBack={handleBackFromSettings} />;
       case AppState.AUDITOR_SETTINGS:
@@ -1214,6 +1279,8 @@ const App: React.FC = () => {
         return <AIUsageStatsScreen onBack={handleBackFromAIUsageStats} />;
       case AppState.AI_PRICING_CONFIG:
         return <AIPricingConfigScreen onBack={handleBackFromAIPricingConfig} />;
+      case AppState.AI_PROMPTS:
+        return <AIPromptsScreen onBack={handleBackFromAIPrompts} />;
       case AppState.ADMIN:
         return (
           <div>

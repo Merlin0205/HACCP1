@@ -7,8 +7,10 @@ import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { StopIcon } from './icons/StopIcon';
 import { CameraIcon } from './icons/CameraIcon';
 import { TrashIcon } from './icons/TrashIcon';
+import { EditIcon, PlusIcon } from './icons';
 import { getNonComplianceLocations, addNonComplianceLocation, findBestMatchLocation } from '../services/firestore';
 import { toast } from '../utils/toast';
+import { rewriteFinding, generateRecommendation } from '../services/nonComplianceAI';
 
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -27,6 +29,9 @@ interface NonComplianceFormProps {
     index: number;
     log: (message: string) => void;
     onLocationSave?: (location: string) => Promise<void>; // Callback pro uložení nového místa
+    itemTitle?: string;
+    itemDescription?: string;
+    sectionTitle?: string;
 }
 
 /**
@@ -207,7 +212,7 @@ const LocationDropdownWithMic: React.FC<{
     );
 };
 
-// Komponenta pro textové pole s mikrofonem
+// Komponenta pro textové pole s mikrofonem a AI ikonami
 const TextAreaWithMic: React.FC<{
     value: string;
     onChange: (value: string) => void;
@@ -216,7 +221,12 @@ const TextAreaWithMic: React.FC<{
     log: (message: string) => void;
     isOtherFieldRecording: boolean;
     onRecordingStateChange: (isRecording: boolean) => void;
-}> = ({ value, onChange, label, id, log, isOtherFieldRecording, onRecordingStateChange }) => {
+    showAIIcons?: boolean;
+    onRewrite?: () => Promise<void>;
+    onGenerate?: () => Promise<void>;
+    isAIRewriting?: boolean;
+    isAIGenerating?: boolean;
+}> = ({ value, onChange, label, id, log, isOtherFieldRecording, onRecordingStateChange, showAIIcons, onRewrite, onGenerate, isAIRewriting, isAIGenerating }) => {
     
     const handleTranscription = useCallback((transcribedText: string) => {
         // Odstranit tečku na konci
@@ -236,6 +246,10 @@ const TextAreaWithMic: React.FC<{
     const buttonIcon = isLoading ? (isRecording ? <StopIcon/> : <Spinner small/>) : <MicrophoneIcon/>;
     const buttonClass = isRecording ? 'bg-red-500' : 'bg-blue-500';
 
+    // Počet ikon: mikrofon (1) + AI ikony (2 pokud jsou zobrazeny)
+    const iconCount = showAIIcons ? 3 : 1;
+    const rightPadding = iconCount * 48 + 8; // 48px pro každou ikonu + 8px padding
+
     return (
         <div className="relative">
             <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -244,27 +258,113 @@ const TextAreaWithMic: React.FC<{
                 rows={3}
                 value={value}
                 onChange={e => onChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md pr-12"
+                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md"
+                style={{ paddingRight: `${rightPadding}px` }}
                 placeholder={isRecording ? "Nahrávám..." : (isTranscribing ? "Přepisuji..." : "")}
-                readOnly={isLoading}
+                readOnly={isLoading || isAIRewriting || isAIGenerating}
             />
-            <button 
-                onClick={toggleRecording}
-                disabled={isOtherFieldRecording}
-                className={`absolute top-8 right-2 p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400`}
-            >
-                {buttonIcon}
-            </button>
+            <div className="absolute top-8 right-2 flex items-center gap-1">
+                <button 
+                    onClick={toggleRecording}
+                    disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating}
+                    className={`p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                    title="Přepisovat hlasem"
+                >
+                    {buttonIcon}
+                </button>
+                {showAIIcons && onRewrite && (
+                    <button
+                        onClick={onRewrite}
+                        disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
+                        className={`p-2 rounded-full text-white bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        title="Přepiš text pomocí AI"
+                    >
+                        {isAIRewriting ? <Spinner small /> : <EditIcon className="h-4 w-4" />}
+                    </button>
+                )}
+                {showAIIcons && onGenerate && (
+                    <button
+                        onClick={onGenerate}
+                        disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
+                        className={`p-2 rounded-full text-white bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        title="Vygeneruj doporučení pomocí AI"
+                    >
+                        {isAIGenerating ? <Spinner small /> : <PlusIcon className="h-4 w-4" />}
+                    </button>
+                )}
+            </div>
             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
         </div>
     );
 };
 
-const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ data, onChange, onRemove, index, log, onLocationSave }) => {
+const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ 
+    data, 
+    onChange, 
+    onRemove, 
+    index, 
+    log, 
+    onLocationSave,
+    itemTitle,
+    itemDescription,
+    sectionTitle
+}) => {
     const [isLocationRecording, setIsLocationRecording] = useState(false);
     const [isFindingRecording, setIsFindingRecording] = useState(false);
     const [isRecommendationRecording, setIsRecommendationRecording] = useState(false);
     const [pendingLocation, setPendingLocation] = useState<string | null>(null); // Nové místo čekající na uložení
+    const [isAIRewriting, setIsAIRewriting] = useState(false);
+    const [isAIGenerating, setIsAIGenerating] = useState(false);
+
+    const handleRewriteFinding = async () => {
+        if (!data.finding || !itemTitle || !sectionTitle) {
+            toast.error('Pro použití AI je potřeba vyplnit popis neshody');
+            return;
+        }
+
+        setIsAIRewriting(true);
+        try {
+            const rewritten = await rewriteFinding(data.finding, {
+                itemTitle,
+                itemDescription: itemDescription || '',
+                sectionTitle
+            });
+            onChange('finding', rewritten);
+            log('Text přepsán pomocí AI');
+            toast.success('Text byl úspěšně přepsán');
+        } catch (error: any) {
+            console.error('[NonComplianceForm] Error rewriting finding:', error);
+            toast.error(error.message || 'Chyba při přepisování textu');
+            log(`Chyba při přepisování: ${error.message}`);
+        } finally {
+            setIsAIRewriting(false);
+        }
+    };
+
+    const handleGenerateRecommendation = async () => {
+        if (!data.finding || !itemTitle || !sectionTitle) {
+            toast.error('Pro generování doporučení je potřeba vyplnit popis neshody');
+            return;
+        }
+
+        setIsAIGenerating(true);
+        try {
+            const recommendation = await generateRecommendation(data.finding, {
+                itemTitle,
+                itemDescription: itemDescription || '',
+                sectionTitle
+            });
+            onChange('recommendation', recommendation);
+            log('Doporučení vygenerováno pomocí AI');
+            toast.success('Doporučení bylo úspěšně vygenerováno');
+        } catch (error: any) {
+            console.error('[NonComplianceForm] Error generating recommendation:', error);
+            toast.error(error.message || 'Chyba při generování doporučení');
+            log(`Chyba při generování: ${error.message}`);
+        } finally {
+            setIsAIGenerating(false);
+        }
+    };
 
     const handlePhotoChange = async (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -320,6 +420,11 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ data, onChange, o
                 log={log}
                 isOtherFieldRecording={isLocationRecording || isRecommendationRecording}
                 onRecordingStateChange={setIsFindingRecording}
+                showAIIcons={true}
+                onRewrite={handleRewriteFinding}
+                onGenerate={handleGenerateRecommendation}
+                isAIRewriting={isAIRewriting}
+                isAIGenerating={isAIGenerating}
             />
             
             <TextAreaWithMic

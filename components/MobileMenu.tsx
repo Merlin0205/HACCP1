@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppState } from '../types';
 import { User } from 'firebase/auth';
+import { SECTION_THEMES } from '../constants/designSystem';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface MobileMenuProps {
     label: string;
     icon: React.ReactNode;
     active: boolean;
+    theme?: typeof SECTION_THEMES[string];
   }>;
   currentView: AppState;
   onNavigate: (state: AppState) => void;
@@ -62,25 +64,33 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 
         {/* Menu Items */}
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                onNavigate(item.id);
-                onClose();
-              }}
-              className={`
-                w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
-                ${item.active 
-                  ? 'bg-primary text-white shadow-md' 
-                  : 'text-gray-700 hover:bg-gray-100'
-                }
-              `}
-            >
-              {item.icon}
-              <span className="font-medium">{item.label}</span>
-            </button>
-          ))}
+          {menuItems.map((item) => {
+            const isActive = item.active;
+            const theme = item.theme || SECTION_THEMES[item.id] || SECTION_THEMES[AppState.ALL_AUDITS];
+            
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onNavigate(item.id);
+                  onClose();
+                }}
+                className={`
+                  w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
+                  ${isActive 
+                    ? `bg-gradient-to-r ${theme.colors.gradient} text-white shadow-md` 
+                    : 'text-gray-700 hover:bg-gray-100'
+                  }
+                `}
+                style={isActive ? {
+                  background: `linear-gradient(to right, ${theme.colors.primary}, ${theme.colors.darkest})`
+                } : undefined}
+              >
+                {item.icon}
+                <span className="font-medium">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* AI Cost Indicator */}

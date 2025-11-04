@@ -1,17 +1,7 @@
 import React from 'react';
-import {
-    HomeIcon,
-    PlusIcon,
-    TrashIcon,
-    CameraIcon,
-    CheckmarkIcon,
-    ReportIcon,
-    SettingsIcon,
-    WarningIcon,
-    InfoIcon,
-    EditIcon,
-    SaveIcon
-} from './icons';
+import { FiAlertCircle } from 'react-icons/fi';
+import { iconMapById } from './iconRegistry';
+import { HomeIcon, SettingsIcon, CheckmarkIcon, ReportIcon, WarningIcon, InfoIcon, TrashIcon, PlusIcon } from './icons';
 
 export const QuestionMarkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" {...props}>
@@ -19,19 +9,24 @@ export const QuestionMarkIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props)
     </svg>
 );
 
-export const iconMap: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> } = {
+// Mapování ikon podle jejich ID (používá se v item.icon)
+// Kombinuje nové ikony z iconRegistry a staré pro zpětnou kompatibilitu
+export const iconMap: { [key: string]: React.ComponentType<any> } = {
+    ...iconMapById, // Nové ikony z iconRegistry
+    
+    // Zpětná kompatibilita se starými ID (item.id)
     'infra_layout': SettingsIcon,
     'infra_equipment': SettingsIcon,
-    'infra_water': CheckmarkIcon, // Placeholder, needs specific icon
-    'infra_floors': HomeIcon, // Placeholder
-    'infra_walls': HomeIcon, // Placeholder
-    'infra_ceilings': HomeIcon, // Placeholder
-    'infra_windows': HomeIcon, // Placeholder
-    'infra_doors': HomeIcon, // Placeholder
-    'infra_surfaces': CheckmarkIcon, // Placeholder
-    'infra_sinks': CheckmarkIcon, // Placeholder
-    'infra_ventilation': SettingsIcon, // Placeholder
-    'infra_lighting': InfoIcon, // Placeholder
+    'infra_water': CheckmarkIcon,
+    'infra_floors': HomeIcon,
+    'infra_walls': HomeIcon,
+    'infra_ceilings': HomeIcon,
+    'infra_windows': HomeIcon,
+    'infra_doors': HomeIcon,
+    'infra_surfaces': CheckmarkIcon,
+    'infra_sinks': CheckmarkIcon,
+    'infra_ventilation': SettingsIcon,
+    'infra_lighting': InfoIcon,
     'infra_sewerage': TrashIcon,
     'infra_changing_room': HomeIcon,
     'infra_staff_wc': TrashIcon,
@@ -47,19 +42,19 @@ export const iconMap: { [key: string]: React.FC<React.SVGProps<SVGSVGElement>> }
     'gmp_cleanliness': CheckmarkIcon,
     'gmp_technical_equipment': SettingsIcon,
     'gmp_cross_contamination': WarningIcon,
-    'gmp_distribution': PlusIcon, // Placeholder
-    'gmp_food_export': PlusIcon, // Placeholder
+    'gmp_distribution': PlusIcon,
+    'gmp_food_export': PlusIcon,
     'gmp_allergens': WarningIcon,
     'hygiene_health_status': CheckmarkIcon,
     'hygiene_personal_cleanliness': CheckmarkIcon,
     'hygiene_training': ReportIcon,
     'hygiene_behavior': CheckmarkIcon,
     'cleaning_sanitation_plan': ReportIcon,
-    'cleaning_products': TrashIcon, // Placeholder
+    'cleaning_products': TrashIcon,
     'cleaning_conditions': CheckmarkIcon,
     'cleaning_maintenance': SettingsIcon,
     'cleaning_discarded_items': TrashIcon,
-    'cleaning_laundry': TrashIcon, // Placeholder
+    'cleaning_laundry': TrashIcon,
     'cleaning_waste': TrashIcon,
     'haccp_system': ReportIcon,
     'haccp_documentation': ReportIcon,

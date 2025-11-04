@@ -1,5 +1,5 @@
-import React from 'react';
-import { AuditItem, AuditAnswer, NonComplianceData } from '../types';
+import React, { useMemo } from 'react';
+import { AuditItem, AuditAnswer, NonComplianceData, AuditStructure } from '../types';
 import NonComplianceForm from './NonComplianceForm';
 import { PlusIcon, CheckmarkIcon } from './icons';
 import { Modal } from './ui/Modal';
@@ -12,10 +12,22 @@ interface AuditItemModalProps {
   onClose: () => void;
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
   log: (message: string) => void;
+  auditStructure?: AuditStructure;
 }
 
-export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate, log }) => {
+export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate, log, auditStructure }) => {
   if (!item) return null;
+
+  // Najít sectionTitle podle item.id
+  const sectionTitle = useMemo(() => {
+    if (!auditStructure) return '';
+    for (const section of auditStructure.audit_sections) {
+      if (section.items.some(i => i.id === item.id)) {
+        return section.title;
+      }
+    }
+    return '';
+  }, [auditStructure, item.id]);
 
   const isCompliant = !answer || answer.compliant;
 
@@ -129,6 +141,9 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                     onChange={(field, value) => handleNonComplianceChange(index, field, value)}
                     onRemove={() => handleRemoveNonCompliance(index)}
                     log={log}
+                    itemTitle={item.title}
+                    itemDescription={item.description}
+                    sectionTitle={sectionTitle}
                   />
                 </CardBody>
               </Card>

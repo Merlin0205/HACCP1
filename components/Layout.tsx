@@ -3,9 +3,10 @@ import { AppState, Tab } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateAIUsageStats } from '../services/firestore';
 import { APP_VERSION, BUILD_DATE } from '../constants';
-import { HomeIcon, SettingsIcon } from './icons/index';
+import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon } from './icons/index';
 import { MobileMenu } from './MobileMenu';
 import { TabBar } from './TabBar';
+import { getSectionTheme, SECTION_THEMES } from '../constants/designSystem';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -63,22 +64,16 @@ export const Layout: React.FC<LayoutProps> = ({
     {
       id: AppState.INCOMPLETE_AUDITS,
       label: 'Nezapočaté',
-      icon: (
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      icon: <ClockIcon className="h-5 w-5" />,
       active: currentView === AppState.INCOMPLETE_AUDITS,
+      theme: SECTION_THEMES[AppState.INCOMPLETE_AUDITS],
     },
     {
       id: AppState.ALL_AUDITS,
       label: 'Audity vše',
-      icon: (
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-        </svg>
-      ),
+      icon: <ChecklistIcon className="h-5 w-5" />,
       active: currentView === AppState.ALL_AUDITS,
+      theme: SECTION_THEMES[AppState.ALL_AUDITS],
     },
     {
       id: AppState.OPERATOR_DASHBOARD,
@@ -89,6 +84,7 @@ export const Layout: React.FC<LayoutProps> = ({
               currentView === AppState.EDIT_OPERATOR ||
               currentView === AppState.ADD_PREMISE ||
               currentView === AppState.EDIT_PREMISE,
+      theme: SECTION_THEMES[AppState.OPERATOR_DASHBOARD],
     },
     {
       id: AppState.SETTINGS,
@@ -100,7 +96,9 @@ export const Layout: React.FC<LayoutProps> = ({
               currentView === AppState.AI_REPORT_SETTINGS ||
               currentView === AppState.AI_USAGE_STATS ||
               currentView === AppState.AI_PRICING_CONFIG ||
+              currentView === AppState.AI_PROMPTS ||
               currentView === AppState.ADMIN,
+      theme: SECTION_THEMES[AppState.SETTINGS],
     },
   ];
 
@@ -142,26 +140,34 @@ export const Layout: React.FC<LayoutProps> = ({
 
         {/* Menu Items */}
         <nav className="flex-1 px-4 py-4 space-y-1">
-          {visibleMenuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`
-                w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
-                ${item.active 
-                  ? 'bg-primary text-white shadow-md' 
-                  : 'text-gray-700 hover:bg-gray-100'
-                }
-                ${isSidebarCollapsed ? 'justify-center' : ''}
-              `}
-              title={isSidebarCollapsed ? item.label : undefined}
-            >
-              {item.icon}
-              {!isSidebarCollapsed && (
-                <span className="font-medium">{item.label}</span>
-              )}
-            </button>
-          ))}
+          {visibleMenuItems.map((item) => {
+            const isActive = item.active;
+            const theme = item.theme;
+            
+            return (
+              <button
+                key={item.id}
+                onClick={() => onNavigate(item.id)}
+                className={`
+                  w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
+                  ${isActive 
+                    ? `bg-gradient-to-r ${theme.colors.gradient} text-white shadow-md` 
+                    : 'text-gray-700 hover:bg-gray-100'
+                  }
+                  ${isSidebarCollapsed ? 'justify-center' : ''}
+                `}
+                title={isSidebarCollapsed ? item.label : undefined}
+                style={isActive ? {
+                  background: `linear-gradient(to right, ${theme.colors.primary}, ${theme.colors.darkest})`
+                } : undefined}
+              >
+                {item.icon}
+                {!isSidebarCollapsed && (
+                  <span className="font-medium">{item.label}</span>
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         {/* AI Cost Indicator */}

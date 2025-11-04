@@ -5,6 +5,9 @@
 import React from 'react';
 import { useUserRole } from '../hooks/useUserRole';
 import { Card, CardBody } from './ui/Card';
+import { PageHeader } from './PageHeader';
+import { SECTION_THEMES } from '../constants/designSystem';
+import { AppState } from '../types';
 
 interface SettingsScreenProps {
   onNavigateToAdmin: () => void;
@@ -13,6 +16,7 @@ interface SettingsScreenProps {
   onNavigateToAIReportSettings: () => void;
   onNavigateToAIUsageStats: () => void;
   onNavigateToAIPricingConfig: () => void;
+  onNavigateToAIPrompts: () => void;
   onBack: () => void;
 }
 
@@ -22,7 +26,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigateToAuditorSettings, 
   onNavigateToAIReportSettings, 
   onNavigateToAIUsageStats, 
-  onNavigateToAIPricingConfig, 
+  onNavigateToAIPricingConfig,
+  onNavigateToAIPrompts, 
   onBack 
 }) => {
   const { isAdmin } = useUserRole();
@@ -112,17 +117,31 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       onClick: onNavigateToAIPricingConfig,
       adminOnly: false,
     },
+    {
+      id: 'ai-prompts',
+      title: 'AI Prompty',
+      description: 'Správa promptů pro generování textu neshod',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+      color: 'bg-blue-100 text-blue-600',
+      hoverColor: 'hover:bg-blue-50',
+      onClick: onNavigateToAIPrompts,
+      adminOnly: false,
+    },
   ];
 
   const visibleItems = settingsItems.filter(item => !item.adminOnly || isAdmin);
 
   return (
     <div className="w-full max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Nastavení</h1>
-        <p className="text-gray-600">Správa aplikace a konfigurace</p>
-      </div>
+      <PageHeader
+        section={SECTION_THEMES[AppState.SETTINGS]}
+        title="Nastavení"
+        description="Správa aplikace a konfigurace"
+      />
 
       {/* Settings Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
