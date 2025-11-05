@@ -4,10 +4,13 @@ import { Card, CardHeader, CardBody, CardFooter } from './ui/Card';
 import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
+import { Tooltip } from './ui/Tooltip';
+import { EmptyState } from './ui/EmptyState';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
 import { AppState } from '../types';
+import { getAuditStatusBadge, getReportStatusBadge } from '../utils/badges';
 
 interface AllAuditsScreenProps {
   audits: Audit[];
@@ -67,54 +70,29 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
     });
   };
 
-  const getStatusBadge = (status: AuditStatus) => {
-    const badges = {
-      [AuditStatus.DRAFT]: 'bg-gray-100 text-gray-800',
-      [AuditStatus.NOT_STARTED]: 'bg-gray-100 text-gray-800', // zpětná kompatibilita
-      [AuditStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-      [AuditStatus.COMPLETED]: 'bg-green-100 text-green-800',
-      [AuditStatus.REVISED]: 'bg-orange-100 text-orange-800',
-      [AuditStatus.LOCKED]: 'bg-green-100 text-green-800', // zpětná kompatibilita - mapuje na COMPLETED
-    };
-    // Zobrazit správný text pro zpětnou kompatibilitu
-    const displayText = status === AuditStatus.LOCKED ? AuditStatus.COMPLETED : 
-                        status === AuditStatus.NOT_STARTED ? AuditStatus.DRAFT : status;
-    return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badges[status] || badges[AuditStatus.DRAFT]}`}>
-        {displayText}
-      </span>
-    );
-  };
+  // Using unified badge component from utils
 
   const getReportBadge = (auditId: string) => {
     const report = reports.find(r => r.auditId === auditId && r.isLatest);
     if (!report) return null;
 
-    const badges = {
-      [ReportStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
-      [ReportStatus.GENERATING]: 'bg-yellow-100 text-yellow-800 animate-pulse',
-      [ReportStatus.DONE]: 'bg-green-100 text-green-800',
-      [ReportStatus.ERROR]: 'bg-red-100 text-red-800',
-    };
-
     const isGenerating = report.status === ReportStatus.GENERATING;
 
     return (
       <div className="flex items-center gap-1">
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badges[report.status]}`}>
-          {isGenerating ? 'Generuje se...' : report.status}
-        </span>
+        {getReportStatusBadge(report.status, isGenerating)}
         {isGenerating && onCancelReportGeneration && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onCancelReportGeneration(report.id);
-            }}
-            className="px-1.5 py-0.5 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors font-bold"
-            title="Zrušit generování"
-          >
-            ✕
-          </button>
+          <Tooltip content="Zrušit generování">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelReportGeneration(report.id);
+              }}
+              className="px-1.5 py-0.5 text-xs text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors font-bold"
+            >
+              ✕
+            </button>
+          </Tooltip>
         )}
       </div>
     );
@@ -364,16 +342,16 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
             <tbody className="bg-white divide-y divide-gray-100">
               {filteredAndSortedAudits.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <td colSpan={7} className="px-6 py-16">
+                    <EmptyState
+                      title="Žádné audity nenalezeny"
+                      description="Zkuste upravit vyhledávání nebo vytvořte nový audit"
+                      icon={
                         <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                      </div>
-                      <p className="text-lg font-semibold text-gray-900 mb-1">Žádné audity nenalezeny</p>
-                      <p className="text-sm text-gray-600">Zkuste upravit vyhledávání nebo vytvořte nový audit</p>
-                    </div>
+                      }
+                    />
                   </td>
                 </tr>
               ) : (
@@ -392,13 +370,9 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                         onClick={() => onSelectAudit(audit.id)}
                       >
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="relative group">
-                          <div className="text-sm font-medium text-gray-900 cursor-help">
-                            {operator?.operator_name || '-'}
-                          </div>
-                          {/* Tooltip s kompletními informacemi o provozovateli */}
-                          {operator && (
-                            <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
+                        <Tooltip
+                          content={
+                            operator ? (
                               <div className="space-y-1.5">
                                 <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
                                 {operator.operator_ico && (
@@ -426,20 +400,19 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                   </div>
                                 )}
                               </div>
-                              {/* Šipka tooltipu */}
-                              <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
-                            </div>
-                          )}
-                        </div>
+                            ) : '-'
+                          }
+                          position={isLastRow ? 'top' : 'bottom'}
+                        >
+                          <div className="text-sm font-medium text-gray-900 cursor-help">
+                            {operator?.operator_name || '-'}
+                          </div>
+                        </Tooltip>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="relative group">
-                          <div className="text-sm text-gray-900 cursor-help">
-                            {premise?.premise_name || '-'}
-                          </div>
-                          {/* Tooltip s kompletními informacemi o pracovišti */}
-                          {premise && (
-                            <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
+                        <Tooltip
+                          content={
+                            premise ? (
                               <div className="space-y-1.5">
                                 <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
                                 {premise.premise_address && (
@@ -467,14 +440,17 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                   </div>
                                 )}
                               </div>
-                              {/* Šipka tooltipu */}
-                              <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
-                            </div>
-                          )}
-                        </div>
+                            ) : '-'
+                          }
+                          position={isLastRow ? 'top' : 'bottom'}
+                        >
+                          <div className="text-sm text-gray-900 cursor-help">
+                            {premise?.premise_name || '-'}
+                          </div>
+                        </Tooltip>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(audit.status)}
+                        {getAuditStatusBadge(audit.status)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
@@ -493,101 +469,76 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                         <div className="flex items-center justify-end gap-2">
                           {/* Pokračovat v auditu nebo Zobrazit report */}
                           {isCompleted(audit.status) ? (
-                            <div className="relative group">
+                            <Tooltip content="Zobrazit report">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-primary-light/20 transition-colors text-primary hover:text-primary-dark"
-                                title="Zobrazit report"
                               >
                                 <ReportIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Zobrazit report
-                              </div>
-                            </div>
+                            </Tooltip>
                           ) : (
-                            <div className="relative group">
+                            <Tooltip content="Pokračovat v auditu">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600 hover:text-green-700"
-                                title="Pokračovat v auditu"
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                 </svg>
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Pokračovat v auditu
-                              </div>
-                            </div>
+                            </Tooltip>
                           )}
 
                           {/* Editovat (pouze pokud není dokončen) */}
                           {isEditable(audit.status) && (
-                            <div className="relative group">
+                            <Tooltip content="Editovat audit">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
-                                title="Editovat audit"
                               >
                                 <EditIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Editovat audit
-                              </div>
-                            </div>
+                            </Tooltip>
                           )}
 
                           {/* Odemknout (pouze pokud je dokončen) */}
                           {isCompleted(audit.status) && onUnlockAudit && (
-                            <div className="relative group">
+                            <Tooltip content="Odemknout pro úpravy">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setUnlockingAuditId(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600 hover:text-yellow-700"
-                                title="Odemknout pro úpravy"
                               >
                                 <EditIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Odemknout pro úpravy
-                              </div>
-                            </div>
+                            </Tooltip>
                           )}
 
                           {/* Smazat */}
                           {onDeleteAudit && (
-                            <div className="relative group">
+                            <Tooltip content="Smazat audit">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeletingAuditId(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
-                                title="Smazat audit"
                               >
                                 <TrashIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Smazat audit
-                              </div>
-                            </div>
+                            </Tooltip>
                           )}
                         </div>
                       </td>
@@ -744,16 +695,16 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
       <div className="md:hidden space-y-3 mb-20">
         {filteredAndSortedAudits.length === 0 ? (
           <Card>
-            <CardBody className="py-16 text-center">
-              <div className="flex flex-col items-center">
-                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <CardBody>
+              <EmptyState
+                title="Žádné audity nenalezeny"
+                description="Zkuste upravit vyhledávání nebo vytvořte nový audit"
+                icon={
                   <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                </div>
-                <p className="text-lg font-semibold text-gray-900 mb-1">Žádné audity nenalezeny</p>
-                <p className="text-sm text-gray-600">Zkuste upravit vyhledávání nebo vytvořte nový audit</p>
-              </div>
+                }
+              />
             </CardBody>
           </Card>
         ) : (
@@ -848,7 +799,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          {getStatusBadge(audit.status)}
+                          {getAuditStatusBadge(audit.status)}
                           {getReportBadge(audit.id)}
                         </div>
                       </div>

@@ -173,18 +173,75 @@ export const DESIGN_TOKENS = {
     md: 'shadow-md',
     lg: 'shadow-lg',
     xl: 'shadow-xl',
+    '2xl': 'shadow-2xl',
   },
   borderRadius: {
     sm: 'rounded-sm',
     md: 'rounded-md',
     lg: 'rounded-lg',
     xl: 'rounded-xl',
+    '2xl': 'rounded-2xl',
     full: 'rounded-full',
   },
   transitions: {
     fast: 'transition-all duration-150',
     normal: 'transition-all duration-200',
     slow: 'transition-all duration-300',
+  },
+  breakpoints: {
+    sm: '640px',
+    md: '768px',
+    lg: '1024px',
+    xl: '1280px',
+    '2xl': '1536px',
+  },
+};
+
+// Consistent color palette
+export const COLORS = {
+  primary: {
+    DEFAULT: '#059669', // emerald-600
+    light: '#10B981', // emerald-500
+    lighter: '#34D399', // emerald-400
+    dark: '#047857', // emerald-700
+    darkest: '#065F46', // emerald-800
+  },
+  secondary: {
+    DEFAULT: '#3B82F6', // blue-500
+    light: '#60A5FA', // blue-400
+    dark: '#2563EB', // blue-600
+  },
+  success: {
+    DEFAULT: '#10B981',
+    light: '#D1FAE5',
+    dark: '#059669',
+  },
+  warning: {
+    DEFAULT: '#F59E0B',
+    light: '#FEF3C7',
+    dark: '#D97706',
+  },
+  error: {
+    DEFAULT: '#EF4444',
+    light: '#FEE2E2',
+    dark: '#DC2626',
+  },
+  info: {
+    DEFAULT: '#3B82F6',
+    light: '#DBEAFE',
+    dark: '#2563EB',
+  },
+  neutral: {
+    50: '#F9FAFB',
+    100: '#F3F4F6',
+    200: '#E5E7EB',
+    300: '#D1D5DB',
+    400: '#9CA3AF',
+    500: '#6B7280',
+    600: '#4B5563',
+    700: '#374151',
+    800: '#1F2937',
+    900: '#111827',
   },
 };
 
