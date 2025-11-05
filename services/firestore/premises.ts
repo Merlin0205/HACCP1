@@ -92,23 +92,29 @@ export async function fetchPremisesByOperator(operatorId: string): Promise<Premi
   let q;
   if (isAdmin) {
     // Admin vidí všechna pracoviště pro daného provozovatele
+    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
     q = query(
       collection(db, COLLECTION_NAME),
-      where('operatorId', '==', operatorId),
-      orderBy('premise_name', 'asc')
+      where('operatorId', '==', operatorId)
     );
   } else {
     // Běžný uživatel vidí jen své
+    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
     q = query(
       collection(db, COLLECTION_NAME),
       where('userId', '==', userId),
-      where('operatorId', '==', operatorId),
-      orderBy('premise_name', 'asc')
+      where('operatorId', '==', operatorId)
     );
   }
   
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToPremise);
+  const premises = snapshot.docs.map(docToPremise);
+  // Seřadit lokálně pokud je potřeba (podle názvu vzestupně)
+  return premises.sort((a, b) => {
+    const nameA = a.premise_name || '';
+    const nameB = b.premise_name || '';
+    return nameA.localeCompare(nameB, 'cs');
+  });
 }
 
 /**

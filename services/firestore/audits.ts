@@ -99,23 +99,29 @@ export async function fetchAuditsByPremise(premiseId: string): Promise<Audit[]> 
   let q;
   if (isAdmin) {
     // Admin vidí všechny audity pro dané pracoviště
+    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
     q = query(
       collection(db, COLLECTION_NAME),
-      where('premiseId', '==', premiseId),
-      orderBy('createdAt', 'desc')
+      where('premiseId', '==', premiseId)
     );
   } else {
     // Běžný uživatel vidí jen své
+    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
     q = query(
       collection(db, COLLECTION_NAME),
       where('userId', '==', userId),
-      where('premiseId', '==', premiseId),
-      orderBy('createdAt', 'desc')
+      where('premiseId', '==', premiseId)
     );
   }
   
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(docToAudit);
+  const audits = snapshot.docs.map(docToAudit);
+  // Seřadit lokálně pokud je potřeba (nejnovější první)
+  return audits.sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return dateB - dateA;
+  });
 }
 
 /**
