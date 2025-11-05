@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData, NonComplianceData } from '../types';
 import SummaryReportContent from '../src/components/SummaryReport';
 import { Button } from './ui/Button';
 import { BackButton } from './BackButton';
+// Tabs - vlastní implementace místo Flowbite (kvůli nekompatibilitě verze)
 
 interface ReportViewProps {
   report: Report | undefined;
@@ -209,6 +210,8 @@ const FullReportContent: React.FC<{ report: Report | undefined, reportData: Repo
 };
 
 const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack, reportVersions = [], onSelectVersion }) => {
+  const [activeTab, setActiveTab] = useState(0);
+
   const formatDateFull = (dateString?: string): string => {
     if (!dateString) return 'Neuvedeno';
     const date = new Date(dateString);
@@ -221,7 +224,7 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
     });
   };
 
-  const renderContent = () => {
+  const renderLegacyContent = () => {
     if (!audit || !auditStructure) return <ErrorView error="Přiřazený audit nebo jeho struktura nebyly nalezeny." />;
     if (!report) return <ErrorView error="Pro tento audit neexistuje žádný záznam o reportu." />;
 
@@ -237,6 +240,19 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
         return <ErrorView error={`Neznámý stav reportu: ${report.status}`} />;
     }
   }
+
+  // Dynamicky importovat SmartTemplateView pouze pokud je potřeba
+  const [SmartTemplateView, setSmartTemplateView] = useState<React.ComponentType<any> | null>(null);
+  
+  React.useEffect(() => {
+    if (activeTab === 1) {
+      import('./report/SmartTemplateView').then((module) => {
+        setSmartTemplateView(() => module.default);
+      }).catch((error) => {
+        console.error('[ReportView] Chyba při načítání SmartTemplateView:', error);
+      });
+    }
+  }, [activeTab]);
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -299,18 +315,20 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
             )}
           </div>
           <div className="flex items-center gap-3 lg:self-center">
-            <Button
-              variant="primary"
-              onClick={() => window.print()}
-              leftIcon={
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-              }
-              className="shadow-md hover:shadow-lg transition-all hover:scale-105"
-            >
-              Tisk / Uložit do PDF
-            </Button>
+            {activeTab === 0 && (
+              <Button
+                variant="primary"
+                onClick={() => window.print()}
+                leftIcon={
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                }
+                className="shadow-md hover:shadow-lg transition-all hover:scale-105"
+              >
+                Tisk / Uložit do PDF
+              </Button>
+            )}
             <BackButton
               onClick={onBack}
               label="Zpět"
@@ -319,10 +337,58 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
         </div>
       </div>
       
-      {/* Report content - stejný vzhled jako před redesignem */}
+      {/* Tabs - Legacy / Smart Template */}
       <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in print:shadow-none print:w-full print:max-w-none print:rounded-none">
+        <div className="p-6 print:hidden">
+          <div className="border-b border-gray-200 mb-4">
+            <nav className="-mb-px flex space-x-8" aria-label="Report modes">
+              <button
+                onClick={() => setActiveTab(0)}
+                className={`
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                  ${activeTab === 0
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }
+                `}
+              >
+                Legacy
+              </button>
+              <button
+                onClick={() => setActiveTab(1)}
+                className={`
+                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                  ${activeTab === 1
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }
+                `}
+              >
+                Smart Template
+              </button>
+            </nav>
+          </div>
+        </div>
+        
+        {/* Report content */}
         <div className="report-body">
-          {renderContent()}
+          {activeTab === 0 && renderLegacyContent()}
+          {activeTab === 1 && report && audit && auditStructure && SmartTemplateView && (
+            <SmartTemplateView
+              report={report}
+              audit={audit}
+              auditStructure={auditStructure}
+              onBack={onBack}
+            />
+          )}
+          {activeTab === 1 && !SmartTemplateView && (
+            <div className="text-center p-12">
+              <div className="flex justify-center items-center mb-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              </div>
+              <p className="text-gray-600 mt-2">Načítání Smart Template systému...</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

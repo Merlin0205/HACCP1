@@ -7,6 +7,7 @@ import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon } from './icons/index'
 import { MobileMenu } from './MobileMenu';
 import { TabBar } from './TabBar';
 import { getSectionTheme, SECTION_THEMES } from '../constants/designSystem';
+import { Avatar } from 'flowbite-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -52,9 +53,6 @@ export const Layout: React.FC<LayoutProps> = ({
     const interval = setInterval(loadTotalCost, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  // Mobile: hamburger menu, Desktop: sidebar
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
 
   if (!showSidebar) {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
@@ -121,7 +119,7 @@ export const Layout: React.FC<LayoutProps> = ({
         totalCost={totalCost}
       />
 
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - vlastní implementace s Flowbite styling */}
       <aside className={`
         hidden lg:flex flex-col bg-white border-r border-gray-200 transition-all duration-300
         ${isSidebarCollapsed ? 'w-16' : 'w-64'}
@@ -151,7 +149,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
                   ${isActive 
-                    ? `bg-gradient-to-r ${theme.colors.gradient} text-white shadow-md` 
+                    ? 'text-white shadow-md' 
                     : 'text-gray-700 hover:bg-gray-100'
                   }
                   ${isSidebarCollapsed ? 'justify-center' : ''}
@@ -249,7 +247,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Header Bar */}
+        {/* Top Header Bar - vlastní implementace s Flowbite styling */}
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40 print:hidden">
           {/* Mobile: Hamburger + Logo */}
           <div className="flex items-center gap-4 lg:hidden">
@@ -294,33 +292,40 @@ export const Layout: React.FC<LayoutProps> = ({
               </div>
             </div>
 
-            {/* User Avatar */}
+            {/* User Avatar with Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-gray-100 transition-colors"
               >
-                <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center font-semibold text-sm">
-                  {currentUser?.displayName?.charAt(0).toUpperCase() || 
-                   currentUser?.email?.charAt(0).toUpperCase() || 'U'}
-                </div>
+                <Avatar
+                  img=""
+                  alt={currentUser?.displayName || 'Uživatel'}
+                  rounded
+                  size="sm"
+                >
+                  <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                    {currentUser?.displayName?.charAt(0).toUpperCase() || 
+                     currentUser?.email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                </Avatar>
                 <svg className="hidden lg:block h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
 
               {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
-                  <div className="px-3 py-2 border-b border-gray-200">
-                    <p className="font-semibold text-gray-800">{currentUser?.displayName || 'Uživatel'}</p>
-                    <p className="text-sm text-gray-600 truncate">{currentUser?.email}</p>
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
+                  <div className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200">
+                    <div className="font-semibold">{currentUser?.displayName || 'Uživatel'}</div>
+                    <div className="font-medium truncate">{currentUser?.email}</div>
                   </div>
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
                       signOut();
                     }}
-                    className="w-full text-left px-3 py-2 rounded-md hover:bg-red-50 text-red-600 font-medium mt-1"
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg transition-colors"
                   >
                     Odhlásit se
                   </button>
@@ -348,4 +353,3 @@ export const Layout: React.FC<LayoutProps> = ({
     </div>
   );
 };
-

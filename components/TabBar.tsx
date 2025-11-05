@@ -33,11 +33,12 @@ export const TabBar: React.FC<TabBarProps> = ({
                 flex items-center gap-2 px-3 sm:px-4 py-2 rounded-t-lg cursor-pointer transition-all
                 whitespace-nowrap flex-shrink-0
                 ${isActive 
-                  ? `bg-gradient-to-r ${tabTheme.colors.gradient} text-white border-b-2 shadow-sm` 
+                  ? 'text-white border-b-2 shadow-sm' 
                   : `${tabTheme.colors.bgLight} text-gray-700 hover:bg-gray-100 border-b-2 border-transparent`
                 }
               `}
               style={isActive ? {
+                background: `linear-gradient(to right, ${tabTheme.colors.primary}, ${tabTheme.colors.light || tabTheme.colors.primary})`,
                 borderBottomColor: tabTheme.colors.primary
               } : undefined}
             >

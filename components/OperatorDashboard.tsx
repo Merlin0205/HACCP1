@@ -193,10 +193,14 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       <Card className="overflow-hidden hidden md:block">
         <CardBody className="p-0 overflow-x-auto">
           <table className="w-full">
-            <thead className={`bg-gradient-to-r ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.gradient}`}>
+            <thead 
+              style={{
+                background: `linear-gradient(to right, ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.primary}, ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.darkest})`
+              }}
+            >
               <tr>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-emerald-600/80 transition-colors rounded-tl-lg"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center gap-2">
@@ -205,7 +209,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-emerald-600/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('ico')}
                 >
                   <div className="flex items-center gap-2">
@@ -214,7 +218,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-emerald-600/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('address')}
                 >
                   <div className="flex items-center gap-2">
@@ -223,7 +227,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-emerald-600/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('premises')}
                 >
                   <div className="flex items-center gap-2">

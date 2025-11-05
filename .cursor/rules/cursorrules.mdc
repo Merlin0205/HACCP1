@@ -1,0 +1,342 @@
+---
+alwaysApply: true
+description: "Instrukce pro Cursor AI - HACCP Audit Assistant"
+---
+Kdyz pracujes podle techto pravidel (napr. zmeny kodu, opravy, pouzivani Flowbite/Firebase), vzdy napis na zacatek odpovedi JEDU PODLE RULES a pak pokracuj v odpovedi.
+# Instrukce pro Cursor AI - HACCP Audit Assistant
+
+## 🎯 ZÁKLADNÍ PRAVIDLA
+
+### Vždy pracuj podle dokumentace
+- **Flowbite dokumentace je tvůj "svatý grál"**: https://flowbite-react.com/
+- **Firebase dokumentace**: https://firebase.google.com/docs
+- Pokud něco nevíš, vždy nejdřív zkontroluj dokumentaci
+- Pokud nedokážeš něco vyřešit, napiš uživateli kde to najde nebo jak na to
+
+### ⚠️ AUTOMATICKÁ AKTUALIZACE DOKUMENTACE
+- **Když se mění něco zásadního v projektu, VŽDY automaticky aktualizuj relevantní dokumenty:**
+  - Přidání nové technologie → aktualizuj `.cursorrules` sekci "Technologie projektu"
+  - Změna struktury projektu → aktualizuj `.cursorrules` sekci "Struktura projektu"
+  - Přidání nové Firebase služby → aktualizuj `.cursorrules` sekci "Firebase pravidla"
+  - Změna UI frameworku nebo pravidel → aktualizuj `.cursorrules` a `FLOWBITE_PRIRUCKA.md`
+  - Přidání nového důležitého souboru → aktualizuj `.cursorrules` sekci "Důležité soubory"
+- **Nepočítej s tím, že uživatel si to aktualizuje sám - vždy to udělej automaticky!**
+- **Aktualizace dokumentace je součástí změny, ne samostatný krok**
+
+### Technologie projektu
+- **Frontend**: React 19.2.0 + TypeScript + Vite
+- **UI Framework**: Flowbite React (vždy používej podle dokumentace!)
+- **CSS Framework**: Tailwind CSS v3.4.18 (integrovaný s Flowbite)
+- **Backend**: Firebase (Firestore, Storage, Functions, Authentication)
+- **Build**: Vite
+- **State Management**: React Hooks + Context API
+- **PDF Rendering**: @react-pdf/renderer (pro Smart Template systém)
+- **Drag & Drop**: @dnd-kit/core (pro Smart Template editor)
+
+---
+
+## 🎨 UI PRAVIDLA - FLOWBITE
+
+### ⚠️ KRITICKÉ PRAVIDLA PRO UI ZMĚNY:
+
+1. **VŽDY používej Flowbite komponenty** podle oficiální dokumentace
+   - Odkaz: https://flowbite-react.com/
+   - Před každou změnou UI zkontroluj dokumentaci Flowbite
+
+2. **Light mode ONLY** - aplikace je vždy v light mode
+   - `class="light"` na `<html>` tagu
+   - NIKDY nepoužívej `dark:` třídy
+   - NIKDY nepoužívej dark mode styling
+
+3. **Zachování původních barev**
+   - Pro gradienty: VŽDY používej inline styles `style={{ background: 'linear-gradient(...)' }}`
+   - NIKDY nepoužívej Tailwind gradient třídy pro barvy (`bg-gradient-to-r`, atd.)
+   - Barvy z `constants/designSystem.ts` - SECTION_THEMES
+
+4. **Wrapper komponenty**
+   - Existující wrappery v `components/ui/` zachovávají API
+   - Používají Flowbite komponenty uvnitř
+   - Pokud vytváříš novou komponentu, použij Flowbite přímo, ne wrapper
+
+5. **Icon props**
+   - Flowbite vyžaduje ikony jako funkce: `icon={() => <Icon />}`
+   - NIKDY nepoužívej: `icon={<Icon />}`
+
+### ✅ Co VŽDY dělat při změnách UI:
+
+```tsx
+// ✅ SPRÁVNĚ - Flowbite podle dokumentace
+import { Button } from 'flowbite-react';
+<Button color="blue" size="md">Text</Button>
+
+// ✅ SPRÁVNĚ - Gradient přes inline style
+<div style={{
+  background: `linear-gradient(to right, ${theme.colors.primary}, ${theme.colors.darkest})`
+}}>
+
+// ✅ SPRÁVNĚ - Icon jako funkce
+<TextInput icon={() => <SearchIcon />} />
+```
+
+### ❌ Co NIKDY nedělat:
+
+```tsx
+// ❌ ŠPATNĚ - custom CSS místo Flowbite
+<button className="px-4 py-2 bg-blue-500">Text</button>
+
+// ❌ ŠPATNĚ - Tailwind gradient třídy
+<div className="bg-gradient-to-r from-blue-500 to-purple-500">
+
+// ❌ ŠPATNĚ - dark mode
+<div className="bg-white dark:bg-gray-800">
+
+// ❌ ŠPATNĚ - icon jako JSX
+<TextInput icon={<SearchIcon />} />
+```
+
+### 📚 Flowbite dokumentace odkazy:
+- **Hlavní**: https://flowbite-react.com/
+- **Komponenty**: https://flowbite-react.com/docs/components/button
+- **Theme**: https://flowbite-react.com/docs/customize/theme
+
+### 📝 Průvodce Flowbite najdeš v:
+- `FLOWBITE_PRIRUCKA.md` - detailní příručka pro Flowbite v projektu
+
+---
+
+## 🔥 FIREBASE PRAVIDLA
+
+### Struktura Firebase služeb:
+
+1. **Firebase Authentication**
+   - `contexts/AuthContext.tsx` - wrapper pro Firebase Auth
+   - `components/LoginScreen.tsx`, `components/RegisterScreen.tsx`
+   - Uživatelé jsou izolováni podle `uid`
+
+2. **Firestore Database**
+   - Všechny CRUD operace v `services/firestore/`
+   - Collections: `customers`, `audits`, `reports`, `settings`, `users`, `aiUsageLogs`, `reportTemplates`
+   - **Security Rules**: `firestore.rules` - user isolation
+
+3. **Firebase Storage**
+   - `services/storage.ts` - upload/download fotek
+   - Fotky auditů: `audits/{auditId}/photos/{photoId}`
+   - PDF reporty Legacy: `reports/{reportId}/pdf`
+   - Smart Template data: `reports/{reportId}/smart/{drafts|finalVersions|pdf|templates}/`
+   - **Security Rules**: `storage.rules` - max 10MB pro obrázky
+
+4. **Cloud Functions**
+   - `functions/src/` - serverless funkce
+   - `generateReport.ts` - Legacy AI generování reportů (beze změny)
+   - `generateSmartReportPdf.ts` - Smart Template PDF generování (nová)
+   - `transcribeAudio.ts`, `generatePdf.ts`, `analyzeImage.ts`
+
+### ✅ Co VŽDY dělat při práci s Firebase:
+
+```tsx
+// ✅ SPRÁVNĚ - použij existující service funkce
+import { createAudit, updateAudit } from './services/firestore';
+await createAudit(auditData);
+
+// ✅ SPRÁVNĚ - použij AuthContext pro uživatele
+import { useAuth } from './contexts/AuthContext';
+const { user } = useAuth();
+
+// ✅ SPRÁVNĚ - error handling
+try {
+  await someFirebaseOperation();
+} catch (error) {
+  toast.error('Chyba: ' + error.message);
+}
+```
+
+### ❌ Co NIKDY nedělat:
+
+```tsx
+// ❌ ŠPATNĚ - přímý import Firebase SDK v komponentách
+import { collection, addDoc } from 'firebase/firestore';
+// Používej service funkce místo toho!
+
+// ❌ ŠPATNĚ - ignorování error handlingu
+await createAudit(data); // Co když selže?
+```
+
+### 📚 Firebase dokumentace:
+- **Firestore**: https://firebase.google.com/docs/firestore
+- **Storage**: https://firebase.google.com/docs/storage
+- **Functions**: https://firebase.google.com/docs/functions
+- **Auth**: https://firebase.google.com/docs/auth
+
+### 📝 Průvodce Firebase najdeš v:
+- `NAVOD.md` - kompletní návod k nastavení a deploy
+- `README.md` - struktura projektu a Firebase migrace
+
+---
+
+## 📁 STRUKTURA PROJEKTU
+
+### Hlavní adresáře:
+
+```
+HACCP1/
+├── components/          # React komponenty
+│   ├── ui/              # Flowbite wrapper komponenty (Button, Card, Input, Modal)
+│   ├── icons/           # SVG ikony
+│   ├── report/          # Smart Template komponenty (NOVÁ)
+│   │   ├── SmartTemplateView.tsx
+│   │   ├── SmartTemplateSelector.tsx
+│   │   ├── SmartReportRenderer.tsx
+│   │   └── SmartReportDesigner.tsx
+│   └── [screens].tsx    # Obrazovky aplikace
+│
+├── services/            # Business logika a API
+│   ├── firestore/       # Firestore CRUD operace
+│   │   ├── reportTemplates.ts  # Smart Template šablony (NOVÁ)
+│   │   └── reports.ts           # UPRAVENO - přidána smart pole
+│   ├── smartTemplate/   # Smart Template služby (NOVÁ)
+│   │   ├── SmartTemplateEngine.ts
+│   │   ├── templateLoader.ts
+│   │   └── reportDocumentService.ts
+│   └── storage.ts       # Firebase Storage
+│
+├── contexts/            # React Contexts
+│   └── AuthContext.tsx  # Firebase Authentication
+│
+├── hooks/               # Custom React hooks
+│   ├── useAppData.ts    # Načítání dat z Firestore
+│   └── useUserRole.ts
+│
+├── types.ts             # TypeScript typy (UPRAVENO - přidány Smart typy)
+├── types/
+│   └── smartReport.ts   # Smart Template typy (NOVÁ)
+├── constants/designSystem.ts  # Design systém (SECTION_THEMES)
+│
+├── firebaseConfig.ts    # Firebase inicializace
+├── firestore.rules      # Firestore security rules (UPRAVENO - přidány reportTemplates)
+├── storage.rules        # Storage security rules (UPRAVENO - přidány smart cesty)
+│
+└── functions/src/       # Cloud Functions
+    └── generateSmartReportPdf.ts  # Smart Template PDF (NOVÁ)
+```
+
+### Důležité soubory:
+
+- **`App.tsx`** - hlavní logika aplikace, routing
+- **`AppWithAuth.tsx`** - wrapper s autentifikací
+- **`firebaseConfig.ts`** - Firebase SDK inicializace
+- **`components/ReportView.tsx`** - zobrazení reportů (UPRAVENO - přidány záložky Legacy/Smart)
+- **`SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`** - detailní plán Smart Template systému
+- **`FLOWBITE_PRIRUCKA.md`** - Flowbite příručka
+- **`NAVOD.md`** - návod k nastavení a deploy
+
+---
+
+## 🔧 WORKFLOW PRO ZMĚNY
+
+### Při změně UI komponenty:
+
+1. **Zkontroluj Flowbite dokumentaci** - https://flowbite-react.com/
+2. **Podívej se do `FLOWBITE_PRIRUCKA.md`** - máš tam příklady
+3. **Použij Flowbite komponentu** podle dokumentace
+4. **Zachovej původní barvy** přes inline styles
+5. **Otestuj v light mode** - aplikace je vždy světlá
+
+### Při práci s Firebase:
+
+1. **Zkontroluj existující service funkce** v `services/firestore/`
+2. **Použij existující funkce** místo přímého Firebase SDK
+3. **Respektuj security rules** - uživatelé jsou izolováni
+4. **Přidej error handling** - všechny operace mohou selhat
+
+---
+
+## ✅ CHECKLIST PŘED COMMITEM
+
+### UI změny:
+- [ ] Použil jsem Flowbite komponentu podle dokumentace?
+- [ ] Zachoval jsem původní barvy přes inline styles?
+- [ ] Komponenta funguje v light mode?
+- [ ] Není tam žádný dark mode CSS?
+- [ ] **Aktualizoval jsem dokumentaci pokud byla změna zásadní?**
+
+### Firebase změny:
+- [ ] Použil jsem existující service funkce?
+- [ ] Přidal jsem error handling?
+- [ ] Security rules jsou správně nastavené?
+- [ ] **Aktualizoval jsem dokumentaci pokud byla změna zásadní?**
+
+### Obecné:
+- [ ] Kód je TypeScript validní?
+- [ ] Build prochází (`npm run build`)?
+- [ ] **Aktualizoval jsem `.cursorrules` nebo jinou dokumentaci pokud byla změna zásadní?**
+
+---
+
+## 🚨 ČASTÉ CHYBY
+
+1. **Nepoužití Flowbite dokumentace** - VŽDY zkontroluj https://flowbite-react.com/
+2. **Dark mode třídy** - Aplikace je vždy světlá, nepoužívej dark mode
+3. **Tailwind gradienty místo inline styles** - Používej inline styles pro gradienty
+4. **Přímý Firebase SDK v komponentách** - Používej service funkce z `services/firestore/`
+5. **Icon jako JSX místo funkce** - Flowbite vyžaduje `icon={() => <Icon />}`
+
+---
+
+## 📚 DŮLEŽITÉ ODKAZY
+
+### Dokumentace:
+- **Flowbite React**: https://flowbite-react.com/
+- **Firebase**: https://firebase.google.com/docs
+
+### Projektové soubory:
+- **Flowbite příručka**: `FLOWBITE_PRIRUCKA.md`
+- **Firebase návod**: `NAVOD.md`
+- **README**: `README.md`
+- **Smart Template plán**: `SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`
+- **Smart Template spec**: `HACCP_Smart_Template_Report_System.md`
+
+---
+
+## ⚠️ POKUD NĚCO NEVÍŠ
+
+1. **Zkontroluj dokumentaci** - Flowbite nebo Firebase
+2. **Podívej se do projektových souborů** - `FLOWBITE_PRIRUCKA.md`, `NAVOD.md`
+3. **Zkontroluj podobný kód** v projektu - jak se to dělá jinde
+4. **Pokud nedokážeš vyřešit** - napiš uživateli konkrétně kde to najde nebo jak na to
+
+---
+
+## 🧩 SMART TEMPLATE SYSTÉM
+
+### Základní principy
+- **Paralelní systém** - funguje vedle Legacy systému, žádné změny v Legacy kódu
+- **Legacy systém zůstává beze změny** - žádné úpravy stávajících komponent
+- **UI přepínač** - uživatel si může vybrat mezi Legacy a Smart módem v `ReportView`
+
+### Struktura Smart Template
+- **Template Rules** - JSON pravidla layoutu (uloženy v `reportTemplates` collection)
+- **ReportDocument** - struktura připravená pro render (WYSIWYG)
+- **SmartTemplateEngine** - aplikuje pravidla šablony na audit data
+- **Storage struktura**: `reports/{reportId}/smart/{drafts|finalVersions|pdf|templates}/`
+
+### Při práci se Smart Template:
+1. **Vždy použij existující služby** z `services/smartTemplate/`
+2. **Nepoužívej přímý Firebase SDK** - použij `reportDocumentService.ts`
+3. **Respektuj strukturu Storage** - Smart data jsou v `smart/` podadresáři
+4. **Legacy systém beze změny** - žádné úpravy `ReportView.tsx` Legacy části
+
+### Důležité soubory Smart Template:
+- `SMART_TEMPLATE_IMPLEMENTATION_PLAN.md` - detailní plán implementace
+- `HACCP_Smart_Template_Report_System.md` - původní specifikace
+- `services/smartTemplate/SmartTemplateEngine.ts` - engine pro aplikaci pravidel
+- `components/report/SmartTemplateView.tsx` - hlavní UI komponenta
+
+### ⚠️ Při implementaci Smart Template:
+- Vždy ověř, že Legacy systém funguje beze změny
+- Používej Flowbite komponenty pro UI (Tabs, Button, atd.)
+- Dokumentuj všechny nové typy v `types/smartReport.ts`
+- Aktualizuj security rules pro nové collections a Storage cesty
+
+---
+
+**PAMATUJ SI: Dokumentace je tvůj nejlepší přítel - vždy ji kontroluj před psaním kódu!**

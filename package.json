@@ -9,25 +9,36 @@
     "preview": "vite preview",
     "emulators": "firebase emulators:start",
     "emulators:functions": "firebase emulators:start --only functions",
-    "emulators:all": "firebase emulators:start --only functions,firestore,auth,storage"
+    "emulators:all": "firebase emulators:start --only functions,firestore,auth,storage",
+    "init-default-template": "node --loader ts-node/esm scripts/initDefaultTemplate.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@react-pdf/renderer": "^4.2.0",
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/modifiers": "^1.0.0",
     "cors": "^2.8.5",
+    "date-fns": "^3.6.0",
     "diff": "^5.2.0",
     "dotenv": "^17.2.3",
     "firebase": "^12.5.0",
+    "flowbite": "^3.1.2",
+    "flowbite-react": "^0.12.10",
     "react": "^19.2.0",
     "react-beautiful-dnd": "^13.1.1",
     "react-diff-viewer-continued": "^3.4.0",
     "react-dom": "^19.2.0",
-    "react-icons": "^5.5.0"
+    "react-icons": "^5.5.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

@@ -95,9 +95,10 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
       isOpen={true}
       onClose={handleClose}
       title={item.title}
-      size="lg"
+      size="md"
+      responsiveSize={{ mobile: 'md', desktop: '4xl' }}
       footer={
-        <Button variant="primary" onClick={handleClose} fullWidth>
+        <Button variant="primary" onClick={handleClose} className="w-full sm:w-auto">
           Zavřít
         </Button>
       }

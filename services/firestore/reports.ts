@@ -297,3 +297,71 @@ export async function deleteReportsByAuditIds(auditIds: string[]): Promise<void>
     await Promise.all(deletePromises);
   }
 }
+
+/**
+ * Aktualizuje pouze Smart Template metadata v reportu
+ */
+export async function updateReportSmartMetadata(
+  reportId: string,
+  smartMetadata: {
+    selectedTemplateId?: string;
+    selectedTemplateVersion?: string;
+    lastSmartDraftPath?: string;
+  }
+): Promise<void> {
+  const docRef = doc(db, COLLECTION_NAME, reportId);
+  
+  // Načíst aktuální report
+  const currentReport = await fetchReport(reportId);
+  if (!currentReport) {
+    throw new Error('Report not found');
+  }
+  
+  // Sloučit stávající smart data s novými
+  const updatedSmart = {
+    ...currentReport.smart,
+    ...smartMetadata
+  };
+  
+  await updateDoc(docRef, {
+    smart: updatedSmart,
+    updatedAt: Timestamp.now()
+  });
+}
+
+/**
+ * Přidá novou finální verzi Smart Template do reportu
+ */
+export async function addSmartFinalVersion(
+  reportId: string,
+  versionData: {
+    versionId: string;
+    reportPath: string;
+    pdfPath?: string;
+    createdAt: string;
+    createdBy: string;
+    createdByName?: string;
+  }
+): Promise<void> {
+  const docRef = doc(db, COLLECTION_NAME, reportId);
+  
+  // Načíst aktuální report
+  const currentReport = await fetchReport(reportId);
+  if (!currentReport) {
+    throw new Error('Report not found');
+  }
+  
+  // Přidat novou verzi do pole finalVersions
+  const updatedSmart = {
+    ...currentReport.smart,
+    finalVersions: [
+      ...(currentReport.smart?.finalVersions || []),
+      versionData
+    ]
+  };
+  
+  await updateDoc(docRef, {
+    smart: updatedSmart,
+    updatedAt: Timestamp.now()
+  });
+}

@@ -95,6 +95,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onSwitchToLogin 
             onChange={(e) => setDisplayName(e.target.value)}
             required
             placeholder="Jan Novák"
+            autoComplete="name"
           />
 
           <TextField
@@ -104,6 +105,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onSwitchToLogin 
             onChange={(e) => setEmail(e.target.value)}
             required
             placeholder="vas@email.cz"
+            autoComplete="email"
           />
 
           <TextField
@@ -115,6 +117,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onSwitchToLogin 
             minLength={6}
             placeholder="Alespoň 6 znaků"
             helperText="Heslo musí mít alespoň 6 znaků"
+            autoComplete="new-password"
           />
 
           <TextField
@@ -125,6 +128,7 @@ export const RegisterScreen: React.FC<RegisterScreenProps> = ({ onSwitchToLogin 
             required
             minLength={6}
             placeholder="Znovu zadejte heslo"
+            autoComplete="new-password"
           />
 
           <Button

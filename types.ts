@@ -99,6 +99,7 @@ export enum AppState {
   AI_USAGE_STATS = 'ai_usage_stats',
   AI_PRICING_CONFIG = 'ai_pricing_config',
   AI_PROMPTS = 'ai_prompts',
+  SMART_TEMPLATE_SETTINGS = 'smart_template_settings',
   ADMIN = 'admin',
   USER_MANAGEMENT = 'user_management'
 }
@@ -213,4 +214,33 @@ export interface Report {
   createdBy?: string; // userId uživatele, který vytvořil report
   createdByName?: string; // displayName uživatele (pro zobrazení bez joinování)
   isLatest?: boolean; // true pokud je to nejnovější verze reportu pro daný audit
+  // Smart Template data
+  smart?: {
+    selectedTemplateId?: string;
+    selectedTemplateVersion?: string;
+    lastSmartDraftPath?: string;
+    finalVersions?: Array<{
+      versionId: string;
+      reportPath: string;
+      pdfPath?: string;
+      createdAt: string;
+      createdBy: string;
+      createdByName?: string;
+    }>;
+  };
+}
+
+/**
+ * ReportTemplate - šablona pro Smart Template systém
+ */
+export interface ReportTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  version: string;
+  rules: any; // TemplateRules z types/smartReport.ts (circular dependency)
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string; // userId
 }

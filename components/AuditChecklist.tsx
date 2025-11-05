@@ -196,9 +196,9 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                               {isAnswered && (
                                 <div className="mt-0.5 sm:mt-1">
                                   {isCompliant ? (
-                                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>
+                                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-600 rounded-full shadow-sm ring-2 ring-green-200"></div>
                                   ) : (
-                                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full"></div>
+                                    <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-red-600 rounded-full shadow-sm ring-2 ring-red-200"></div>
                                   )}
                                 </div>
                               )}

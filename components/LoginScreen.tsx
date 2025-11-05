@@ -98,6 +98,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToRegister }) 
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="vas@email.cz"
+                autoComplete="email"
               />
 
               <TextField
@@ -107,6 +108,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToRegister }) 
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
 
               <div className="flex items-center justify-between">
@@ -179,6 +181,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToRegister }) 
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="vas@email.cz"
+              autoComplete="email"
             />
 
             <div className="flex gap-3">

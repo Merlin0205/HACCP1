@@ -154,8 +154,23 @@ HACCP1/
   ├─ userId: string
   ├─ auditId: string         # Reference na audit
   ├─ status: string          # "Pending", "Done", "Error"
-  ├─ reportData: object      # AI vygenerovaný report
-  └─ auditorSnapshot: object # Údaje auditora
+  ├─ reportData: object      # AI vygenerovaný report (Legacy)
+  ├─ auditorSnapshot: object  # Údaje auditora
+  └─ smart?: object           # Smart Template data (volitelné)
+      ├─ selectedTemplateId: string
+      ├─ selectedTemplateVersion: string
+      ├─ lastSmartDraftPath: string
+      └─ finalVersions: array
+
+/reportTemplates/{templateId}  # NOVÁ - Smart Template šablony
+  ├─ name: string
+  ├─ description: string
+  ├─ version: string
+  ├─ rules: object           # JSON pravidla layoutu
+  ├─ isDefault: boolean
+  ├─ createdAt: timestamp
+  ├─ createdBy: string        # userId
+  └─ updatedAt: timestamp
 
 /settings/{documentId}
   ├─ auditStructure          # Struktura checklistu (sdílená)
@@ -189,7 +204,20 @@ HACCP1/
   │   ├─ photo_1_timestamp.jpg
   │   └─ ...další fotky
   └─ reports/
-      └─ report_{reportId}_timestamp.pdf
+      ├─ {reportId}/
+      │   ├─ pdf/                    # Legacy PDF soubory
+      │   │   └─ {timestamp}.pdf
+      │   └─ smart/                   # Smart Template data (NOVÁ)
+      │       ├─ drafts/
+      │       │   └─ lastSmartDraft.json
+      │       ├─ finalVersions/
+      │       │   └─ {versionId}/
+      │       │       └─ reportDocument.json
+      │       ├─ pdf/
+      │       │   └─ {timestamp}.pdf
+      │       └─ templates/
+      │           └─ {templateId}/
+      │               └─ v{n}.json
 ```
 
 ---
@@ -273,6 +301,8 @@ firebase deploy
 - ✅ **HACCP Audity** - Interaktivní checklist s fotodokumentací
 - ✅ **Hlasový přepis** - Gemini AI audio transcription
 - ✅ **AI Reporty** - Automatické generování protokolů
+  - **Legacy systém** - stávající AI generování reportů (beze změny)
+  - **Smart Template systém** - nový systém s šablonami a WYSIWYG editací (v plánu)
 - ✅ **PDF Export** - Puppeteer v Cloud Functions
 - ✅ **Cloudová databáze** - Firestore (real-time sync)
 - ✅ **Autentifikace** - Email/heslo + Google OAuth
@@ -294,7 +324,13 @@ firebase deploy
 - **Firebase Storage** - File storage
 - **Firebase Authentication** - Auth služba
 - **Cloud Functions** - Node.js 20 (TypeScript)
-- **Puppeteer** - PDF generování
+- **Puppeteer** - PDF generování (Legacy)
+- **@react-pdf/renderer** - PDF generování (Smart Template)
+
+### Smart Template systém (v plánu):
+- **@react-pdf/renderer** - WYSIWYG PDF preview a generování
+- **@dnd-kit/core** - Drag & drop pro editaci layoutu
+- **Template Rules** - JSON pravidla pro automatické generování layoutu
 
 ### AI:
 - **Google Gemini API** - Report generation & Audio transcription
@@ -432,5 +468,25 @@ firebase emulators:start
 
 ---
 
-*Poslední aktualizace: Listopad 2025*
+## 🧩 SMART TEMPLATE SYSTÉM (V PLÁNU)
+
+### O Smart Template systému
+Nový systém generování reportů, který umožňuje:
+- ✅ Automatické generování layoutu podle šablon (rules JSON)
+- ✅ WYSIWYG editaci automaticky vytvořeného návrhu
+- ✅ Uložení finálních verzí jako samostatné záznamy
+- ✅ Verzování a regeneraci z nových šablon
+- ✅ Paralelní fungování se stávajícím Legacy systémem
+
+### Dokumentace Smart Template
+- **Detailní plán**: `SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`
+- **Původní specifikace**: `HACCP_Smart_Template_Report_System.md`
+
+### Status
+Smart Template systém je v plánu implementace. Legacy systém funguje beze změny.
+
+---
+
+*Poslední aktualizace: Leden 2025*
 *Verze: 2.0 - Firebase Edition*
+*Smart Template: V plánu*

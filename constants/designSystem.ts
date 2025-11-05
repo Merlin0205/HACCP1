@@ -144,6 +144,7 @@ export const getSectionTheme = (appState: AppState): SectionTheme | null => {
     appState === AppState.AI_REPORT_SETTINGS ||
     appState === AppState.AI_USAGE_STATS ||
     appState === AppState.AI_PRICING_CONFIG ||
+    appState === AppState.SMART_TEMPLATE_SETTINGS ||
     appState === AppState.ADMIN
   ) {
     return SECTION_THEMES[AppState.SETTINGS];

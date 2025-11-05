@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useThemeMode } from 'flowbite-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginScreen } from './components/LoginScreen';
 import { RegisterScreen } from './components/RegisterScreen';
@@ -32,8 +33,14 @@ const AuthScreens: React.FC = () => {
  */
 const AppContent: React.FC = () => {
   const { currentUser, loading } = useAuth();
+  const { setMode } = useThemeMode();
   const [userMetadata, setUserMetadata] = useState<UserMetadata | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(true);
+
+  // Vynutit light mode při mountu
+  useEffect(() => {
+    setMode('light');
+  }, [setMode]);
 
   // Načíst user metadata po přihlášení
   useEffect(() => {

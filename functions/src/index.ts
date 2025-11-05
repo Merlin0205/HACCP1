@@ -14,6 +14,7 @@ admin.initializeApp();
 export { generateReport } from './generateReport';
 export { transcribeAudio } from './transcribeAudio';
 export { generatePdf } from './generatePdf';
+export { generateSmartReportPdf } from './generateSmartReportPdf';
 export { analyzeImage } from './analyzeImage';
 export { generateText } from './generateText';
 export { updateGeminiPrices } from './updateGeminiPrices';

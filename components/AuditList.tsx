@@ -4,6 +4,7 @@ import { Card, CardHeader, CardBody, CardFooter } from './ui/Card';
 import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
+import { Badge } from './ui/Badge';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -102,20 +103,20 @@ export const AuditList: React.FC<AuditListProps> = ({
   };
 
   const getStatusBadge = (status: AuditStatus) => {
-    const badges = {
-      [AuditStatus.DRAFT]: 'bg-gray-100 text-gray-800',
-      [AuditStatus.NOT_STARTED]: 'bg-gray-100 text-gray-800',
-      [AuditStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
-      [AuditStatus.COMPLETED]: 'bg-green-100 text-green-800',
-      [AuditStatus.REVISED]: 'bg-orange-100 text-orange-800',
-      [AuditStatus.LOCKED]: 'bg-green-100 text-green-800',
+    const badgeColors: Record<AuditStatus, 'gray' | 'blue' | 'success' | 'warning'> = {
+      [AuditStatus.DRAFT]: 'gray',
+      [AuditStatus.NOT_STARTED]: 'gray',
+      [AuditStatus.IN_PROGRESS]: 'blue',
+      [AuditStatus.COMPLETED]: 'success',
+      [AuditStatus.REVISED]: 'warning',
+      [AuditStatus.LOCKED]: 'success',
     };
     const displayText = status === AuditStatus.LOCKED ? AuditStatus.COMPLETED : 
                         status === AuditStatus.NOT_STARTED ? AuditStatus.DRAFT : status;
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badges[status] || badges[AuditStatus.DRAFT]}`}>
+      <Badge color={badgeColors[status] || 'gray'}>
         {displayText}
-      </span>
+      </Badge>
     );
   };
 
@@ -136,11 +137,11 @@ export const AuditList: React.FC<AuditListProps> = ({
     const report = reports.find(r => r.auditId === auditId && r.isLatest);
     if (!report) return null;
 
-    const badges = {
-      [ReportStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
-      [ReportStatus.GENERATING]: 'bg-yellow-100 text-yellow-800 animate-pulse',
-      [ReportStatus.DONE]: 'bg-green-100 text-green-800',
-      [ReportStatus.ERROR]: 'bg-red-100 text-red-800',
+    const badgeColors: Record<ReportStatus, 'warning' | 'success' | 'failure'> = {
+      [ReportStatus.PENDING]: 'warning',
+      [ReportStatus.GENERATING]: 'warning',
+      [ReportStatus.DONE]: 'success',
+      [ReportStatus.ERROR]: 'failure',
     };
 
     const isGenerating = report.status === ReportStatus.GENERATING;
@@ -161,9 +162,12 @@ export const AuditList: React.FC<AuditListProps> = ({
             </svg>
           </button>
         )}
-        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${badges[report.status] || badges[ReportStatus.PENDING]}`}>
+        <Badge 
+          color={badgeColors[report.status] || 'gray'}
+          className={isGenerating ? 'animate-pulse' : ''}
+        >
           {report.status === ReportStatus.GENERATING ? 'Generuje se...' : report.status === ReportStatus.DONE ? 'Hotovo' : report.status}
-        </span>
+        </Badge>
       </div>
     );
   };
@@ -327,13 +331,17 @@ export const AuditList: React.FC<AuditListProps> = ({
       <Card className="overflow-hidden hidden md:block">
         <CardBody className="p-0 overflow-x-auto">
           <table className="w-full">
-            <thead className={`bg-gradient-to-r ${SECTION_THEMES[AppState.ALL_AUDITS].colors.gradient}`}>
+            <thead 
+              style={{
+                background: `linear-gradient(to right, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.primary}, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.darkest})`
+              }}
+            >
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider rounded-tl-lg">
                   ID
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('status')}
                 >
                   <div className="flex items-center gap-2">
@@ -342,7 +350,7 @@ export const AuditList: React.FC<AuditListProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('createdAt')}
                 >
                   <div className="flex items-center gap-2">
@@ -351,7 +359,7 @@ export const AuditList: React.FC<AuditListProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:bg-blue-600/80 transition-colors"
+                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('completedAt')}
                 >
                   <div className="flex items-center gap-2">

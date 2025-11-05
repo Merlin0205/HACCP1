@@ -1,4 +1,5 @@
 import React from 'react';
+import { TextInput, Textarea, Select as FlowbiteSelect, Label } from 'flowbite-react';
 
 export interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -17,47 +18,39 @@ export const TextField: React.FC<TextFieldProps> = ({
   className = '',
   ...props
 }) => {
-  const inputClasses = `
-    w-full px-4 py-2.5 rounded-lg border transition-colors duration-200
-    focus:outline-none focus:ring-2 focus:ring-offset-0
-    ${error 
-      ? 'border-accent-error focus:ring-accent-error focus:border-accent-error' 
-      : 'border-gray-300 focus:ring-primary focus:border-primary'
-    }
-    ${leftIcon ? 'pl-10' : ''}
-    ${rightIcon ? 'pr-10' : ''}
-    ${className}
-  `;
+  // Flowbite TextInput má color prop pro error state
+  const color = error ? 'failure' : undefined;
+  
+  // Odstranit helperText a error z props, aby se nedostaly do DOM
+  const { helperText: _, error: __, ...inputProps } = props as any;
+
+  // Příprava helperText pro Flowbite - pouze pokud existuje
+  const flowbiteHelperText = error 
+    ? <span className="text-red-600">{error}</span> 
+    : helperText 
+      ? helperText 
+      : undefined;
+
+  // Flowbite icon prop přijímá funkci, která vrací ReactNode
+  const iconComponent = leftIcon ? () => <>{leftIcon}</> : undefined;
+  const rightIconComponent = rightIcon ? () => <>{rightIcon}</> : undefined;
 
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <Label htmlFor={props.id} className="mb-1.5">
           {label}
-        </label>
+        </Label>
       )}
-      <div className="relative">
-        {leftIcon && (
-          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-            {leftIcon}
-          </div>
-        )}
-        <input
-          className={inputClasses}
-          {...props}
-        />
-        {rightIcon && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-            {rightIcon}
-          </div>
-        )}
-      </div>
-      {error && (
-        <p className="mt-1 text-sm text-accent-error">{error}</p>
-      )}
-      {helperText && !error && (
-        <p className="mt-1 text-sm text-gray-500">{helperText}</p>
-      )}
+      <TextInput
+        id={props.id}
+        color={color}
+        icon={iconComponent}
+        rightIcon={rightIconComponent}
+        {...(flowbiteHelperText && { helperText: flowbiteHelperText })}
+        className={className}
+        {...inputProps}
+      />
     </div>
   );
 };
@@ -75,33 +68,32 @@ export const TextArea: React.FC<TextAreaProps> = ({
   className = '',
   ...props
 }) => {
-  const textareaClasses = `
-    w-full px-4 py-2.5 rounded-lg border transition-colors duration-200
-    focus:outline-none focus:ring-2 focus:ring-offset-0 resize-y
-    ${error 
-      ? 'border-accent-error focus:ring-accent-error focus:border-accent-error' 
-      : 'border-gray-300 focus:ring-primary focus:border-primary'
-    }
-    ${className}
-  `;
+  const color = error ? 'failure' : undefined;
+
+  // Odstranit helperText a error z props, aby se nedostaly do DOM
+  const { helperText: _, error: __, ...textareaProps } = props as any;
+
+  // Příprava helperText pro Flowbite - pouze pokud existuje
+  const flowbiteHelperText = error 
+    ? <span className="text-red-600">{error}</span> 
+    : helperText 
+      ? helperText 
+      : undefined;
 
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <Label htmlFor={props.id} className="mb-1.5">
           {label}
-        </label>
+        </Label>
       )}
-      <textarea
-        className={textareaClasses}
-        {...props}
+      <Textarea
+        id={props.id}
+        color={color}
+        {...(flowbiteHelperText && { helperText: flowbiteHelperText })}
+        className={className}
+        {...textareaProps}
       />
-      {error && (
-        <p className="mt-1 text-sm text-accent-error">{error}</p>
-      )}
-      {helperText && !error && (
-        <p className="mt-1 text-sm text-gray-500">{helperText}</p>
-      )}
     </div>
   );
 };
@@ -121,41 +113,38 @@ export const Select: React.FC<SelectProps> = ({
   className = '',
   ...props
 }) => {
-  const selectClasses = `
-    w-full px-4 py-2.5 rounded-lg border transition-colors duration-200
-    focus:outline-none focus:ring-2 focus:ring-offset-0 appearance-none
-    bg-white bg-[url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")] bg-[length:1.5em_1.5em] bg-[right_0.75rem_center] bg-no-repeat
-    ${error 
-      ? 'border-accent-error focus:ring-accent-error focus:border-accent-error' 
-      : 'border-gray-300 focus:ring-primary focus:border-primary'
-    }
-    ${className}
-  `;
+  const color = error ? 'failure' : undefined;
+
+  // Odstranit helperText a error z props, aby se nedostaly do DOM
+  const { helperText: _, error: __, ...selectProps } = props as any;
+
+  // Příprava helperText pro Flowbite - pouze pokud existuje
+  const flowbiteHelperText = error 
+    ? <span className="text-red-600">{error}</span> 
+    : helperText 
+      ? helperText 
+      : undefined;
 
   return (
     <div className="w-full">
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <Label htmlFor={props.id} className="mb-1.5">
           {label}
-        </label>
+        </Label>
       )}
-      <select
-        className={selectClasses}
-        {...props}
+      <FlowbiteSelect
+        id={props.id}
+        color={color}
+        {...(flowbiteHelperText && { helperText: flowbiteHelperText })}
+        className={className}
+        {...selectProps}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
-      {error && (
-        <p className="mt-1 text-sm text-accent-error">{error}</p>
-      )}
-      {helperText && !error && (
-        <p className="mt-1 text-sm text-gray-500">{helperText}</p>
-      )}
+      </FlowbiteSelect>
     </div>
   );
 };
-

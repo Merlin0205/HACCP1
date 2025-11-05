@@ -32,6 +32,7 @@ import AIReportSettingsScreen from './components/AIReportSettingsScreen';
 import AIUsageStatsScreen from './components/AIUsageStatsScreen';
 import AIPricingConfigScreen from './components/AIPricingConfigScreen';
 import AIPromptsScreen from './components/AIPromptsScreen';
+import SmartTemplateSettingsScreen from './components/SmartTemplateSettingsScreen';
 import { OperatorDashboard } from './components/OperatorDashboard';
 import { OperatorForm } from './components/OperatorForm';
 import { PremiseForm } from './components/PremiseForm';
@@ -1068,6 +1069,14 @@ const App: React.FC = () => {
     setAppState(AppState.SETTINGS);
   }
 
+  const handleNavigateToSmartTemplateSettings = () => {
+    setAppState(AppState.SMART_TEMPLATE_SETTINGS);
+  }
+
+  const handleBackFromSmartTemplateSettings = () => {
+    setAppState(AppState.SETTINGS);
+  }
+
   const handleNavigate = (newState: AppState) => {
     // Pokud jsou otevřené taby a navigujeme na jinou obrazovku, deaktivujeme taby
     if (tabs.length > 0 && activeTabId) {
@@ -1268,7 +1277,7 @@ const App: React.FC = () => {
         );
       }
       case AppState.SETTINGS:
-        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToAIPrompts={handleNavigateToAIPrompts} onBack={handleBackFromSettings} />;
+        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToAIPrompts={handleNavigateToAIPrompts} onNavigateToSmartTemplateSettings={handleNavigateToSmartTemplateSettings} onBack={handleBackFromSettings} />;
       case AppState.USER_MANAGEMENT:
         return <UserManagementScreen onBack={handleBackFromSettings} />;
       case AppState.AUDITOR_SETTINGS:
@@ -1281,6 +1290,8 @@ const App: React.FC = () => {
         return <AIPricingConfigScreen onBack={handleBackFromAIPricingConfig} />;
       case AppState.AI_PROMPTS:
         return <AIPromptsScreen onBack={handleBackFromAIPrompts} />;
+      case AppState.SMART_TEMPLATE_SETTINGS:
+        return <SmartTemplateSettingsScreen onBack={handleBackFromSmartTemplateSettings} />;
       case AppState.ADMIN:
         return (
           <div>

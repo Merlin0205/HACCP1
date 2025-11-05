@@ -1,5 +1,10 @@
-import React, { useEffect } from 'react';
-import { XIcon } from '../icons';
+import React, { useState, useEffect } from 'react';
+import { 
+  Modal as FlowbiteModal, 
+  ModalHeader as FlowbiteModalHeader,
+  ModalBody as FlowbiteModalBody,
+  ModalFooter as FlowbiteModalFooter
+} from 'flowbite-react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -7,8 +12,9 @@ export interface ModalProps {
   title?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | 'full';
   closeOnBackdropClick?: boolean;
+  responsiveSize?: { mobile?: string; desktop?: string }; // Nová prop pro responzivní velikosti
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,124 +23,68 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   children,
   footer,
-  size = 'md',
+  size = 'lg', // Změněno z 'md' na 'lg' - větší výchozí velikost
   closeOnBackdropClick = true,
+  responsiveSize,
 }) => {
+  const [isMobile, setIsMobile] = useState(false);
+
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
     };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'hidden';
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  const sizeClasses = {
-    sm: 'max-w-md',
-    md: 'max-w-2xl',
-    lg: 'max-w-4xl',
-    xl: 'max-w-6xl',
-    full: 'max-w-full mx-4',
+  // Mapování velikostí na Flowbite sizes
+  const sizeMap: Record<string, 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl'> = {
+    sm: 'sm',
+    md: 'md',
+    lg: 'lg',
+    xl: 'xl',
+    '2xl': '2xl',
+    '3xl': '3xl',
+    '4xl': '4xl',
+    full: '7xl', // Použijeme největší velikost pro full
   };
 
-  // Mobile: bottom drawer, Desktop: centered modal
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-50 transition-opacity duration-300"
-        onClick={closeOnBackdropClick ? onClose : undefined}
-      />
-      
-      {/* Modal Container */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none lg:items-center lg:justify-center">
-        <div
-          className={`
-            bg-white rounded-t-3xl lg:rounded-2xl shadow-2xl w-full ${sizeClasses[size]}
-            pointer-events-auto
-            max-h-[90vh] overflow-hidden
-            flex flex-col
-            animate-slide-up lg:animate-fade-in
-          `}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          {title && (
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-              <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-              <button
-                onClick={onClose}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                aria-label="Zavřít"
-              >
-                <XIcon className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-          )}
-          
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            {children}
-          </div>
-          
-          {/* Footer */}
-          {footer && (
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex-shrink-0 flex items-center justify-end gap-3">
-              {footer}
-            </div>
-          )}
-        </div>
-      </div>
+  // Určit finální velikost podle responzivního nastavení
+  let finalSize: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl';
+  
+  if (responsiveSize) {
+    // Použij mobilní velikost na mobilu, desktop velikost na desktopu
+    if (isMobile) {
+      finalSize = sizeMap[responsiveSize.mobile || 'md'] || 'md';
+    } else {
+      finalSize = sizeMap[responsiveSize.desktop || size || 'lg'] || 'lg';
+    }
+  } else {
+    finalSize = sizeMap[size] || 'lg';
+  }
 
-      <style>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-        
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-        
-        @media (min-width: 1024px) {
-          .animate-slide-up {
-            animation: fade-in 0.2s ease-out;
-          }
-        }
-        
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
-        }
-      `}</style>
-    </>
+  return (
+    <FlowbiteModal
+      show={isOpen}
+      onClose={onClose}
+      size={finalSize}
+      dismissible={closeOnBackdropClick}
+    >
+      {title && (
+        <FlowbiteModalHeader>
+          {title}
+        </FlowbiteModalHeader>
+      )}
+      <FlowbiteModalBody className="max-h-[calc(100vh-200px)] overflow-y-auto">
+        {children}
+      </FlowbiteModalBody>
+      {footer && (
+        <FlowbiteModalFooter className="flex justify-end gap-3 flex-wrap">
+          {footer}
+        </FlowbiteModalFooter>
+      )}
+    </FlowbiteModal>
   );
 };
-

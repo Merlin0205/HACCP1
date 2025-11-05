@@ -12,6 +12,8 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   sendPasswordResetEmail,
   updateProfile
@@ -49,6 +51,7 @@ export function useAuth() {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
 
   /**
    * Registrace nového uživatele
@@ -106,6 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /**
    * Přihlášení přes Google
+   * Používá popup, pokud selže kvůli blokování, použije redirect jako fallback
    */
   const signInWithGoogle = async () => {
     try {
@@ -114,7 +118,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         prompt: 'select_account'
       });
       
-      const userCredential = await signInWithPopup(auth, provider);
+      let userCredential;
+      
+      try {
+        // Zkusit popup nejdřív - lepší UX
+        userCredential = await signInWithPopup(auth, provider);
+      } catch (popupError: any) {
+        // Pokud popup selže kvůli blokování, použít redirect
+        if (
+          popupError.code === 'auth/popup-blocked' ||
+          popupError.code === 'auth/popup-closed-by-user'
+        ) {
+          console.log('[Auth] Popup selhalo, používáme redirect');
+          await signInWithRedirect(auth, provider);
+          return; // Redirect odešle uživatele pryč
+        }
+        throw popupError;
+      }
       
       // Pokud uživatel neexistuje v users collection, vytvořit ho
       if (userCredential.user) {
@@ -138,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error.code === 'auth/popup-closed-by-user') {
         throw new Error('Přihlášení bylo zrušeno');
       } else if (error.code === 'auth/popup-blocked') {
-        throw new Error('Popup byl zablokován prohlížečem');
+        throw new Error('Popup byl zablokován prohlížečem. Použijte tlačítko znovu.');
       } else {
         throw new Error('Chyba při přihlášení přes Google: ' + error.message);
       }
@@ -186,6 +206,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCurrentUser(user);
       setLoading(false);
     });
+
+    // Zkontrolovat, jestli se uživatel vrací z Google redirect (fallback)
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result && result.user) {
+          // Uživatel se přihlásil přes redirect
+          toast.success('Úspěšně přihlášen přes Google!');
+          
+          // Pokud uživatel neexistuje v users collection, vytvořit ho
+          import('../services/firestore/users').then(({ fetchUserMetadata, createUserMetadata }) => {
+            fetchUserMetadata(result.user.uid).then((existingUser) => {
+              if (!existingUser) {
+                createUserMetadata(
+                  result.user.uid,
+                  result.user.email || '',
+                  result.user.displayName || 'Uživatel'
+                );
+              }
+            }).catch((err) => {
+              console.error('[Auth] Error checking/creating user metadata:', err);
+            });
+          }).catch((err) => {
+            console.error('[Auth] Error importing user service:', err);
+          });
+        }
+      })
+      .catch((error) => {
+        // Ignorovat chyby při redirect - uživatel prostě není přihlášen přes redirect
+        if (error.code !== 'auth/credential-already-in-use') {
+          // Ignorovat běžné chyby při redirect check
+          if (error.code && !error.code.includes('auth/')) {
+            console.log('[Auth] Redirect result error (ignored):', error);
+          }
+        }
+      });
 
     return unsubscribe;
   }, []);

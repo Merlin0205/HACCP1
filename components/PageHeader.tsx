@@ -20,12 +20,12 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
       <div className="flex items-start gap-4 flex-1 min-w-0">
         {/* Icon with gradient background */}
-        <div className={`
-          flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl
-          bg-gradient-to-br ${section.colors.gradient}
-          flex items-center justify-center
-          shadow-md
-        `}>
+        <div 
+          className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center shadow-md"
+          style={{
+            background: `linear-gradient(to bottom right, ${section.colors.primary}, ${section.colors.darkest})`
+          }}
+        >
           <Icon className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
         </div>
         

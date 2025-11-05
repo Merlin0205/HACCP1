@@ -1,4 +1,5 @@
 import React from 'react';
+import { Card as FlowbiteCard } from 'flowbite-react';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -17,12 +18,12 @@ export const Card: React.FC<CardProps> = ({
   const clickableClasses = onClick ? 'cursor-pointer' : '';
   
   return (
-    <div
-      className={`bg-white rounded-xl shadow-md ${hoverClasses} ${clickableClasses} ${className}`}
+    <FlowbiteCard
+      className={`${hoverClasses} ${clickableClasses} ${className}`}
       onClick={onClick}
     >
       {children}
-    </div>
+    </FlowbiteCard>
   );
 };
 
@@ -50,7 +51,7 @@ export interface CardBodyProps {
 
 export const CardBody: React.FC<CardBodyProps> = ({ children, className = '' }) => {
   return (
-    <div className={`px-6 py-4 ${className}`}>
+    <div className={`w-full px-6 py-4 ${className}`}>
       {children}
     </div>
   );
@@ -68,4 +69,3 @@ export const CardFooter: React.FC<CardFooterProps> = ({ children, className = ''
     </div>
   );
 };
-

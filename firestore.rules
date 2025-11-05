@@ -159,5 +159,19 @@ service cloud.firestore {
       allow update: if canUpdate();
       allow delete: if canDelete();
     }
+    
+    // Report Templates - schválené uživatele mohou číst, vytvářet/upravovat/mazat mohou vlastní nebo admin
+    match /reportTemplates/{templateId} {
+      allow read: if isApproved();
+      allow create: if isApproved() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isApproved() && (
+        isAdmin() || 
+        resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isApproved() && (
+        isAdmin() || 
+        resource.data.createdBy == request.auth.uid
+      );
+    }
   }
 }

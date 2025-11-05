@@ -17,6 +17,7 @@ interface SettingsScreenProps {
   onNavigateToAIUsageStats: () => void;
   onNavigateToAIPricingConfig: () => void;
   onNavigateToAIPrompts: () => void;
+  onNavigateToSmartTemplateSettings: () => void;
   onBack: () => void;
 }
 
@@ -27,7 +28,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigateToAIReportSettings, 
   onNavigateToAIUsageStats, 
   onNavigateToAIPricingConfig,
-  onNavigateToAIPrompts, 
+  onNavigateToAIPrompts,
+  onNavigateToSmartTemplateSettings,
   onBack 
 }) => {
   const { isAdmin } = useUserRole();
@@ -129,6 +131,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       color: 'bg-blue-100 text-blue-600',
       hoverColor: 'hover:bg-blue-50',
       onClick: onNavigateToAIPrompts,
+      adminOnly: false,
+    },
+    {
+      id: 'smart-templates',
+      title: 'Smart Template šablony',
+      description: 'Správa šablon pro Smart Template systém',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      color: 'bg-indigo-100 text-indigo-600',
+      hoverColor: 'hover:bg-indigo-50',
+      onClick: onNavigateToSmartTemplateSettings,
       adminOnly: false,
     },
   ];

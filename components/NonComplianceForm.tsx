@@ -163,7 +163,7 @@ const LocationDropdownWithMic: React.FC<{
                     <button 
                         onClick={toggleRecording}
                         disabled={isOtherFieldRecording || (isTranscribing && !isRecording)}
-                        className={`absolute top-1/2 -translate-y-1/2 right-2 p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                        className={`absolute top-1/2 -translate-y-1/2 right-2 p-1.5 sm:p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed z-10`}
                         title="Přepisovat hlasem"
                     >
                         {buttonIcon}
@@ -263,11 +263,11 @@ const TextAreaWithMic: React.FC<{
                 placeholder={isRecording ? "Nahrávám..." : (isTranscribing ? "Přepisuji..." : "")}
                 readOnly={isLoading || isAIRewriting || isAIGenerating}
             />
-            <div className="absolute top-8 right-2 flex items-center gap-1">
+            <div className="absolute top-8 right-2 flex items-center gap-1 z-10">
                 <button 
                     onClick={toggleRecording}
                     disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating}
-                    className={`p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                    className={`p-1.5 sm:p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
                     title="Přepisovat hlasem"
                 >
                     {buttonIcon}
@@ -276,20 +276,20 @@ const TextAreaWithMic: React.FC<{
                     <button
                         onClick={onRewrite}
                         disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
-                        className={`p-2 rounded-full text-white bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        className={`p-1.5 sm:p-2 rounded-full text-white bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
                         title="Přepiš text pomocí AI"
                     >
-                        {isAIRewriting ? <Spinner small /> : <EditIcon className="h-4 w-4" />}
+                        {isAIRewriting ? <Spinner small /> : <EditIcon className="h-3 w-3 sm:h-4 sm:w-4" />}
                     </button>
                 )}
                 {showAIIcons && onGenerate && (
                     <button
                         onClick={onGenerate}
                         disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
-                        className={`p-2 rounded-full text-white bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        className={`p-1.5 sm:p-2 rounded-full text-white bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
                         title="Vygeneruj doporučení pomocí AI"
                     >
-                        {isAIGenerating ? <Spinner small /> : <PlusIcon className="h-4 w-4" />}
+                        {isAIGenerating ? <Spinner small /> : <PlusIcon className="h-3 w-3 sm:h-4 sm:w-4" />}
                     </button>
                 )}
             </div>
@@ -391,7 +391,7 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
     };
     
     return (
-        <div className="p-4 border bg-white rounded-md shadow-sm space-y-4 relative mt-2">
+        <div className="w-full p-4 border bg-white rounded-md shadow-sm space-y-4 relative mt-2">
              <div className="flex justify-between items-center">
                 <h4 className="font-semibold text-gray-700">Detail neshody #{index + 1}</h4>
                 <button 

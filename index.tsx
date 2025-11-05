@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { ThemeModeScript } from 'flowbite-react';
 import AppWithAuth from './AppWithAuth';
 import './index.css';
 
@@ -11,6 +12,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
+    <ThemeModeScript />
     <AppWithAuth />
   </React.StrictMode>
 );
