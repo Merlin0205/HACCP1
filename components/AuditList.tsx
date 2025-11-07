@@ -5,20 +5,24 @@ import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
-import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
+import { PlusIcon, EditIcon, TrashIcon, ReportIcon, ClockIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
 import { AppState } from '../types';
 import { fetchActiveAuditTypes, AuditType } from '../services/firestore/auditTypes';
+import { toast } from '../utils/toast';
 
 interface AuditListProps {
   premiseName: string;
+  premiseId?: string; // ID pracoviště pro vytváření auditů
   audits: Audit[];
   reports: Report[];
   operators: Operator[];
   premises: Premise[];
   onSelectAudit: (auditId: string, reportId?: string) => void;
-  onPrepareNewAudit: (auditTypeId?: string) => void;
+  onPrepareNewAudit: (auditTypeId?: string) => void; // Deprecated, použijte onPrepareAudit
+  onPrepareAudit?: (premiseId: string) => void; // Nový handler pro předpřipravení
+  onStartNewAudit?: (premiseId: string) => void; // Nový handler pro vytvoření
   onDeleteAudit: (auditId: string) => void;
   onUnlockAudit: (auditId: string) => void;
   onCancelReportGeneration?: (reportId: string) => void;
@@ -32,12 +36,15 @@ type SortDirection = 'asc' | 'desc';
 
 export const AuditList: React.FC<AuditListProps> = ({ 
   premiseName, 
+  premiseId,
   audits, 
   reports,
   operators,
   premises,
   onSelectAudit, 
   onPrepareNewAudit, 
+  onPrepareAudit,
+  onStartNewAudit,
   onDeleteAudit, 
   onUnlockAudit,
   onCancelReportGeneration,
@@ -47,6 +54,8 @@ export const AuditList: React.FC<AuditListProps> = ({
 }) => {
   const [deletingAuditId, setDeletingAuditId] = useState<string | null>(null);
   const [unlockingAuditId, setUnlockingAuditId] = useState<string | null>(null);
+  const [preparingAuditPremiseId, setPreparingAuditPremiseId] = useState<string | null>(null);
+  const [startingAuditPremiseId, setStartingAuditPremiseId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AuditStatus | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('createdAt');
@@ -58,6 +67,35 @@ export const AuditList: React.FC<AuditListProps> = ({
   const [auditTypes, setAuditTypes] = useState<AuditType[]>([]);
   const [selectedAuditTypeId, setSelectedAuditTypeId] = useState<string>('');
   const [loadingTypes, setLoadingTypes] = useState(false);
+  
+  // Získat premiseId - MUSÍ být k dispozici, stejně jako premise.id v OperatorDashboard
+  const resolvedPremiseId = useMemo(() => {
+    console.log('[AuditList] Resolving premiseId:', { premiseId, audits: audits.length, premiseName, premises: premises?.length });
+    
+    // 1. Použít premiseId z props (nejspolehlivější)
+    if (premiseId) {
+      console.log('[AuditList] Using premiseId from props:', premiseId);
+      return premiseId;
+    }
+    
+    // 2. Najít z audits
+    if (audits.length > 0 && audits[0].premiseId) {
+      console.log('[AuditList] Using premiseId from audits:', audits[0].premiseId);
+      return audits[0].premiseId;
+    }
+    
+    // 3. Najít z premises pomocí premiseName
+    if (premiseName && premises && premises.length > 0) {
+      const found = premises.find(p => p.premise_name === premiseName);
+      if (found?.id) {
+        console.log('[AuditList] Found premiseId from premiseName:', found.id);
+        return found.id;
+      }
+    }
+    
+    console.error('[AuditList] Could not resolve premiseId!');
+    return null;
+  }, [premiseId, audits, premiseName, premises]);
 
   // Načíst aktivní typy auditů při otevření modalu
   useEffect(() => {
@@ -280,14 +318,36 @@ export const AuditList: React.FC<AuditListProps> = ({
         title="Audity"
         description={`Kompletní seznam auditů pro pracoviště: ${premiseName}`}
         action={
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={handleNewAuditClick}
-              leftIcon={<PlusIcon className="h-5 w-5" />}
-            >
-              Nový audit
-            </Button>
+          resolvedPremiseId ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('[AuditList] Předpřipravit clicked, premiseId:', resolvedPremiseId);
+                  setPreparingAuditPremiseId(resolvedPremiseId);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-purple-50 transition-colors text-purple-600 hover:text-purple-700 border border-purple-200"
+                title="Předpřipravit audit"
+              >
+                <ClockIcon className="h-4 w-4" />
+                <span className="text-sm font-medium">Předpřipravit audit</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('[AuditList] Začít clicked, premiseId:', resolvedPremiseId);
+                  setStartingAuditPremiseId(resolvedPremiseId);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded hover:bg-green-50 transition-colors text-green-600 hover:text-green-700 bg-green-50 border border-green-200"
+                title="Začít audit"
+              >
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+                <span className="text-sm font-medium">Začít audit</span>
+              </button>
+            </div>
+          ) : null
         }
       />
 
@@ -1098,6 +1158,64 @@ export const AuditList: React.FC<AuditListProps> = ({
             ))}
           </div>
         )}
+      </Modal>
+
+      {/* Prepare Audit Modal */}
+      <Modal
+        isOpen={!!preparingAuditPremiseId}
+        onClose={() => setPreparingAuditPremiseId(null)}
+        title="Předpřipravit audit?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPreparingAuditPremiseId(null)}>
+              Zrušit
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (preparingAuditPremiseId) {
+                  onPrepareAudit(preparingAuditPremiseId);
+                  setPreparingAuditPremiseId(null);
+                }
+              }}
+            >
+              Předpřipravit
+            </Button>
+          </>
+        }
+      >
+        <p className="text-gray-600">
+          Opravdu chcete předpřipravit audit pro toto pracoviště? Audit bude vytvořen se statusem "Nezapočatý" a bude k dispozici v seznamu nezapočatých auditů.
+        </p>
+      </Modal>
+
+      {/* Start Audit Modal */}
+      <Modal
+        isOpen={!!startingAuditPremiseId}
+        onClose={() => setStartingAuditPremiseId(null)}
+        title="Začít audit?"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setStartingAuditPremiseId(null)}>
+              Zrušit
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (startingAuditPremiseId) {
+                  onStartNewAudit(startingAuditPremiseId);
+                  setStartingAuditPremiseId(null);
+                }
+              }}
+            >
+              Začít
+            </Button>
+          </>
+        }
+      >
+        <p className="text-gray-600">
+          Opravdu chcete začít audit pro toto pracoviště? Audit bude vytvořen se statusem "Probíhá" a budete přesměrováni přímo do formuláře auditu.
+        </p>
       </Modal>
     </div>
   );

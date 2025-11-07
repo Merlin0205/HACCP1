@@ -141,6 +141,7 @@ export interface Premise {
   premise_responsible_person: string;
   premise_phone: string;
   premise_email: string;
+  auditTypeId?: string; // ID typu auditu přiřazeného k pracovišti
 }
 
 // Zpětná kompatibilita - deprecated, použijte Operator

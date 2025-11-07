@@ -383,6 +383,175 @@ const App: React.FC = () => {
     setAppState(previousAppState);
   };
 
+  const handleStartNewAudit = async (premiseId: string) => {
+    try {
+      const premise = premises.find(p => p.id === premiseId);
+      const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
+      
+      if (!premise || !operator) {
+        toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
+        return;
+      }
+
+      // Načíst strukturu podle typu auditu z premise
+      let structureToUse = auditStructure;
+      let auditTypeIdToUse: string | undefined = premise.auditTypeId;
+      
+      if (auditTypeIdToUse) {
+        try {
+          const { fetchAuditType } = await import('./services/firestore/auditTypes');
+          const auditType = await fetchAuditType(auditTypeIdToUse);
+          if (auditType) {
+            structureToUse = auditType.auditStructure;
+          }
+        } catch (error) {
+          console.error('[handleStartNewAudit] Error loading audit type:', error);
+          toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
+        }
+      }
+
+      // Načíst aktuální údaje auditora z Firestore
+      const auditorInfo = await fetchAuditorInfo();
+
+      const prefilledHeaderValues: AuditHeaderValues = {
+        premise_name: premise.premise_name || '',
+        premise_address: premise.premise_address || '',
+        premise_responsible_person: premise.premise_responsible_person || '',
+        premise_phone: premise.premise_phone || '',
+        premise_email: premise.premise_email || '',
+        operator_name: operator.operator_name || '',
+        operator_address: operator.operator_address || '',
+        operator_ico: operator.operator_ico || '',
+        operator_statutory_body: operator.operator_statutory_body || '',
+        operator_phone: operator.operator_phone || '',
+        operator_email: operator.operator_email || '',
+        auditor_name: auditorInfo.name,
+        auditor_phone: auditorInfo.phone,
+        auditor_email: auditorInfo.email,
+        auditor_web: auditorInfo.web,
+      };
+
+      // Vytvořit audit s statusem IN_PROGRESS
+      const newAuditData: Omit<Audit, 'id'> = {
+        premiseId: premiseId,
+        status: AuditStatus.IN_PROGRESS,
+        createdAt: new Date().toISOString(),
+        headerValues: prefilledHeaderValues,
+        answers: {},
+        auditTypeId: auditTypeIdToUse,
+      };
+
+      const auditId = await createAudit({ ...newAuditData, id: `audit_${Date.now()}` });
+      const newAudit: Audit = { ...newAuditData, id: auditId };
+      
+      // Aktualizovat lokální state
+      setAudits(prev => [...prev, newAudit]);
+      
+      // Nastavit aktivní audit a premise
+      setActiveAuditId(auditId);
+      setActivePremiseId(premiseId);
+      
+      // Nastavit strukturu pro AuditChecklist
+      setAuditStructureState(structureToUse);
+      
+      // Vytvořit tab pro audit pokud je aktivní tab typu audit_list
+      if (activeTabId && tabs.length > 0) {
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (activeTab?.type === 'audit_list' && activeTab.premiseId === premiseId) {
+          const newTab: Tab = {
+            id: `tab_${Date.now()}_${auditId}`,
+            type: 'audit',
+            auditId: auditId,
+            operatorName: operator.operator_name,
+            premiseId: premiseId,
+            createdAt: new Date().toISOString(),
+          };
+          setTabs(prev => [...prev, newTab]);
+          setActiveTabId(newTab.id);
+        }
+      }
+      
+      // Přeskočit HEADER_FORM a jít rovnou do AUDIT_IN_PROGRESS
+      setAppState(AppState.AUDIT_IN_PROGRESS);
+      
+      toast.success('Audit byl vytvořen a můžete začít vyplňovat.');
+    } catch (error) {
+      console.error('[handleStartNewAudit] Error:', error);
+      toast.error('Chyba při vytváření auditu.');
+    }
+  };
+
+  const handlePrepareAudit = async (premiseId: string) => {
+    try {
+      const premise = premises.find(p => p.id === premiseId);
+      const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
+      
+      if (!premise || !operator) {
+        toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
+        return;
+      }
+
+      // Načíst strukturu podle typu auditu z premise
+      let structureToUse = auditStructure;
+      let auditTypeIdToUse: string | undefined = premise.auditTypeId;
+      
+      if (auditTypeIdToUse) {
+        try {
+          const { fetchAuditType } = await import('./services/firestore/auditTypes');
+          const auditType = await fetchAuditType(auditTypeIdToUse);
+          if (auditType) {
+            structureToUse = auditType.auditStructure;
+          }
+        } catch (error) {
+          console.error('[handlePrepareAudit] Error loading audit type:', error);
+          toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
+        }
+      }
+
+      // Načíst aktuální údaje auditora z Firestore
+      const auditorInfo = await fetchAuditorInfo();
+
+      const prefilledHeaderValues: AuditHeaderValues = {
+        premise_name: premise.premise_name || '',
+        premise_address: premise.premise_address || '',
+        premise_responsible_person: premise.premise_responsible_person || '',
+        premise_phone: premise.premise_phone || '',
+        premise_email: premise.premise_email || '',
+        operator_name: operator.operator_name || '',
+        operator_address: operator.operator_address || '',
+        operator_ico: operator.operator_ico || '',
+        operator_statutory_body: operator.operator_statutory_body || '',
+        operator_phone: operator.operator_phone || '',
+        operator_email: operator.operator_email || '',
+        auditor_name: auditorInfo.name,
+        auditor_phone: auditorInfo.phone,
+        auditor_email: auditorInfo.email,
+        auditor_web: auditorInfo.web,
+      };
+
+      // Vytvořit audit s statusem DRAFT (Nezapočatý)
+      const newAuditData: Omit<Audit, 'id'> = {
+        premiseId: premiseId,
+        status: AuditStatus.DRAFT,
+        createdAt: new Date().toISOString(),
+        headerValues: prefilledHeaderValues,
+        answers: {},
+        auditTypeId: auditTypeIdToUse,
+      };
+
+      const auditId = await createAudit({ ...newAuditData, id: `audit_${Date.now()}` });
+      const newAudit: Audit = { ...newAuditData, id: auditId };
+      
+      // Aktualizovat lokální state
+      setAudits(prev => [...prev, newAudit]);
+      
+      toast.success('Audit byl předpřipraven a je k dispozici v seznamu nezapočatých auditů.');
+    } catch (error) {
+      console.error('[handlePrepareAudit] Error:', error);
+      toast.error('Chyba při předpřipravení auditu.');
+    }
+  };
+
   const handlePrepareNewAudit = async (auditTypeId?: string) => {
     // Pokud je aktivní tab typu audit_list, použít premiseId z tabu
     let premiseIdToUse = activePremiseId;
@@ -406,12 +575,14 @@ const App: React.FC = () => {
       return;
     }
 
-    // Načíst strukturu podle typu auditu
+    // Načíst strukturu podle typu auditu - použít auditTypeId z premise pokud existuje, jinak použít předaný parametr
     let structureToUse = auditStructure;
-    if (auditTypeId) {
+    const auditTypeIdToUse = activePremise.auditTypeId || auditTypeId;
+    
+    if (auditTypeIdToUse) {
       try {
         const { fetchAuditType } = await import('./services/firestore/auditTypes');
-        const auditType = await fetchAuditType(auditTypeId);
+        const auditType = await fetchAuditType(auditTypeIdToUse);
         if (auditType) {
           structureToUse = auditType.auditStructure;
         }
@@ -419,6 +590,10 @@ const App: React.FC = () => {
         console.error('[handlePrepareNewAudit] Error loading audit type:', error);
         toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
       }
+    } else {
+      // Pokud premise nemá auditTypeId a není předán parametr, zobrazit modal pro výběr
+      // Toto se stane jen u starých premises bez auditTypeId
+      // Prozatím použijeme výchozí strukturu, ale v budoucnu můžeme zobrazit modal
     }
 
     // Načíst aktuální údaje auditora z Firestore
@@ -445,9 +620,9 @@ const App: React.FC = () => {
     setActiveAuditId(null);
     setPendingHeader(prefilledHeaderValues);
     // Uložit auditTypeId do state pro pozdější vytvoření auditu
-    if (auditTypeId) {
+    if (auditTypeIdToUse) {
       // Uložit do sessionStorage nebo do state
-      sessionStorage.setItem('pendingAuditTypeId', auditTypeId);
+      sessionStorage.setItem('pendingAuditTypeId', auditTypeIdToUse);
     }
     // Pokud je aktivní tab, nastavit také activePremiseId pro HEADER_FORM
     if (premiseIdToUse) {
@@ -670,10 +845,16 @@ const App: React.FC = () => {
   const createNewAudit = (headerValues: AuditHeaderValues, status: AuditStatus): Audit => {
     if (!activePremiseId) throw new Error("Premise ID is missing");
     
-    // Získat auditTypeId z sessionStorage pokud existuje
-    const auditTypeId = sessionStorage.getItem('pendingAuditTypeId') || undefined;
-    if (auditTypeId) {
-      sessionStorage.removeItem('pendingAuditTypeId');
+    // Získat auditTypeId z premise pokud existuje, jinak z sessionStorage
+    const premise = premises.find(p => p.id === activePremiseId);
+    let auditTypeId: string | undefined = premise?.auditTypeId;
+    
+    if (!auditTypeId) {
+      // Fallback na sessionStorage pro staré flow
+      auditTypeId = sessionStorage.getItem('pendingAuditTypeId') || undefined;
+      if (auditTypeId) {
+        sessionStorage.removeItem('pendingAuditTypeId');
+      }
     }
     
     return {
@@ -1116,12 +1297,20 @@ const App: React.FC = () => {
           const premiseAudits = audits.filter(a => a.premiseId === activeTab.premiseId);
           return <AuditList
             premiseName={activePremise?.premise_name || ''}
+            premiseId={activeTab.premiseId}
             audits={premiseAudits}
             reports={reports.filter(r => premiseAudits.some(a => a.id === r.auditId))}
+            operators={operators}
+            premises={premises}
             onSelectAudit={handleSelectAudit}
             onPrepareNewAudit={handlePrepareNewAudit}
+            onPrepareAudit={handlePrepareAudit}
+            onStartNewAudit={handleStartNewAudit}
             onDeleteAudit={handleDeleteAudit}
             onUnlockAudit={handleUnlockAudit}
+            onCancelReportGeneration={handleCancelReportGeneration}
+            onDeleteReportVersion={handleDeleteReportVersion}
+            onSetReportAsLatest={handleSetReportAsLatest}
             onBack={handleBackToAuditList}
           />;
         } else if (activeTab.type === 'report' && activeAudit) {
@@ -1158,6 +1347,7 @@ const App: React.FC = () => {
         return <OperatorDashboard 
           operators={operators} 
           premises={premises}
+          audits={audits}
           onSelectPremise={handleSelectPremiseForAudits} 
           onAddNewOperator={handleAddNewOperator} 
           onEditOperator={handleEditOperator} 
@@ -1165,6 +1355,8 @@ const App: React.FC = () => {
           onAddPremise={handleAddPremise}
           onEditPremise={handleEditPremise}
           onDeletePremise={handleDeletePremise}
+          onStartNewAudit={handleStartNewAudit}
+          onPrepareAudit={handlePrepareAudit}
         />;
       case AppState.ADD_OPERATOR:
       case AppState.EDIT_OPERATOR:
@@ -1182,12 +1374,15 @@ const App: React.FC = () => {
         const premiseAudits = audits.filter(a => a.premiseId === activePremiseId);
         return <AuditList
           premiseName={activePremise?.premise_name || ''}
+          premiseId={activePremiseId}
           audits={premiseAudits}
           reports={reports.filter(r => premiseAudits.some(a => a.id === r.auditId))}
           operators={operators}
           premises={premises}
           onSelectAudit={handleSelectAudit}
           onPrepareNewAudit={handlePrepareNewAudit}
+          onPrepareAudit={handlePrepareAudit}
+          onStartNewAudit={handleStartNewAudit}
           onDeleteAudit={handleDeleteAudit}
           onUnlockAudit={handleUnlockAudit}
           onCancelReportGeneration={handleCancelReportGeneration}
@@ -1310,6 +1505,7 @@ const App: React.FC = () => {
         return <OperatorDashboard 
           operators={operators} 
           premises={premises}
+          audits={audits}
           onSelectPremise={handleSelectPremiseForAudits} 
           onAddNewOperator={handleAddNewOperator} 
           onEditOperator={handleEditOperator} 
@@ -1317,6 +1513,8 @@ const App: React.FC = () => {
           onAddPremise={handleAddPremise}
           onEditPremise={handleEditPremise}
           onDeletePremise={handleDeletePremise}
+          onStartNewAudit={handleStartNewAudit}
+          onPrepareAudit={handlePrepareAudit}
         />;
     }
   };

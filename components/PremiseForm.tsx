@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Premise } from '../types';
 import { Card, CardBody } from './ui/Card';
-import { TextField } from './ui/Input';
+import { TextField, Select } from './ui/Input';
 import { Button } from './ui/Button';
 import { BackIcon } from './icons';
+import { fetchActiveAuditTypes } from '../services/firestore/auditTypes';
 
 type PremiseData = Omit<Premise, 'id'>;
 
@@ -14,6 +15,11 @@ interface PremiseFormProps {
   onBack: () => void;
 }
 
+interface AuditTypeOption {
+  value: string;
+  label: string;
+}
+
 export const PremiseForm: React.FC<PremiseFormProps> = ({ initialData, operatorId, onSave, onBack }) => {
   const defaultPremiseData: PremiseData = {
     operatorId: operatorId,
@@ -21,11 +27,33 @@ export const PremiseForm: React.FC<PremiseFormProps> = ({ initialData, operatorI
     premise_address: '',
     premise_responsible_person: '',
     premise_phone: '',
-    premise_email: ''
+    premise_email: '',
+    auditTypeId: ''
   };
 
   const [premiseData, setPremiseData] = useState<PremiseData>(defaultPremiseData);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [auditTypes, setAuditTypes] = useState<AuditTypeOption[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState(false);
+
+  // Načíst aktivní typy auditů
+  useEffect(() => {
+    const loadAuditTypes = async () => {
+      try {
+        setLoadingTypes(true);
+        const types = await fetchActiveAuditTypes();
+        setAuditTypes(types.map(type => ({
+          value: type.id,
+          label: type.name
+        })));
+      } catch (error) {
+        console.error('[PremiseForm] Error loading audit types:', error);
+      } finally {
+        setLoadingTypes(false);
+      }
+    };
+    loadAuditTypes();
+  }, []);
 
   useEffect(() => {
     if (initialData) {
@@ -41,8 +69,19 @@ export const PremiseForm: React.FC<PremiseFormProps> = ({ initialData, operatorI
     setPremiseData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPremiseData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validace - auditTypeId je povinné
+    if (!premiseData.auditTypeId) {
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
       await onSave(premiseData);
@@ -109,6 +148,18 @@ export const PremiseForm: React.FC<PremiseFormProps> = ({ initialData, operatorI
                   type="email"
                   value={premiseData.premise_email || ''}
                   onChange={handleChange}
+                />
+                <Select
+                  label="Typ auditu"
+                  name="auditTypeId"
+                  value={premiseData.auditTypeId || ''}
+                  onChange={handleSelectChange}
+                  options={[
+                    { value: '', label: loadingTypes ? 'Načítání...' : 'Vyberte typ auditu' },
+                    ...auditTypes
+                  ]}
+                  required
+                  error={!premiseData.auditTypeId ? 'Typ auditu je povinný' : undefined}
                 />
               </div>
             </div>
