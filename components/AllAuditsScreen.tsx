@@ -9,6 +9,7 @@ import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
 import { AppState } from '../types';
+import { Pagination } from './ui/Pagination';
 
 interface AllAuditsScreenProps {
   audits: Audit[];
@@ -55,6 +56,8 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   const [expandedAudits, setExpandedAudits] = useState<Set<string>>(new Set());
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
   const [settingLatestReportId, setSettingLatestReportId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const formatDate = (dateString?: string): string => {
     if (!dateString) return '-';
@@ -211,6 +214,11 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
     return filtered;
   }, [audits, operators, premises, searchQuery, statusFilter, sortField, sortDirection]);
 
+  const paginatedAudits = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedAudits.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedAudits, currentPage, itemsPerPage]);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -306,9 +314,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
       </Card>
 
       {/* Table - Desktop */}
-      <Card className="overflow-hidden hidden md:block">
-        <CardBody className="p-0 overflow-x-auto">
-          <table className="w-full">
+      <Card className="hidden md:block">
+        <CardBody className="p-0">
+          <div className="min-w-[900px] xl:min-w-0 overflow-x-auto xl:overflow-x-visible overflow-y-visible">
+            <table className="w-full">
             <thead 
               style={{
                 background: `linear-gradient(to right, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.primary}, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.darkest})`
@@ -316,7 +325,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
             >
               <tr>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
                   onClick={() => handleSort('operator')}
                 >
                   <div className="flex items-center gap-2">
@@ -325,7 +334,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('premise')}
                 >
                   <div className="flex items-center gap-2">
@@ -334,7 +343,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('status')}
                 >
                   <div className="flex items-center gap-2">
@@ -343,7 +352,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('createdAt')}
                 >
                   <div className="flex items-center gap-2">
@@ -352,7 +361,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('completedAt')}
                 >
                   <div className="flex items-center gap-2">
@@ -360,10 +369,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                     <SortIcon field="completedAt" />
                   </div>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Report
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
+                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
                   Akce
                 </th>
               </tr>
@@ -384,13 +393,13 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredAndSortedAudits.map((audit, index) => {
+                paginatedAudits.map((audit, index) => {
                   const premise = premises.find(p => p.id === audit.premiseId);
                   const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
                   const reportVersions = getAuditReportVersions(audit.id);
                   const hasMultipleVersions = reportVersions.length > 1;
                   const isExpanded = expandedAudits.has(audit.id);
-                  const isLastRow = index === filteredAndSortedAudits.length - 1;
+                  const isLastRow = index === paginatedAudits.length - 1;
 
                   return (
                     <React.Fragment key={audit.id}>
@@ -398,7 +407,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                         className="hover:bg-primary-light/5 transition-colors cursor-pointer"
                         onClick={() => onSelectAudit(audit.id)}
                       >
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
                         <div className="relative group">
                           <div className="text-sm font-medium text-gray-900 cursor-help">
                             {operator?.operator_name || '-'}
@@ -439,7 +448,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
                         <div className="relative group">
                           <div className="text-sm text-gray-900 cursor-help">
                             {premise?.premise_name || '-'}
@@ -480,23 +489,23 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
                         {getStatusBadge(audit.status)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
                           {formatDate(audit.createdAt)}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
                           {audit.completedAt ? formatDate(audit.completedAt) : '-'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
                         {getReportBadge(audit.id)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2">
                           {/* Pokračovat v auditu nebo Zobrazit report */}
                           {isCompleted(audit.status) ? (
@@ -744,6 +753,17 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
               )}
             </tbody>
           </table>
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredAndSortedAudits.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </CardBody>
       </Card>
 

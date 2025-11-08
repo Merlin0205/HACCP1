@@ -199,6 +199,25 @@ Každá sekce má vlastní barevný motiv:
 - Zavření tabu (X ikona)
 - Kliknutí na tab aktivuje ho
 
+**Logika vytváření tabů:**
+- Centrální funkce `openOrActivateTab()` v `App.tsx`
+- Pokud existuje tab pro stejný audit/premise → aktivuje se existující tab
+- Pokud existuje tab s jiným typem → aktualizuje se typ tabu
+- Pokud tab neexistuje → vytvoří se nový tab
+
+**Formát názvů tabů:**
+- `audit_list`: "Audity ([Název pracoviště])"
+- `audit`: "Audit ([Název provozovatele])"
+- `report`: "Report ([Název provozovatele])"
+
+**Tooltips:**
+- Každý tab má `title` atribut s detaily (provozovatel, pracoviště, datum, status)
+
+**"Zpět" navigace:**
+- Pokud je aktivní `audit_list` tab → vrací na předchozí view (OPERATOR_DASHBOARD)
+- Pokud je aktivní `audit` nebo `report` tab → vrací na AUDIT_LIST pro dané pracoviště
+- Pokud nejsou taby → vrací na předchozí appState
+
 #### MobileMenu (`MobileMenu.tsx`)
 **Funkce:**
 - Full-screen overlay na mobilu

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, ChangeEvent, useEffect } from 'react';
+import React, { useState, useCallback, ChangeEvent, useEffect, useRef } from 'react';
 import { PhotoWithAnalysis, NonComplianceData } from '../types';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import ImagePreview from './ImagePreview';
@@ -11,16 +11,9 @@ import { EditIcon, PlusIcon } from './icons';
 import { getNonComplianceLocations, addNonComplianceLocation, findBestMatchLocation } from '../services/firestore';
 import { toast } from '../utils/toast';
 import { rewriteFinding, generateRecommendation } from '../services/nonComplianceAI';
-
-
-const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = error => reject(error);
-    });
-};
+import { compressImage } from '../utils/imageCompression';
+import { uploadAuditPhoto } from '../services/storage';
+import { fileToBase64 } from '../services/storage';
 
 interface NonComplianceFormProps {
     data: NonComplianceData;
@@ -32,6 +25,7 @@ interface NonComplianceFormProps {
     itemTitle?: string;
     itemDescription?: string;
     sectionTitle?: string;
+    auditId?: string; // ID auditu pro upload fotek na Storage
 }
 
 /**
@@ -307,7 +301,8 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
     onLocationSave,
     itemTitle,
     itemDescription,
-    sectionTitle
+    sectionTitle,
+    auditId
 }) => {
     const [isLocationRecording, setIsLocationRecording] = useState(false);
     const [isFindingRecording, setIsFindingRecording] = useState(false);
@@ -315,6 +310,10 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
     const [pendingLocation, setPendingLocation] = useState<string | null>(null); // Nové místo čekající na uložení
     const [isAIRewriting, setIsAIRewriting] = useState(false);
     const [isAIGenerating, setIsAIGenerating] = useState(false);
+    
+    // Refs pro file inputy
+    const galleryInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
 
     const handleRewriteFinding = async () => {
         if (!data.finding || !itemTitle || !sectionTitle) {
@@ -366,23 +365,95 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
         }
     };
 
-    const handlePhotoChange = async (e: ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            const files = Array.from(e.target.files);
-            const newPhotos: PhotoWithAnalysis[] = [...data.photos];
-            for (const file of files) {
-                try {
-                    const base64 = await fileToBase64(file);
-                    newPhotos.push({ file, base64 });
-                } catch (error) {
-                    console.error("Error converting file to base64:", error);
+    const handlePhotoChange = async (files: FileList | null, source: 'gallery' | 'camera') => {
+        if (!files || files.length === 0) return;
+        
+        if (!auditId) {
+            toast.error('Chybí ID auditu pro upload fotek');
+            return;
+        }
+
+        const fileArray = Array.from(files);
+        
+        for (let i = 0; i < fileArray.length; i++) {
+            const file = fileArray[i];
+            const photoIndex = data.photos.length + i;
+            
+            try {
+                // Vytvořit placeholder pro loading state
+                const placeholderPhoto: PhotoWithAnalysis = {
+                    file,
+                    isUploading: true
+                };
+                const currentPhotos = data.photos;
+                onChange('photos', [...currentPhotos, placeholderPhoto]);
+                
+                // Komprimovat obrázek
+                log(`Komprimuji fotku ${i + 1}/${fileArray.length}...`);
+                const compressedFile = await compressImage(file);
+                
+                // Upload na Storage
+                log(`Nahrávám fotku ${i + 1}/${fileArray.length} na Storage...`);
+                const { url, storagePath } = await uploadAuditPhoto(auditId, compressedFile, photoIndex);
+                
+                // Vytvořit base64 pro preview (volitelné, pro rychlejší zobrazení)
+                const base64 = await fileToBase64(compressedFile);
+                
+                // Aktualizovat placeholder s reálnými daty
+                const uploadedPhoto: PhotoWithAnalysis = {
+                    storagePath,
+                    url,
+                    base64: base64.split(',')[1], // Odstranit data:image/jpeg;base64, prefix
+                    isUploading: false
+                    // file je odstraněn - nelze ukládat do Firestore
+                };
+                
+                // Najít a nahradit placeholder v aktuálních fotkách
+                const updatedPhotos = [...data.photos];
+                const placeholderIndex = updatedPhotos.findIndex(p => p.isUploading && p.file === file);
+                if (placeholderIndex !== -1) {
+                    updatedPhotos[placeholderIndex] = uploadedPhoto;
+                } else {
+                    updatedPhotos.push(uploadedPhoto);
                 }
+                
+                onChange('photos', updatedPhotos);
+                log(`Fotka ${i + 1}/${fileArray.length} úspěšně nahrána`);
+            } catch (error: any) {
+                console.error(`Error processing photo ${i + 1}:`, error);
+                toast.error(`Chyba při nahrávání fotky ${i + 1}: ${error.message || 'Neznámá chyba'}`);
+                log(`Chyba při nahrávání fotky ${i + 1}: ${error.message}`);
+                
+                // Odstranit placeholder při chybě
+                const updatedPhotos = data.photos.filter(p => !(p.isUploading && p.file === file));
+                onChange('photos', updatedPhotos);
             }
-            onChange('photos', newPhotos);
         }
     };
     
-    const removePhoto = (photoIndex: number) => {
+    const handleGalleryClick = () => {
+        galleryInputRef.current?.click();
+    };
+    
+    const handleCameraClick = () => {
+        cameraInputRef.current?.click();
+    };
+    
+    const removePhoto = async (photoIndex: number) => {
+        const photo = data.photos[photoIndex];
+        
+        // Pokud má fotka storagePath, smazat ji ze Storage
+        if (photo.storagePath) {
+            try {
+                const { deleteAuditPhoto } = await import('../services/storage');
+                await deleteAuditPhoto(photo.storagePath);
+                log(`Fotka smazána ze Storage`);
+            } catch (error: any) {
+                console.error('[NonComplianceForm] Error deleting photo from Storage:', error);
+                toast.error('Chyba při mazání fotky ze Storage');
+            }
+        }
+        
         onChange('photos', data.photos.filter((_, i) => i !== photoIndex));
     };
 
@@ -438,11 +509,44 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
             />
 
             <div>
-                <label className="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors">
-                    <CameraIcon />
-                    <span className="ml-3 font-medium text-gray-600">Přidat fotky</span>
-                    <input type="file" accept="image/*" multiple onChange={handlePhotoChange} className="hidden" />
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fotky</label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    {/* Tlačítko pro galerii */}
+                    <button
+                        type="button"
+                        onClick={handleGalleryClick}
+                        className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors flex-1"
+                    >
+                        <CameraIcon />
+                        <span className="ml-3 font-medium text-gray-600">Vybrat z galerie</span>
+                    </button>
+                    <input
+                        ref={galleryInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => handlePhotoChange(e.target.files, 'gallery')}
+                        className="hidden"
+                    />
+                    
+                    {/* Tlačítko pro fotoaparát */}
+                    <button
+                        type="button"
+                        onClick={handleCameraClick}
+                        className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-green-400 transition-colors flex-1"
+                    >
+                        <CameraIcon />
+                        <span className="ml-3 font-medium text-gray-600">Vyfotit</span>
+                    </button>
+                    <input
+                        ref={cameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => handlePhotoChange(e.target.files, 'camera')}
+                        className="hidden"
+                    />
+                </div>
                 <ImagePreview photos={data.photos} onRemove={removePhoto} onAnalyze={handleAnalyzePhoto} />
             </div>
         </div>

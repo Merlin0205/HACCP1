@@ -12,6 +12,7 @@ import {
   listAll
 } from 'firebase/storage';
 import { storage, auth } from '../firebaseConfig';
+import { generatePhotoFilename } from '../utils/photoIdGenerator';
 
 /**
  * Získá aktuálního uživatele
@@ -29,7 +30,7 @@ function getCurrentUserId(): string {
  * 
  * @param auditId ID auditu
  * @param file Soubor k nahrání
- * @param index Index fotky (pro unikátní název)
+ * @param index Index fotky (nepoužívá se, zachován pro kompatibilitu)
  * @returns URL a storage path
  */
 export async function uploadAuditPhoto(
@@ -38,8 +39,10 @@ export async function uploadAuditPhoto(
   index: number
 ): Promise<{ url: string; storagePath: string }> {
   const userId = getCurrentUserId();
-  const timestamp = Date.now();
-  const fileName = `photo_${index}_${timestamp}.${file.name.split('.').pop()}`;
+  
+  // Generovat human-readable název fotky (formát: F{YYYYMMDD}_{COUNTER}.{ext})
+  const fileExtension = file.name.split('.').pop() || 'jpg';
+  const fileName = await generatePhotoFilename(auditId, fileExtension);
   const storagePath = `users/${userId}/audits/${auditId}/${fileName}`;
   
   const storageRef = ref(storage, storagePath);

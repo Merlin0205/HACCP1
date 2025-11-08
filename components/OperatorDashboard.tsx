@@ -8,6 +8,7 @@ import { PlusIcon, EditIcon, TrashIcon, ChevronDownIcon, ClockIcon } from './ico
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
 import { AppState } from '../types';
+import { Pagination } from './ui/Pagination';
 
 interface OperatorDashboardProps {
   operators: Operator[];
@@ -49,6 +50,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [expandedOperatorIds, setExpandedOperatorIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const premisesByOperator = useMemo(() => {
     const map = new Map<string, Premise[]>();
@@ -114,6 +117,11 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     return filtered;
   }, [operators, premisesByOperator, searchQuery, sortField, sortDirection]);
+
+  const paginatedOperators = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredAndSortedOperators.slice(start, start + itemsPerPage);
+  }, [filteredAndSortedOperators, currentPage, itemsPerPage]);
 
   const toggleOperator = (operatorId: string) => {
     setExpandedOperatorIds(prev => {
@@ -242,9 +250,10 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       </Card>
 
       {/* Table - Desktop */}
-      <Card className="overflow-hidden hidden md:block">
-        <CardBody className="p-0 overflow-hidden">
-          <table className="w-full table-auto">
+      <Card className="hidden md:block">
+        <CardBody className="p-0">
+          <div className="min-w-[900px] xl:min-w-0 overflow-x-auto xl:overflow-x-visible overflow-y-visible">
+            <table className="w-full table-auto">
             <thead 
               style={{
                 background: `linear-gradient(to right, ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.primary}, ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.darkest})`
@@ -252,7 +261,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             >
               <tr>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
                   onClick={() => handleSort('name')}
                 >
                   <div className="flex items-center gap-2">
@@ -261,7 +270,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('ico')}
                 >
                   <div className="flex items-center gap-2">
@@ -270,7 +279,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('address')}
                 >
                   <div className="flex items-center gap-2">
@@ -279,7 +288,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('premises')}
                 >
                   <div className="flex items-center gap-2">
@@ -287,16 +296,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     <SortIcon field="premises" />
                   </div>
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   KONTAKT
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
+                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
                   AKCE
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {filteredAndSortedOperators.length === 0 ? (
+              {paginatedOperators.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center">
@@ -311,15 +320,15 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredAndSortedOperators.map((operator, index) => {
+                paginatedOperators.map((operator, index) => {
                   const operatorPremises = premisesByOperator.get(operator.id) || [];
                   const isExpanded = expandedOperatorIds.has(operator.id);
-                  const isLastRow = index === filteredAndSortedOperators.length - 1;
+                  const isLastRow = index === paginatedOperators.length - 1;
 
                   return (
                     <Fragment key={operator.id}>
                       <tr className="hover:bg-primary-light/5 transition-colors">
-                        <td className="px-6 py-4">
+                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4">
                           <div className="text-sm font-medium text-gray-900">
                             <div className="relative group inline-block">
                               <span className="cursor-help">{operator.operator_name || '-'}</span>
@@ -362,15 +371,15 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-600">
                           {operator.operator_ico || '-'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs">
+                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-600 max-w-xs">
                           <div className="truncate" title={operator.operator_address || ''}>
                             {operator.operator_address || '-'}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4">
                           {operatorPremises.length > 0 ? (
                             <button
                               onClick={(e) => {
@@ -397,7 +406,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-600">
                           <div className="flex flex-col gap-1">
                             {operator.operator_phone && (
                               <div className="flex items-center gap-1">
@@ -418,7 +427,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             {!operator.operator_phone && !operator.operator_email && <span>-</span>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={(e) => {
@@ -471,7 +480,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               const isLastPremise = premiseIndex === operatorPremises.length - 1 && isLastRow;
                               return (
                                 <tr key={premise.id} className="bg-white hover:bg-primary-light/10 transition-all duration-200 border-t border-gray-200/50">
-                                  <td className="px-6 py-4 pl-12" colSpan={2}>
+                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 pl-12" colSpan={2}>
                                     <div className="flex items-start gap-3">
                                       <div className="w-1 h-10 bg-gradient-to-b from-primary-light to-primary-dark rounded-full flex-shrink-0 mt-0.5"></div>
                                       <div className="relative group flex-1 min-w-0">
@@ -520,7 +529,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-6 py-4" colSpan={2}>
+                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4" colSpan={2}>
                                     {(() => {
                                       const metrics = getPremiseMetrics(premise.id);
                                       return (
@@ -605,7 +614,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                       );
                                     })()}
                                   </td>
-                                  <td className="px-6 py-4 text-sm text-gray-800">
+                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-800">
                                     <div className="flex flex-col gap-1.5">
                                       {premise.premise_phone && (
                                         <div className="flex items-center gap-2">
@@ -626,17 +635,17 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                       {!premise.premise_phone && !premise.premise_email && <span className="text-gray-400">-</span>}
                                     </div>
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right">
                                     <div className="flex items-center justify-end gap-1">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setPreparingAuditPremiseId(premise.id);
                                         }}
-                                        className="p-1 rounded hover:bg-purple-50 transition-colors text-purple-600 hover:text-purple-700 relative group"
+                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-purple-50 transition-colors text-purple-600 hover:text-purple-700 relative group"
                                         title="Předpřipravit audit"
                                       >
-                                        <ClockIcon className="h-4 w-4" />
+                                        <ClockIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
                                         {/* Tooltip */}
                                         <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                                           Předpřipravit audit
@@ -648,10 +657,10 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           e.stopPropagation();
                                           setStartingAuditPremiseId(premise.id);
                                         }}
-                                        className="p-1 rounded hover:bg-green-50 transition-colors text-green-600 hover:text-green-700 relative group"
+                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-green-50 transition-colors text-green-600 hover:text-green-700 relative group"
                                         title="Začít audit"
                                       >
-                                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <svg className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" fill="currentColor" viewBox="0 0 24 24">
                                           <path d="M8 5v14l11-7z"/>
                                         </svg>
                                         {/* Tooltip */}
@@ -665,10 +674,10 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           e.stopPropagation();
                                           onSelectPremise(premise.id);
                                         }}
-                                        className="p-1 rounded hover:bg-emerald-50 transition-colors text-emerald-600 hover:text-emerald-700"
+                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-emerald-50 transition-colors text-emerald-600 hover:text-emerald-700"
                                         title="Zobrazit audity"
                                       >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                         </svg>
                                       </button>
@@ -677,20 +686,20 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           e.stopPropagation();
                                           onEditPremise(premise.id);
                                         }}
-                                        className="p-1 rounded hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
+                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
                                         title="Upravit pracoviště"
                                       >
-                                        <EditIcon className="h-4 w-4" />
+                                        <EditIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
                                       </button>
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setDeletingPremiseId(premise.id);
                                         }}
-                                        className="p-1 rounded hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
+                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
                                         title="Smazat pracoviště"
                                       >
-                                        <TrashIcon className="h-4 w-4" />
+                                        <TrashIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
                                       </button>
                                     </div>
                                   </td>
@@ -706,6 +715,17 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               )}
             </tbody>
           </table>
+          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredAndSortedOperators.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(items) => {
+              setItemsPerPage(items);
+              setCurrentPage(1);
+            }}
+          />
         </CardBody>
       </Card>
 

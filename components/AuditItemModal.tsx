@@ -13,9 +13,10 @@ interface AuditItemModalProps {
   onAnswerUpdate: (itemId: string, answer: AuditAnswer) => void;
   log: (message: string) => void;
   auditStructure?: AuditStructure;
+  auditId?: string; // ID auditu pro upload fotek na Storage
 }
 
-export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate, log, auditStructure }) => {
+export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, onClose, onAnswerUpdate, log, auditStructure, auditId }) => {
   if (!item) return null;
 
   // Najít sectionTitle podle item.id
@@ -145,6 +146,7 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                     itemTitle={item.title}
                     itemDescription={item.description}
                     sectionTitle={sectionTitle}
+                    auditId={auditId}
                   />
                 </CardBody>
               </Card>

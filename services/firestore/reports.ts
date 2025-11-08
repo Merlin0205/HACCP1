@@ -8,6 +8,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -19,6 +20,7 @@ import {
 import { db, auth } from '../../firebaseConfig';
 import { Report } from '../../types';
 import { fetchUserMetadata } from './users';
+import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'reports';
 
@@ -213,8 +215,14 @@ export async function createReport(reportData: Omit<Report, 'id'>): Promise<stri
     await batch.commit();
   }
   
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+  // Generovat human-readable ID (formát: R{YYYYMMDD}_{COUNTER})
+  const reportId = await generateHumanReadableId('R', COLLECTION_NAME);
+  const docRef = doc(db, COLLECTION_NAME, reportId);
+  
+  // Použít setDoc s explicitním ID místo addDoc
+  await setDoc(docRef, {
     ...reportData,
+    id: reportId, // Explicitně uložit ID do dokumentu
     userId,
     versionNumber,
     createdBy: userId,
@@ -224,7 +232,7 @@ export async function createReport(reportData: Omit<Report, 'id'>): Promise<stri
     updatedAt: Timestamp.now()
   });
   
-  return docRef.id;
+  return reportId;
 }
 
 /**

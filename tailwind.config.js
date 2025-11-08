@@ -36,6 +36,7 @@ export default {
         'lg': '1024px',
         'xl': '1280px',
         '2xl': '1920px',
+        'tablet': { 'min': '768px', 'max': '1279px' },
       },
       borderRadius: {
         'xl': '0.75rem',

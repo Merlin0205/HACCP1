@@ -118,12 +118,12 @@ export const Select: React.FC<SelectProps> = ({
   // Odstranit helperText a error z props, aby se nedostaly do DOM
   const { helperText: _, error: __, ...selectProps } = props as any;
 
-  // Příprava helperText pro Flowbite - pouze pokud existuje
-  const flowbiteHelperText = error 
-    ? <span className="text-red-600">{error}</span> 
+  // Příprava helperText pro zobrazení pod selectem
+  const displayHelperText = error 
+    ? <span className="mt-1.5 text-sm text-red-600">{error}</span> 
     : helperText 
-      ? helperText 
-      : undefined;
+      ? <span className="mt-1.5 text-sm text-gray-500">{helperText}</span> 
+      : null;
 
   return (
     <div className="w-full">
@@ -135,7 +135,6 @@ export const Select: React.FC<SelectProps> = ({
       <FlowbiteSelect
         id={props.id}
         color={color}
-        {...(flowbiteHelperText && { helperText: flowbiteHelperText })}
         className={className}
         {...selectProps}
       >
@@ -145,6 +144,7 @@ export const Select: React.FC<SelectProps> = ({
           </option>
         ))}
       </FlowbiteSelect>
+      {displayHelperText}
     </div>
   );
 };

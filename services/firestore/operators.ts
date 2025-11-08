@@ -17,6 +17,7 @@ import {
 import { db, auth } from '../../firebaseConfig';
 import { Operator } from '../../types';
 import { fetchUserMetadata } from './users';
+import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'operators';
 
@@ -102,7 +103,9 @@ export async function fetchOperator(operatorId: string): Promise<Operator | null
 export async function createOperator(operatorData: Omit<Operator, 'id'> & { id?: string }): Promise<string> {
   const userId = getCurrentUserId();
   
-  const operatorId = operatorData.id || `operator_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Pokud je ID poskytnuto, použít ho (z lokálního state)
+  // Jinak vygenerovat nové human-readable ID (formát: O{YYYYMMDD}_{COUNTER})
+  const operatorId = operatorData.id || await generateHumanReadableId('O', COLLECTION_NAME);
   
   const docRef = doc(db, COLLECTION_NAME, operatorId);
   

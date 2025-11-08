@@ -70,6 +70,7 @@ import {
 import { fetchAuditStructure } from './services/firestore/settings';
 import { writeBatch, doc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
+import { generateHumanReadableId } from './utils/idGenerator';
 
 const App: React.FC = () => {
   // --- DATA MANAGEMENT (using custom hooks) ---
@@ -315,6 +316,83 @@ const App: React.FC = () => {
     }
   };
 
+  // Centrální funkce pro vytvoření nebo aktivaci tabu
+  const openOrActivateTab = (
+    auditId: string | undefined,
+    tabType: 'audit' | 'report' | 'audit_list',
+    premiseId: string,
+    operatorName: string,
+    premiseName?: string,
+    auditDate?: string,
+    status?: string
+  ): string => {
+    // 1. Najít existující tab
+    let existingTab: Tab | undefined;
+    
+    if (tabType === 'audit_list') {
+      // Pro audit_list hledat podle premiseId
+      existingTab = tabs.find(t => t.type === 'audit_list' && t.premiseId === premiseId);
+    } else if (auditId) {
+      // Pro audit/report hledat podle auditId (jakéhokoliv typu)
+      existingTab = tabs.find(t => t.auditId === auditId);
+    }
+    
+    if (existingTab) {
+      // Pokud existuje tab s jiným typem, aktualizovat typ a metadata
+      if (existingTab.type !== tabType) {
+        const updatedTab: Tab = {
+          ...existingTab,
+          type: tabType,
+          operatorName: operatorName,
+          premiseName: premiseName,
+          auditDate: auditDate,
+          status: status,
+        };
+        setTabs(prev => prev.map(t => t.id === existingTab!.id ? updatedTab : t));
+        setActiveTabId(existingTab.id);
+        return existingTab.id;
+      }
+      // Pokud je typ stejný, pouze aktualizovat metadata pokud je poskytnuto
+      if (auditDate || status || premiseName) {
+        const updatedTab: Tab = {
+          ...existingTab,
+          operatorName: operatorName,
+          premiseName: premiseName || existingTab.premiseName,
+          auditDate: auditDate || existingTab.auditDate,
+          status: status || existingTab.status,
+        };
+        setTabs(prev => prev.map(t => t.id === existingTab!.id ? updatedTab : t));
+      }
+      // Aktivovat existující tab
+      setActiveTabId(existingTab.id);
+      return existingTab.id;
+    }
+    
+    // 2. Vytvořit nový tab pouze pokud neexistuje
+    const newTab: Tab = {
+      id: `tab_${Date.now()}_${auditId || premiseId}`,
+      type: tabType,
+      auditId: auditId,
+      premiseId: premiseId,
+      operatorName: operatorName,
+      premiseName: premiseName,
+      auditDate: auditDate,
+      status: status,
+      createdAt: new Date().toISOString(),
+    };
+    
+    setTabs(prev => {
+      const newTabs = [...prev, newTab];
+      if (prev.length === 0) {
+        setPreviousAppState(appState);
+      }
+      return newTabs;
+    });
+    setActiveTabId(newTab.id);
+    
+    return newTab.id;
+  };
+
   const handleSelectPremiseForAudits = (premiseId: string) => {
     const premise = premises.find(p => p.id === premiseId);
     const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
@@ -323,31 +401,16 @@ const App: React.FC = () => {
 
     setActivePremiseId(premiseId);
 
-    // Najít existující tab pro tento seznam auditů
-    const existingTab = tabs.find(tab => tab.type === 'audit_list' && tab.premiseId === premiseId);
+    // Použít centrální funkci pro vytvoření/aktivaci tabu
+    openOrActivateTab(
+      undefined, // auditId není potřeba pro audit_list
+      'audit_list',
+      premiseId,
+      operatorName,
+      premiseName
+    );
 
-    if (existingTab) {
-      // Tab již existuje, pouze ho aktivujeme
-      setActiveTabId(existingTab.id);
-    } else {
-      // Vytvořit nový tab pro seznam auditů
-      const newTab: Tab = {
-        id: `tab_${Date.now()}_premise_${premiseId}`,
-        type: 'audit_list',
-        premiseId: premiseId,
-        operatorName: operatorName,
-        premiseName: premiseName,
-        createdAt: new Date().toISOString(),
-      };
-
-      setTabs(prev => [...prev, newTab]);
-      setActiveTabId(newTab.id);
-      
-      // Uložit předchozí appState pokud ještě nejsou taby
-      if (tabs.length === 0) {
-        setPreviousAppState(appState);
-      }
-    }
+    setAppState(AppState.AUDIT_LIST);
   };
 
   const handleBackToAuditList = () => {
@@ -441,7 +504,8 @@ const App: React.FC = () => {
         auditTypeId: auditTypeIdToUse,
       };
 
-      const auditId = await createAudit({ ...newAuditData, id: `audit_${Date.now()}` });
+      // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
+      const auditId = await createAudit({ ...newAuditData, id: await generateHumanReadableId('A', 'audits') });
       const newAudit: Audit = { ...newAuditData, id: auditId };
       
       // Aktualizovat lokální state
@@ -454,22 +518,16 @@ const App: React.FC = () => {
       // Nastavit strukturu pro AuditChecklist
       setAuditStructureState(structureToUse);
       
-      // Vytvořit tab pro audit pokud je aktivní tab typu audit_list
-      if (activeTabId && tabs.length > 0) {
-        const activeTab = tabs.find(t => t.id === activeTabId);
-        if (activeTab?.type === 'audit_list' && activeTab.premiseId === premiseId) {
-          const newTab: Tab = {
-            id: `tab_${Date.now()}_${auditId}`,
-            type: 'audit',
-            auditId: auditId,
-            operatorName: operator.operator_name,
-            premiseId: premiseId,
-            createdAt: new Date().toISOString(),
-          };
-          setTabs(prev => [...prev, newTab]);
-          setActiveTabId(newTab.id);
-        }
-      }
+      // Použít centrální funkci pro vytvoření/aktivaci tabu
+      openOrActivateTab(
+        auditId,
+        'audit',
+        premiseId,
+        operator.operator_name,
+        premise.premise_name,
+        new Date().toISOString().split('T')[0], // auditDate
+        AuditStatus.IN_PROGRESS
+      );
       
       // Přeskočit HEADER_FORM a jít rovnou do AUDIT_IN_PROGRESS
       setAppState(AppState.AUDIT_IN_PROGRESS);
@@ -539,7 +597,8 @@ const App: React.FC = () => {
         auditTypeId: auditTypeIdToUse,
       };
 
-      const auditId = await createAudit({ ...newAuditData, id: `audit_${Date.now()}` });
+      // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
+      const auditId = await createAudit({ ...newAuditData, id: await generateHumanReadableId('A', 'audits') });
       const newAudit: Audit = { ...newAuditData, id: auditId };
       
       // Aktualizovat lokální state
@@ -690,42 +749,24 @@ const App: React.FC = () => {
       setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: newStatus } : a));
       setActiveAuditId(auditId);
       
+      // Použít centrální funkci pro vytvoření/aktivaci tabu
+      const premise = premises.find(p => p.id === audit.premiseId);
+      const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
+      const operatorName = operator?.operator_name || 'Neznámý';
+      const premiseName = premise?.premise_name;
+      
+      openOrActivateTab(
+        auditId,
+        'audit',
+        audit.premiseId,
+        operatorName,
+        premiseName,
+        audit.createdAt ? new Date(audit.createdAt).toISOString().split('T')[0] : undefined,
+        newStatus
+      );
+      
       // Aktualizovat tab - změnit typ na 'audit' pokud existuje report tab
-      const existingTab = tabs.find(t => t.auditId === auditId && t.type === 'report');
-      if (existingTab) {
-        const premise = premises.find(p => p.id === existingTab.premiseId);
-        const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-        const operatorName = operator?.operator_name || 'Neznámý';
-
-        const updatedTab: Tab = {
-          ...existingTab,
-          type: 'audit',
-          operatorName: operatorName,
-        };
-
-        setTabs(prev => prev.map(t => t.id === existingTab.id ? updatedTab : t));
-        setActiveTabId(existingTab.id);
-      } else {
-        // Pokud tab neexistuje, vytvořit nový
-        const premise = premises.find(p => p.id === audit.premiseId);
-        const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-        const operatorName = operator?.operator_name || 'Neznámý';
-
-        const newTab: Tab = {
-          id: `tab_${Date.now()}_${auditId}`,
-          type: 'audit',
-          auditId: auditId,
-          operatorName: operatorName,
-          premiseId: audit.premiseId,
-          createdAt: new Date().toISOString(),
-        };
-
-        setTabs(prev => [...prev, newTab]);
-        setActiveTabId(newTab.id);
-        if (tabs.length === 0) {
-          setPreviousAppState(appState);
-        }
-      }
+      // (to už dělá openOrActivateTab, takže můžeme odstranit starou logiku)
     } catch (error) {
       console.error('[handleUnlockAudit] Error:', error);
       toast.error('Chyba při odemčení auditu. Zkuste to znovu.');
@@ -753,32 +794,25 @@ const App: React.FC = () => {
     const isCompleted = selectedAudit.status === AuditStatus.COMPLETED || selectedAudit.status === AuditStatus.LOCKED;
     const tabType: 'audit' | 'report' = isCompleted ? 'report' : 'audit';
 
-    // Najít existující tab pro tento audit
-    const existingTab = tabs.find(tab => tab.auditId === auditId && tab.type === tabType);
+    // Použít centrální funkci pro vytvoření/aktivaci tabu
+    const premiseName = premise?.premise_name;
+    const auditDate = selectedAudit.createdAt ? new Date(selectedAudit.createdAt).toISOString().split('T')[0] : undefined;
+    
+    openOrActivateTab(
+      auditId,
+      tabType,
+      selectedAudit.premiseId,
+      operatorName,
+      premiseName,
+      auditDate,
+      selectedAudit.status
+    );
 
-    if (existingTab) {
-      // Tab již existuje, pouze ho aktivujeme
-      setActiveTabId(existingTab.id);
+    // Nastavit appState podle typu tabu
+    if (tabType === 'report') {
+      setAppState(AppState.REPORT_VIEW);
     } else {
-      // Vytvořit nový tab
-      const newTab: Tab = {
-        id: `tab_${Date.now()}_${auditId}`,
-        type: tabType,
-        auditId: auditId,
-        operatorName: operatorName,
-        premiseId: selectedAudit.premiseId,
-        createdAt: new Date().toISOString(),
-      };
-
-      setTabs(prev => {
-        const newTabs = [...prev, newTab];
-        // Pokud ještě nejsou žádné taby, uložit předchozí appState
-        if (prev.length === 0) {
-          setPreviousAppState(appState);
-        }
-        return newTabs;
-      });
-      setActiveTabId(newTab.id);
+      setAppState(AppState.AUDIT_IN_PROGRESS);
     }
   };
 
@@ -793,6 +827,7 @@ const App: React.FC = () => {
       setActivePremiseId(tab.premiseId);
       setActiveAuditId(null);
       setActiveReportId(null); // Reset report ID
+      setAppState(AppState.AUDIT_LIST);
     } else {
       // Pro audit a report nastavíme auditId a premiseId
       if (tab.auditId) {
@@ -801,8 +836,14 @@ const App: React.FC = () => {
         setActiveReportId(null);
       }
       setActivePremiseId(tab.premiseId);
+      
+      // Nastavit appState podle typu tabu
+      if (tab.type === 'report') {
+        setAppState(AppState.REPORT_VIEW);
+      } else {
+        setAppState(AppState.AUDIT_IN_PROGRESS);
+      }
     }
-    // Obsah se zobrazí podle typu tabu v renderContent
   };
 
   const handleTabClose = (tabId: string, e?: React.MouseEvent) => {
@@ -826,23 +867,31 @@ const App: React.FC = () => {
         if (newActiveTab.type === 'audit_list') {
           setActivePremiseId(newActiveTab.premiseId);
           setActiveAuditId(null);
+          setAppState(AppState.AUDIT_LIST);
         } else {
           if (newActiveTab.auditId) {
             setActiveAuditId(newActiveTab.auditId);
           }
           setActivePremiseId(newActiveTab.premiseId);
+          // Nastavit appState podle typu tabu
+          if (newActiveTab.type === 'report') {
+            setAppState(AppState.REPORT_VIEW);
+          } else {
+            setAppState(AppState.AUDIT_IN_PROGRESS);
+          }
         }
       } else {
         // Všechny taby zavřené, vrátit se na předchozí view
         setActiveTabId(null);
         setActiveAuditId(null);
         setActivePremiseId(null);
+        setActiveReportId(null);
         setAppState(previousAppState);
       }
     }
   };
 
-  const createNewAudit = (headerValues: AuditHeaderValues, status: AuditStatus): Audit => {
+  const createNewAudit = async (headerValues: AuditHeaderValues, status: AuditStatus): Promise<Audit> => {
     if (!activePremiseId) throw new Error("Premise ID is missing");
     
     // Získat auditTypeId z premise pokud existuje, jinak z sessionStorage
@@ -857,8 +906,11 @@ const App: React.FC = () => {
       }
     }
     
+    // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
+    const auditId = await generateHumanReadableId('A', 'audits');
+    
     return {
-      id: `audit_${Date.now()}`,
+      id: auditId,
       premiseId: activePremiseId,
       status: status,
       createdAt: new Date().toISOString(),
@@ -874,7 +926,7 @@ const App: React.FC = () => {
         await updateAudit(activeAuditId, { headerValues });
         setAudits(prev => prev.map(a => (a.id === activeAuditId ? { ...a, headerValues } : a)));
       } else {
-        const newAuditData = createNewAudit(headerValues, AuditStatus.DRAFT);
+        const newAuditData = await createNewAudit(headerValues, AuditStatus.DRAFT);
         // Předat ID do createAudit, aby se použilo stejné ID ve Firestore
         const { id, ...auditDataWithoutId } = newAuditData;
         const newId = await createAudit({ ...auditDataWithoutId, id });
@@ -901,7 +953,7 @@ const App: React.FC = () => {
         await updateAudit(auditIdToContinue, { headerValues, status: newStatus });
         setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: newStatus } : a)));
       } else {
-        const newAuditData = createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
+        const newAuditData = await createNewAudit(headerValues, AuditStatus.IN_PROGRESS);
         // Předat ID do createAudit, aby se použilo stejné ID ve Firestore
         const { id, ...auditDataWithoutId } = newAuditData;
         const newId = await createAudit({ ...auditDataWithoutId, id });
@@ -912,55 +964,23 @@ const App: React.FC = () => {
       
       setActiveAuditId(auditIdToContinue);
       
-      // Pokud je aktivní tab typu audit_list, vytvořit nový tab pro audit
-      if (activeTabId && tabs.length > 0) {
-        const activeTab = tabs.find(t => t.id === activeTabId);
-        if (activeTab?.type === 'audit_list') {
-          const premise = premises.find(p => p.id === activeTab.premiseId);
-          const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-          const operatorName = operator?.operator_name || 'Neznámý';
-
-          const newTab: Tab = {
-            id: `tab_${Date.now()}_${auditIdToContinue}`,
-            type: 'audit',
-            auditId: auditIdToContinue,
-            operatorName: operatorName,
-            premiseId: activeTab.premiseId,
-            createdAt: new Date().toISOString(),
-          };
-
-          setTabs(prev => [...prev, newTab]);
-          setActiveTabId(newTab.id);
-        } else {
-          // Pokud není audit_list tab, jen aktualizovat auditId v tabu
-          setTabs(prev => prev.map(t => 
-            t.id === activeTabId ? { ...t, auditId: auditIdToContinue, type: 'audit' as const } : t
-          ));
-        }
-      } else {
-        // Pokud nejsou žádné taby, vytvořit nový tab
-        const premise = premises.find(p => p.id === activePremiseId);
-        const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-        const operatorName = operator?.operator_name || 'Neznámý';
-
-        const newTab: Tab = {
-          id: `tab_${Date.now()}_${auditIdToContinue}`,
-          type: 'audit',
-          auditId: auditIdToContinue,
-          operatorName: operatorName,
-          premiseId: activePremiseId || '',
-          createdAt: new Date().toISOString(),
-        };
-
-        setTabs(prev => {
-          const newTabs = [...prev, newTab];
-          if (prev.length === 0) {
-            setPreviousAppState(AppState.HEADER_FORM);
-          }
-          return newTabs;
-        });
-        setActiveTabId(newTab.id);
-      }
+      // Použít centrální funkci pro vytvoření/aktivaci tabu
+      const premise = premises.find(p => p.id === activePremiseId);
+      const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
+      const operatorName = operator?.operator_name || 'Neznámý';
+      const premiseName = premise?.premise_name;
+      const audit = audits.find(a => a.id === auditIdToContinue);
+      const auditDate = audit?.createdAt ? new Date(audit.createdAt).toISOString().split('T')[0] : undefined;
+      
+      openOrActivateTab(
+        auditIdToContinue,
+        'audit',
+        activePremiseId || '',
+        operatorName,
+        premiseName,
+        auditDate,
+        AuditStatus.IN_PROGRESS
+      );
       
       setPendingHeader(null);
     } catch (error) {
@@ -985,7 +1005,12 @@ const App: React.FC = () => {
       : newStatus;
     
     try {
-      await updateAudit(activeAuditId, { status: finalStatus });
+      // Sanitizovat všechny answers - odstranit File objekty před uložením do Firestore
+      const sanitizedAnswers = sanitizeAnswersForFirestore(audit.answers);
+      await updateAudit(activeAuditId, { 
+        answers: sanitizedAnswers,
+        status: finalStatus 
+      });
       setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: finalStatus } : a));
       toast.success('Průběh byl uložen');
     } catch (error) {
@@ -993,6 +1018,32 @@ const App: React.FC = () => {
       toast.error('Chyba při ukládání průběhu');
     }
   }, [activeAuditId, audits]);
+
+  // Pomocná funkce pro odstranění File objektů z photos před uložením do Firestore
+  const sanitizeAnswerForFirestore = (answer: AuditAnswer): AuditAnswer => {
+    if (!answer.nonComplianceData) return answer;
+    
+    return {
+      ...answer,
+      nonComplianceData: answer.nonComplianceData.map(nc => ({
+        ...nc,
+        photos: nc.photos.map(photo => {
+          // Odstranit File objekt - nelze ukládat do Firestore
+          const { file, ...photoWithoutFile } = photo;
+          return photoWithoutFile;
+        })
+      }))
+    };
+  };
+
+  // Sanitizovat všechny answers před uložením do Firestore
+  const sanitizeAnswersForFirestore = (answers: { [itemId: string]: AuditAnswer }): { [itemId: string]: AuditAnswer } => {
+    const sanitized: { [itemId: string]: AuditAnswer } = {};
+    for (const [itemId, answer] of Object.entries(answers)) {
+      sanitized[itemId] = sanitizeAnswerForFirestore(answer);
+    }
+    return sanitized;
+  };
 
   const handleAnswerUpdate = useCallback(async (itemId: string, answer: any) => {
     if (!activeAuditId) return;
@@ -1027,9 +1078,11 @@ const App: React.FC = () => {
     
     // Uložit do Firestore
     try {
+      // Sanitizovat všechny answers - odstranit File objekty před uložením do Firestore
       const newAnswers = { ...audit.answers, [itemId]: answer };
+      const sanitizedAnswers = sanitizeAnswersForFirestore(newAnswers);
       await updateAudit(activeAuditId, { 
-        answers: newAnswers,
+        answers: sanitizedAnswers,
         status: finalStatus 
       });
     } catch (error) {
@@ -1076,46 +1129,26 @@ const App: React.FC = () => {
         return [...filtered, ...allReports];
       });
 
-      // Aktualizovat tab - změnit typ na 'report' pokud existuje audit tab
-      const activeTab = tabs.find(t => t.id === activeTabId);
-      if (activeTab && activeTab.type === 'audit') {
-        const premise = premises.find(p => p.id === activeTab.premiseId);
+      // Aktualizovat tab - použít centrální funkci
+      const activeAudit = audits.find(a => a.id === activeAuditId);
+      if (activeAudit) {
+        const premise = premises.find(p => p.id === activeAudit.premiseId);
         const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
         const operatorName = operator?.operator_name || 'Neznámý';
-
-        const updatedTab: Tab = {
-          ...activeTab,
-          type: 'report',
-          operatorName: operatorName,
-        };
-
-        setTabs(prev => prev.map(t => t.id === activeTabId ? updatedTab : t));
-      } else if (!activeTab) {
-        // Pokud tab neexistuje, vytvořit nový report tab
-        const activeAudit = audits.find(a => a.id === activeAuditId);
-        if (activeAudit) {
-          const premise = premises.find(p => p.id === activeAudit.premiseId);
-          const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-          const operatorName = operator?.operator_name || 'Neznámý';
-
-          const newTab: Tab = {
-            id: `tab_${Date.now()}_${activeAuditId}`,
-            type: 'report',
-            auditId: activeAuditId,
-            operatorName: operatorName,
-            premiseId: activeAudit.premiseId,
-            createdAt: new Date().toISOString(),
-          };
-
-          setTabs(prev => {
-            const newTabs = [...prev, newTab];
-            if (prev.length === 0) {
-              setPreviousAppState(appState);
-            }
-            return newTabs;
-          });
-          setActiveTabId(newTab.id);
-        }
+        const premiseName = premise?.premise_name;
+        const auditDate = activeAudit.createdAt ? new Date(activeAudit.createdAt).toISOString().split('T')[0] : undefined;
+        
+        openOrActivateTab(
+          activeAuditId,
+          'report',
+          activeAudit.premiseId,
+          operatorName,
+          premiseName,
+          auditDate,
+          AuditStatus.COMPLETED
+        );
+        
+        setAppState(AppState.REPORT_VIEW);
       }
     } catch (error) {
       console.error('[handleFinishAudit] Error:', error);
@@ -1191,20 +1224,20 @@ const App: React.FC = () => {
   };
 
   const handleToggleAdmin = () => {
-    setAppState(prev => prev === AppState.SETTINGS || prev === AppState.ADMIN ? AppState.OPERATOR_DASHBOARD : AppState.SETTINGS)
-  }
+    setAppState(prev => prev === AppState.SETTINGS || prev === AppState.ADMIN ? AppState.OPERATOR_DASHBOARD : AppState.SETTINGS);
+  };
 
   const handleNavigateToAdmin = () => {
     setAppState(AppState.ADMIN);
-  }
+  };
 
   const handleNavigateToUserManagement = () => {
     setAppState(AppState.USER_MANAGEMENT);
-  }
+  };
 
   const handleBackFromAdmin = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleBackFromSettings = () => {
     setAppState(AppState.INCOMPLETE_AUDITS);
@@ -1212,51 +1245,51 @@ const App: React.FC = () => {
 
   const handleNavigateToAuditorSettings = () => {
     setAppState(AppState.AUDITOR_SETTINGS);
-  }
+  };
 
   const handleBackFromAuditorSettings = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleNavigateToAIReportSettings = () => {
     setAppState(AppState.AI_REPORT_SETTINGS);
-  }
+  };
 
   const handleBackFromAIReportSettings = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleNavigateToAIUsageStats = () => {
     setAppState(AppState.AI_USAGE_STATS);
-  }
+  };
 
   const handleBackFromAIUsageStats = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleNavigateToAIPricingConfig = () => {
     setAppState(AppState.AI_PRICING_CONFIG);
-  }
+  };
 
   const handleBackFromAIPricingConfig = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleNavigateToAIPrompts = () => {
     setAppState(AppState.AI_PROMPTS);
-  }
+  };
 
   const handleBackFromAIPrompts = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleNavigateToSmartTemplateSettings = () => {
     setAppState(AppState.SMART_TEMPLATE_SETTINGS);
-  }
+  };
 
   const handleBackFromSmartTemplateSettings = () => {
     setAppState(AppState.SETTINGS);
-  }
+  };
 
   const handleNavigate = (newState: AppState) => {
     // Pokud jsou otevřené taby a navigujeme na jinou obrazovku, deaktivujeme taby

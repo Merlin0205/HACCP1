@@ -131,17 +131,32 @@ HACCP1/
 
 ## 🗂️ DATABÁZOVÁ STRUKTURA
 
+### Human-readable ID systém
+
+Všechny entity používají human-readable ID formát: `{PREFIX}{YYYYMMDD}_{COUNTER}`
+
+- **Audity**: `A20250811_0001`, `A20250811_0002`, ...
+- **Pracoviště**: `P20250811_0001`, `P20250811_0002`, ...
+- **Provozovatelé**: `O20250811_0001`, `O20250811_0002`, ...
+- **Reporty**: `R20250811_0001`, `R20250811_0002`, ...
+- **Zákazníci**: `C20250811_0001`, `C20250811_0002`, ...
+- **Fotky**: `F20250811_0001.jpg`, `F20250811_0002.jpg`, ... (counter per audit + den)
+
+**Utility funkce:**
+- `utils/idGenerator.ts` - `generateHumanReadableId(prefix, collectionName)`
+- `utils/photoIdGenerator.ts` - `generatePhotoFilename(auditId, fileExtension)`
+
 ### Firestore Collections:
 
 ```
-/customers/{customerId}
+/customers/{customerId}  # Formát ID: C{YYYYMMDD}_{COUNTER}
   ├─ userId: string          # Vlastník dat
   ├─ premise_name: string
   ├─ premise_address: string
   ├─ operator_name: string
   └─ ...další pole zákazníka
 
-/audits/{auditId}
+/audits/{auditId}  # Formát ID: A{YYYYMMDD}_{COUNTER}
   ├─ userId: string          # Vlastník dat
   ├─ customerId: string      # Reference na zákazníka
   ├─ status: string          # "Nový", "Probíhá", "Uzamčen"
@@ -200,8 +215,8 @@ HACCP1/
 ```
 /users/{userId}/
   ├─ audits/{auditId}/
-  │   ├─ photo_0_timestamp.jpg
-  │   ├─ photo_1_timestamp.jpg
+  │   ├─ F{YYYYMMDD}_{COUNTER}.jpg  # Human-readable formát (counter per audit + den)
+  │   ├─ F{YYYYMMDD}_{COUNTER}.jpg
   │   └─ ...další fotky
   └─ reports/
       ├─ {reportId}/

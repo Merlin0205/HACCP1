@@ -29,6 +29,13 @@ export const TabBar: React.FC<TabBarProps> = ({
             <div
               key={tab.id}
               onClick={() => onTabClick(tab.id)}
+              title={
+                tab.type === 'audit_list'
+                  ? `Seznam auditů - ${tab.operatorName}${tab.premiseName ? ` (${tab.premiseName})` : ''}`
+                  : tab.type === 'audit'
+                    ? `Audit - ${tab.operatorName}${tab.premiseName ? ` (${tab.premiseName})` : ''}${tab.auditDate ? ` - ${tab.auditDate}` : ''}${tab.status ? ` - ${tab.status}` : ''}`
+                    : `Report - ${tab.operatorName}${tab.premiseName ? ` (${tab.premiseName})` : ''}${tab.auditDate ? ` - ${tab.auditDate}` : ''}${tab.status ? ` - ${tab.status}` : ''}`
+              }
               className={`
                 flex items-center gap-2 px-3 sm:px-4 py-2 rounded-t-lg cursor-pointer transition-all
                 whitespace-nowrap flex-shrink-0
@@ -52,7 +59,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               {/* Label */}
               <span className="text-sm font-medium">
                 {tab.type === 'audit_list' 
-                  ? `Audity pracoviště ${tab.premiseName ? `(${tab.premiseName})` : ''}`
+                  ? `Audity ${tab.premiseName ? `(${tab.premiseName})` : ''}`
                   : tab.type === 'audit' 
                     ? `Audit (${tab.operatorName})`
                     : `Report (${tab.operatorName})`}

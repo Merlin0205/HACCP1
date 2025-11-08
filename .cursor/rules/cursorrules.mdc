@@ -117,13 +117,22 @@ import { Button } from 'flowbite-react';
    - Všechny CRUD operace v `services/firestore/`
    - Collections: `customers`, `audits`, `reports`, `settings`, `users`, `aiUsageLogs`, `reportTemplates`
    - **Security Rules**: `firestore.rules` - user isolation
+   - **ID systém**: Human-readable ID formát `{PREFIX}{YYYYMMDD}_{COUNTER}`
+     - Audity: `A20250811_0001`, `A20250811_0002`, ...
+     - Pracoviště: `P20250811_0001`, `P20250811_0002`, ...
+     - Provozovatelé: `O20250811_0001`, `O20250811_0002`, ...
+     - Reporty: `R20250811_0001`, `R20250811_0002`, ...
+     - Zákazníci: `C20250811_0001`, `C20250811_0002`, ...
+     - Utility: `utils/idGenerator.ts` - `generateHumanReadableId()`
 
 3. **Firebase Storage**
    - `services/storage.ts` - upload/download fotek
-   - Fotky auditů: `audits/{auditId}/photos/{photoId}`
+   - Fotky auditů: `users/{userId}/audits/{auditId}/F{YYYYMMDD}_{COUNTER}.jpg`
    - PDF reporty Legacy: `reports/{reportId}/pdf`
    - Smart Template data: `reports/{reportId}/smart/{drafts|finalVersions|pdf|templates}/`
    - **Security Rules**: `storage.rules` - max 10MB pro obrázky
+   - **Photo filename**: Human-readable formát `F{YYYYMMDD}_{COUNTER}.{ext}` (counter per audit + den)
+     - Utility: `utils/photoIdGenerator.ts` - `generatePhotoFilename()`
 
 4. **Cloud Functions**
    - `functions/src/` - serverless funkce
@@ -181,6 +190,8 @@ await createAudit(data); // Co když selže?
 HACCP1/
 ├── components/          # React komponenty
 │   ├── ui/              # Flowbite wrapper komponenty (Button, Card, Input, Modal)
+│   │   ├── Pagination.tsx       # Stránkování tabulek (NOVÁ)
+│   │   └── ...
 │   ├── icons/           # SVG ikony
 │   ├── report/          # Smart Template komponenty (NOVÁ)
 │   │   ├── SmartTemplateView.tsx
@@ -188,6 +199,11 @@ HACCP1/
 │   │   ├── SmartReportRenderer.tsx
 │   │   └── SmartReportDesigner.tsx
 │   └── [screens].tsx    # Obrazovky aplikace
+│
+├── utils/               # Utility funkce
+│   ├── idGenerator.ts   # Human-readable ID generování (NOVÁ)
+│   ├── photoIdGenerator.ts  # Human-readable photo filename generování (NOVÁ)
+│   └── toast.ts         # Toast notifikace
 │
 ├── services/            # Business logika a API
 │   ├── firestore/       # Firestore CRUD operace
@@ -224,6 +240,8 @@ HACCP1/
 - **`App.tsx`** - hlavní logika aplikace, routing
 - **`AppWithAuth.tsx`** - wrapper s autentifikací
 - **`firebaseConfig.ts`** - Firebase SDK inicializace
+- **`components/ui/Pagination.tsx`** - reusable pagination komponenta pro tabulky
+- **`vite.config.ts`** - automatické verzování z package.json při buildu
 - **`components/ReportView.tsx`** - zobrazení reportů (UPRAVENO - přidány záložky Legacy/Smart)
 - **`SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`** - detailní plán Smart Template systému
 - **`FLOWBITE_PRIRUCKA.md`** - Flowbite příručka
@@ -306,6 +324,89 @@ HACCP1/
 
 ---
 
+## 📑 TAB (KARTY) SYSTÉM
+
+### Základní principy
+
+**Taby se používají pouze pro:**
+- ✅ `AUDIT_LIST` - Seznam auditů pro pracoviště
+- ✅ `AUDIT_IN_PROGRESS` - Probíhající audit (checklist)
+- ✅ `REPORT_VIEW` - Zobrazení reportu
+
+**Taby se NEPOUŽÍVAJÍ pro:**
+- ❌ Hlavní obrazovky (dashboard, seznamy) - přístupné přes sidebar
+- ❌ Formuláře (ADD_*, EDIT_*) - otevírají se jako overlay
+- ❌ Nastavení a další obrazovky
+
+### Logika vytváření tabů
+
+**Centrální funkce:** `openOrActivateTab()` v `App.tsx`
+
+```typescript
+openOrActivateTab(
+  auditId: string | undefined,
+  tabType: 'audit' | 'report' | 'audit_list',
+  premiseId: string,
+  operatorName: string,
+  premiseName?: string,
+  auditDate?: string,
+  status?: string
+): string
+```
+
+**Chování:**
+1. Pokud existuje tab pro stejný audit/premise → aktivuje se existující tab
+2. Pokud existuje tab s jiným typem → aktualizuje se typ tabu
+3. Pokud tab neexistuje → vytvoří se nový tab
+
+**Všechna místa vytváření tabů používají tuto centrální funkci:**
+- `handleSelectPremiseForAudits()` - audit_list tab
+- `handleStartNewAudit()` - audit tab
+- `handleUnlockAudit()` - audit tab
+- `handleSelectAudit()` - audit nebo report tab
+- `handleFinishAudit()` - report tab
+- `handleHeaderUpdateAndContinue()` - audit tab
+
+### Formát názvů tabů
+
+- **audit_list**: "Audity ([Název pracoviště])"
+- **audit**: "Audit ([Název provozovatele])"
+- **report**: "Report ([Název provozovatele])"
+
+### Tooltips
+
+Každý tab má `title` atribut s detaily:
+- **audit_list**: "Seznam auditů - [Provozovatel] ([Pracoviště])"
+- **audit**: "Audit - [Provozovatel] ([Pracoviště]) - [Datum] - [Status]"
+- **report**: "Report - [Provozovatel] ([Pracoviště]) - [Datum] - [Status]"
+
+### "Zpět" navigace
+
+**`handleBackToAuditList()`:**
+- Pokud je aktivní `audit_list` tab → vrací na předchozí view (OPERATOR_DASHBOARD)
+- Pokud je aktivní `audit` nebo `report` tab → vrací na AUDIT_LIST pro dané pracoviště
+- Pokud nejsou taby → vrací na předchozí appState
+
+**Komponenty s "Zpět" tlačítkem:**
+- `ReportView` - volá `onBack={handleBackToAuditList}`
+- `AuditChecklist` - volá `onBack={handleBackToAuditList}`
+- `HeaderForm` - volá `onBack={handleBackToAuditList}`
+
+### Zobrazení TabBar
+
+- **Desktop (xl+)**: TabBar se zobrazuje pod headerem (pouze jedenkrát)
+- **Mobile/Tablet**: TabBar se nezobrazuje (taby nejsou podporovány na malých obrazovkách)
+- **Renderování**: `components/Layout.tsx` - pouze pokud `tabs.length > 0`
+
+### Důležité soubory
+
+- **`App.tsx`** - centrální logika tabů (`openOrActivateTab`, `handleTabClick`, `handleTabClose`)
+- **`components/TabBar.tsx`** - UI komponenta pro zobrazení tabů
+- **`components/Layout.tsx`** - renderování TabBar
+- **`types.ts`** - Tab interface s `auditDate` a `status` pro tooltips
+
+---
+
 ## 🧩 SMART TEMPLATE SYSTÉM
 
 ### Základní principy
@@ -336,6 +437,37 @@ HACCP1/
 - Používej Flowbite komponenty pro UI (Tabs, Button, atd.)
 - Dokumentuj všechny nové typy v `types/smartReport.ts`
 - Aktualizuj security rules pro nové collections a Storage cesty
+
+---
+
+## 📱 RESPONSIVITA A BREAKPOINTY
+
+### Breakpoint strategie
+- **Mobile** (<768px): Hamburger menu, mobilní karty
+- **Tablet** (768-1279px): Top horizontal bar, desktop tabulky
+- **Desktop Small** (1280-1919px): Sidebar s texty
+- **Desktop Large** (1920px+): Full sidebar s texty
+
+### Navigace podle zařízení
+- **Mobil**: MobileMenu overlay (hamburger)
+- **Tablet**: Top horizontal bar s ikonami (skrytý sidebar)
+- **Desktop**: Sidebar vlevo (skrytý na < 1280px)
+
+### Stránkování tabulek
+- Defaultně 20 položek/stránka
+- Možnost výběru: 10, 20, 50, 100
+- Komponenta: `components/ui/Pagination.tsx`
+- Implementováno v: OperatorDashboard, AllAuditsScreen, AuditList
+
+### User Avatar
+- Pouze jedno místo: vpravo nahoře v top baru (desktop) nebo v tablet top bar
+- Formát: pouze iniciála v kruhu, bez ikony
+
+### Responzivní tabulky
+- Padding: `px-3 md:px-4 xl:px-6 py-3 md:py-4`
+- Ikony: `h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4`
+- Tlačítka: `p-1 md:p-2 xl:p-1`
+- Horizontální scroll: `min-w-[900px] xl:min-w-0` wrapper
 
 ---
 

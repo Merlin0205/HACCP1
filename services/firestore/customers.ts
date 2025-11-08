@@ -8,6 +8,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -17,6 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { Customer } from '../../types';
+import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'customers';
 
@@ -77,14 +79,20 @@ export async function fetchCustomer(customerId: string): Promise<Customer | null
 export async function createCustomer(customerData: Omit<Customer, 'id'>): Promise<string> {
   const userId = getCurrentUserId();
   
-  const docRef = await addDoc(collection(db, COLLECTION_NAME), {
+  // Generovat human-readable ID (formát: C{YYYYMMDD}_{COUNTER})
+  const customerId = await generateHumanReadableId('C', COLLECTION_NAME);
+  const docRef = doc(db, COLLECTION_NAME, customerId);
+  
+  // Použít setDoc s explicitním ID místo addDoc
+  await setDoc(docRef, {
     ...customerData,
+    id: customerId, // Explicitně uložit ID do dokumentu
     userId,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   });
   
-  return docRef.id;
+  return customerId;
 }
 
 /**

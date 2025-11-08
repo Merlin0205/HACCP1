@@ -17,6 +17,7 @@ import {
 import { db, auth } from '../../firebaseConfig';
 import { Premise } from '../../types';
 import { fetchUserMetadata } from './users';
+import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'premises';
 
@@ -137,7 +138,9 @@ export async function fetchPremise(premiseId: string): Promise<Premise | null> {
 export async function createPremise(premiseData: Omit<Premise, 'id'> & { id?: string }): Promise<string> {
   const userId = getCurrentUserId();
   
-  const premiseId = premiseData.id || `premise_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Pokud je ID poskytnuto, použít ho (z lokálního state)
+  // Jinak vygenerovat nové human-readable ID (formát: P{YYYYMMDD}_{COUNTER})
+  const premiseId = premiseData.id || await generateHumanReadableId('P', COLLECTION_NAME);
   
   const docRef = doc(db, COLLECTION_NAME, premiseId);
   

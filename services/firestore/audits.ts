@@ -19,6 +19,7 @@ import {
 import { db, auth } from '../../firebaseConfig';
 import { Audit } from '../../types';
 import { fetchUserMetadata } from './users';
+import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'audits';
 
@@ -146,8 +147,8 @@ export async function createAudit(auditData: Omit<Audit, 'id'> & { id?: string }
   const userId = getCurrentUserId();
   
   // Pokud je ID poskytnuto, použít ho (z lokálního state)
-  // Jinak vygenerovat nové (pro staré audity nebo edge cases)
-  const auditId = auditData.id || `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Jinak vygenerovat nové human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
+  const auditId = auditData.id || await generateHumanReadableId('A', COLLECTION_NAME);
   
   const docRef = doc(db, COLLECTION_NAME, auditId);
   

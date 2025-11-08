@@ -136,7 +136,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
         
         {/* Main Content */}
         <div className="flex-1 min-w-0">
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-3 md:space-y-4">
             {activeSections.map(section => {
               const isOpen = openSections.has(section.id);
               const hasNonCompliance = section.items.some(item => auditData.answers[item.id]?.compliant === false);
@@ -147,25 +147,25 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                 <Card key={section.id} className="overflow-hidden">
                   <CardHeader
                     onClick={() => toggleSection(section.id)}
-                    className="cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="cursor-pointer hover:bg-gray-50 transition-colors px-3 py-2.5 sm:px-4 sm:py-3 md:px-6 md:py-4"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <span className={`w-3 h-3 rounded-full flex-shrink-0 ${hasNonCompliance ? 'bg-accent-error animate-pulse' : 'bg-accent-success'}`}></span>
+                      <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3 flex-1 min-w-0">
+                        <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 rounded-full flex-shrink-0 ${hasNonCompliance ? 'bg-accent-error animate-pulse' : 'bg-accent-success'}`}></span>
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-lg font-bold text-gray-900">{section.title}</h3>
-                          <p className="text-sm text-gray-600 mt-0.5">
+                          <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 leading-tight">{section.title}</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-0.5 leading-tight">
                             {answeredCount} / {sectionItems.length} položek
                           </p>
                         </div>
                       </div>
-                      <ChevronDownIcon className={`h-5 w-5 text-gray-400 flex-shrink-0 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      <ChevronDownIcon className={`h-4 w-4 sm:h-4 sm:w-4 md:h-5 md:w-5 text-gray-400 flex-shrink-0 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </div>
                   </CardHeader>
                   
                   {isOpen && (
-                    <CardBody>
-                      <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
+                    <CardBody className="px-3 py-2.5 sm:px-4 sm:py-3 md:px-6 md:py-4">
+                      <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-2 md:gap-3">
                         {sectionItems.map(item => {
                           const answer = auditData.answers[item.id];
                           const isCompliant = !answer || answer.compliant;
@@ -178,8 +178,12 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                               title={item.title}
                               onClick={() => setSelectedItem(item)}
                               className={`
-                                flex flex-col items-center justify-center p-1.5 sm:p-2 md:p-2.5 lg:p-3 rounded-lg sm:rounded-xl border-2 transition-all
+                                flex flex-col items-center justify-center 
+                                p-2 sm:p-2.5 md:p-3 lg:p-3.5 
+                                rounded-lg sm:rounded-xl border-2 transition-all
                                 aspect-square text-gray-700 hover:shadow-lg hover:-translate-y-0.5
+                                min-h-[64px] sm:min-h-[72px] md:min-h-[80px]
+                                active:scale-95
                                 ${isCompliant && isAnswered 
                                   ? 'bg-green-50 border-green-300 hover:bg-green-100' 
                                   : !isCompliant 
@@ -189,12 +193,12 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                                 ${isAnswered ? 'ring-2 ring-offset-1 sm:ring-offset-2 ring-primary/20' : ''}
                               `}
                             >
-                              <IconComponent className={`h-3.5 w-3.5 sm:h-5 sm:w-5 md:h-6 md:w-6 lg:h-7 lg:w-7 mb-0.5 sm:mb-1 md:mb-1.5 flex-shrink-0 ${isAnswered ? 'opacity-100' : 'opacity-60'}`} />
-                              <span className="text-[9px] sm:text-[10px] md:text-xs text-center leading-tight font-medium break-words line-clamp-2">
+                              <IconComponent className={`h-4 w-4 sm:h-5 sm:w-5 md:h-5 md:w-5 lg:h-6 lg:w-6 mb-1 sm:mb-1.5 flex-shrink-0 ${isAnswered ? 'opacity-100' : 'opacity-60'}`} />
+                              <span className="text-[10px] sm:text-[11px] md:text-xs lg:text-sm text-center leading-tight font-medium break-words line-clamp-2 px-0.5">
                                 {item.title}
                               </span>
                               {isAnswered && (
-                                <div className="mt-0.5 sm:mt-1">
+                                <div className="mt-1 sm:mt-1.5">
                                   {isCompliant ? (
                                     <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-green-600 rounded-full shadow-sm ring-2 ring-green-200"></div>
                                   ) : (
@@ -250,6 +254,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
           onAnswerUpdate={onAnswerUpdate}
           log={log}
           auditStructure={auditStructure}
+          auditId={auditData.id}
         />
       )}
 

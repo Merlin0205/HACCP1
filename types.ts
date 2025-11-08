@@ -49,10 +49,13 @@ export interface AuditType {
 }
 
 export interface PhotoWithAnalysis {
-  file: File;
-  base64?: string;
+  file?: File; // Optional - pouze pro preview před uploadem
+  base64?: string; // Optional - pouze pro preview před uploadem nebo backward compatibility
+  storagePath?: string; // Cesta ve Storage (users/{userId}/audits/{auditId}/photo_xxx.jpg)
+  url?: string; // Download URL z Storage
   analysis?: string;
   isAnalyzing?: boolean;
+  isUploading?: boolean; // Nový flag pro upload state
 }
 
 export interface NonComplianceData {
@@ -79,6 +82,9 @@ export interface Tab {
   operatorName: string; // název provozovatele pro zobrazení
   premiseName?: string; // název pracoviště pro zobrazení (pro audit_list)
   createdAt: string; // timestamp pro řazení
+  // Nové pro lepší UX:
+  auditDate?: string; // Datum auditu pro zobrazení v tooltip
+  status?: string; // Status auditu pro vizuální indikaci
 }
 
 export enum AppState {
