@@ -30,7 +30,7 @@ export const Pagination: React.FC<PaginationProps> = ({
     });
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+    <div className="flex items-center justify-between px-4 py-1.5 border-t border-gray-200 bg-white">
       <div className="flex items-center gap-2 text-sm text-gray-600">
         <span>Zobrazeno {startItem}-{endItem} z {totalItems}</span>
         <span className="hidden md:inline">|</span>

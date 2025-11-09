@@ -5,6 +5,7 @@ import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
+import { ActionIconTooltip } from './ui/ActionIconTooltip';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon, ClockIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -143,18 +144,27 @@ export const AuditList: React.FC<AuditListProps> = ({
   };
 
   const getStatusBadge = (status: AuditStatus) => {
-    const badgeColors: Record<AuditStatus, 'gray' | 'blue' | 'success' | 'warning'> = {
-      [AuditStatus.DRAFT]: 'gray',
-      [AuditStatus.NOT_STARTED]: 'gray',
-      [AuditStatus.IN_PROGRESS]: 'blue',
-      [AuditStatus.COMPLETED]: 'success',
-      [AuditStatus.REVISED]: 'warning',
-      [AuditStatus.LOCKED]: 'success',
+    // Mapování statusů na barvy (NOT_STARTED a LOCKED jsou aliasy)
+    const getBadgeColor = (s: AuditStatus): 'gray' | 'blue' | 'success' | 'warning' => {
+      switch (s) {
+        case AuditStatus.DRAFT:
+        case AuditStatus.NOT_STARTED:
+          return 'gray';
+        case AuditStatus.IN_PROGRESS:
+          return 'blue';
+        case AuditStatus.COMPLETED:
+        case AuditStatus.LOCKED:
+          return 'success';
+        case AuditStatus.REVISED:
+          return 'warning';
+        default:
+          return 'gray';
+      }
     };
     const displayText = status === AuditStatus.LOCKED ? AuditStatus.COMPLETED : 
                         status === AuditStatus.NOT_STARTED ? AuditStatus.DRAFT : status;
     return (
-      <Badge color={badgeColors[status] || 'gray'}>
+      <Badge color={getBadgeColor(status)}>
         {displayText}
       </Badge>
     );
@@ -248,7 +258,7 @@ export const AuditList: React.FC<AuditListProps> = ({
   };
 
   const filteredAndSortedAudits = useMemo(() => {
-    let filtered = audits.filter(audit => {
+    let filtered: Audit[] = audits.filter(audit => {
       // Filtr podle statusu
       if (statusFilter !== 'all' && audit.status !== statusFilter) {
         return false;
@@ -307,19 +317,30 @@ export const AuditList: React.FC<AuditListProps> = ({
     return filteredAndSortedAudits.slice(start, start + itemsPerPage);
   }, [filteredAndSortedAudits, currentPage, itemsPerPage]);
 
-  const isCompleted = (status: AuditStatus) => {
-    return status === AuditStatus.COMPLETED || status === AuditStatus.LOCKED;
+  const isCompleted = (status: AuditStatus): boolean => {
+    switch (status) {
+      case AuditStatus.COMPLETED:
+      case AuditStatus.LOCKED:
+        return true;
+      default:
+        return false;
+    }
   };
 
-  const isEditable = (status: AuditStatus) => {
-    return status === AuditStatus.DRAFT || 
-           status === AuditStatus.IN_PROGRESS || 
-           status === AuditStatus.REVISED ||
-           status === AuditStatus.NOT_STARTED;
+  const isEditable = (status: AuditStatus): boolean => {
+    switch (status) {
+      case AuditStatus.DRAFT:
+      case AuditStatus.IN_PROGRESS:
+      case AuditStatus.REVISED:
+      case AuditStatus.NOT_STARTED:
+        return true;
+      default:
+        return false;
+    }
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto space-y-6 pb-6">
       <PageHeader
         section={SECTION_THEMES[AppState.ALL_AUDITS]}
         title="Audity"
@@ -395,50 +416,50 @@ export const AuditList: React.FC<AuditListProps> = ({
       </Card>
 
       {/* Table - Desktop */}
-      <Card className="hidden md:block">
+      <Card className="hidden md:block w-full">
         <CardBody className="p-0">
-          <div className="min-w-[900px] xl:min-w-0 overflow-x-auto xl:overflow-x-visible overflow-y-visible">
-            <table className="w-full">
+          <div className="w-full">
+            <table className="w-full table-fixed">
             <thead 
               style={{
                 background: `linear-gradient(to right, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.primary}, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.darkest})`
               }}
             >
               <tr>
-                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider rounded-tl-lg">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider rounded-tl-lg">
                   ID
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('status')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Status
                     <SortIcon field="status" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('createdAt')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Datum založení
                     <SortIcon field="createdAt" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('completedAt')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Datum dokončení
                     <SortIcon field="completedAt" />
                   </div>
                 </th>
-                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider">
                   Report
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-right text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
                   Akce
                 </th>
               </tr>
@@ -473,125 +494,105 @@ export const AuditList: React.FC<AuditListProps> = ({
                         className="hover:bg-primary-light/5 transition-colors cursor-pointer"
                         onClick={() => onSelectAudit(audit.id)}
                       >
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
+                        <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900 truncate w-full" title={audit.id}>
                           {audit.id}
                         </div>
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getStatusBadge(audit.status)}
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
+                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={formatDate(audit.createdAt)}>
                           {formatDate(audit.createdAt)}
                         </div>
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
+                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={audit.completedAt ? formatDate(audit.completedAt) : '-'}>
                           {audit.completedAt ? formatDate(audit.completedAt) : '-'}
                         </div>
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getReportBadge(audit.id)}
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right text-sm md:text-xs xl:text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2 md:gap-1">
                           {/* Pokračovat v auditu nebo Zobrazit report */}
                           {isCompleted(audit.status) ? (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-primary-light/20 transition-colors text-primary hover:text-primary-dark"
-                                title="Zobrazit report"
                               >
                                 <ReportIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Zobrazit report
-                              </div>
+                              <ActionIconTooltip text="Zobrazit report" isLastRow={isLastRow} />
                             </div>
                           ) : (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600 hover:text-green-700"
-                                title="Pokračovat v auditu"
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                 </svg>
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Pokračovat v auditu
-                              </div>
+                              <ActionIconTooltip text="Pokračovat v auditu" isLastRow={isLastRow} />
                             </div>
                           )}
 
                           {/* Editovat (pouze pokud není dokončen) */}
                           {isEditable(audit.status) && (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
-                                title="Editovat audit"
                               >
                                 <EditIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Editovat audit
-                              </div>
+                              <ActionIconTooltip text="Editovat audit" isLastRow={isLastRow} />
                             </div>
                           )}
 
                           {/* Odemknout (pouze pokud je dokončen) */}
                           {isCompleted(audit.status) && onUnlockAudit && (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setUnlockingAuditId(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600 hover:text-yellow-700"
-                                title="Odemknout pro úpravy"
                               >
                                 <EditIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Odemknout pro úpravy
-                              </div>
+                              <ActionIconTooltip text="Odemknout pro úpravy" isLastRow={isLastRow} />
                             </div>
                           )}
 
                           {/* Smazat */}
                           {onDeleteAudit && (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeletingAuditId(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
-                                title="Smazat audit"
                               >
                                 <TrashIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Smazat audit
-                              </div>
+                              <ActionIconTooltip text="Smazat audit" isLastRow={isLastRow} />
                             </div>
                           )}
                         </div>
@@ -679,41 +680,47 @@ export const AuditList: React.FC<AuditListProps> = ({
                                     <div className="flex items-center gap-1 flex-shrink-0">
                                       {report.status === ReportStatus.DONE ? (
                                         <>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onSelectAudit(audit.id, report.id);
-                                            }}
-                                            className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
-                                            title="Otevřít tuto verzi reportu"
-                                          >
-                                            <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                          </button>
-                                          {!report.isLatest && onSetReportAsLatest && (
+                                          <div className="relative group/button">
                                             <button
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSettingLatestReportId(report.id);
+                                                onSelectAudit(audit.id, report.id);
                                               }}
-                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200 hover:shadow-sm transition-all duration-200 border border-green-200"
-                                              title="Nastavit jako aktuální verzi"
+                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
                                             >
-                                              <svg className="h-3.5 w-3.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                              </svg>
+                                              <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </button>
+                                            <ActionIconTooltip text="Otevřít tuto verzi reportu" isLastRow={index === reportVersions.length - 1} />
+                                          </div>
+                                          {!report.isLatest && onSetReportAsLatest && (
+                                            <div className="relative group/button">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSettingLatestReportId(report.id);
+                                                }}
+                                                className="p-1 md:p-1.5 rounded bg-gradient-to-br from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200 hover:shadow-sm transition-all duration-200 border border-green-200"
+                                              >
+                                                <svg className="h-3.5 w-3.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              </button>
+                                              <ActionIconTooltip text="Nastavit jako aktuální verzi" isLastRow={index === reportVersions.length - 1} />
+                                            </div>
                                           )}
                                           {onDeleteReportVersion && (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeletingReportId(report.id);
-                                              }}
-                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-red-50 to-red-100 text-red-700 hover:from-red-100 hover:to-red-200 hover:shadow-sm transition-all duration-200 border border-red-200"
-                                              title="Smazat tuto verzi"
-                                            >
-                                              <TrashIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                            </button>
+                                            <div className="relative group/button">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setDeletingReportId(report.id);
+                                                }}
+                                                className="p-1 md:p-1.5 rounded bg-gradient-to-br from-red-50 to-red-100 text-red-700 hover:from-red-100 hover:to-red-200 hover:shadow-sm transition-all duration-200 border border-red-200"
+                                              >
+                                                <TrashIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                              </button>
+                                              <ActionIconTooltip text="Smazat tuto verzi" isLastRow={index === reportVersions.length - 1} />
+                                            </div>
                                           )}
                                         </>
                                       ) : (
@@ -838,28 +845,32 @@ export const AuditList: React.FC<AuditListProps> = ({
                         </Button>
                       )}
                       {isCompleted(audit.status) && onUnlockAudit && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setUnlockingAuditId(audit.id);
-                          }}
-                          className="p-2 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600"
-                          title="Odemknout"
-                        >
-                          <EditIcon className="h-4 w-4" />
-                        </button>
+                        <div className="relative group/button">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUnlockingAuditId(audit.id);
+                            }}
+                            className="p-2 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600"
+                          >
+                            <EditIcon className="h-4 w-4" />
+                          </button>
+                          <ActionIconTooltip text="Odemknout" isLastRow={false} />
+                        </div>
                       )}
                       {onDeleteAudit && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingAuditId(audit.id);
-                          }}
-                          className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
-                          title="Smazat"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
+                        <div className="relative group/button">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingAuditId(audit.id);
+                            }}
+                            className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                          <ActionIconTooltip text="Smazat" isLastRow={false} />
+                        </div>
                       )}
                     </div>
                   </CardBody>
@@ -896,7 +907,7 @@ export const AuditList: React.FC<AuditListProps> = ({
                       </button>
                       {isExpanded && (
                         <div className="mt-2 space-y-1 pl-7">
-                          {reportVersions.map((report) => (
+                          {reportVersions.map((report, index) => (
                             <div
                               key={report.id}
                               className="flex items-center justify-between gap-2 p-1.5 bg-white rounded border-2 border-yellow-200"
@@ -927,7 +938,6 @@ export const AuditList: React.FC<AuditListProps> = ({
                                         onSelectAudit(audit.id, report.id);
                                       }}
                                       className="p-1 rounded bg-gradient-to-br from-primary to-primary-dark text-white"
-                                      title="Otevřít tuto verzi reportu"
                                     >
                                       <ReportIcon className="h-3.5 w-3.5" />
                                     </button>
@@ -938,7 +948,6 @@ export const AuditList: React.FC<AuditListProps> = ({
                                           setSettingLatestReportId(report.id);
                                         }}
                                         className="p-1 rounded bg-gradient-to-br from-green-50 to-green-100 text-green-700 border border-green-200"
-                                        title="Nastavit jako aktuální verzi"
                                       >
                                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -952,7 +961,6 @@ export const AuditList: React.FC<AuditListProps> = ({
                                           setDeletingReportId(report.id);
                                         }}
                                         className="p-1 rounded bg-gradient-to-br from-red-50 to-red-100 text-red-700 border border-red-200"
-                                        title="Smazat tuto verzi"
                                       >
                                         <TrashIcon className="h-3.5 w-3.5" />
                                       </button>

@@ -4,6 +4,9 @@ import { Card, CardHeader, CardBody } from './ui/Card';
 import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
+import { DetailTooltip } from './ui/DetailTooltip';
+import { TooltipCell } from './ui/TooltipCell';
+import { ActionIconTooltip } from './ui/ActionIconTooltip';
 import { PlusIcon, EditIcon, TrashIcon, ChevronDownIcon, ClockIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -202,7 +205,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
+    <div className="w-full max-w-7xl mx-auto pb-6">
       <PageHeader
         section={SECTION_THEMES[AppState.OPERATOR_DASHBOARD]}
         title="Zákazníci"
@@ -250,10 +253,10 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       </Card>
 
       {/* Table - Desktop */}
-      <Card className="hidden md:block">
+      <Card className="hidden md:block w-full">
         <CardBody className="p-0">
-          <div className="min-w-[900px] xl:min-w-0 overflow-x-auto xl:overflow-x-visible overflow-y-visible">
-            <table className="w-full table-auto">
+          <div className="w-full">
+            <table className="w-full table-fixed">
             <thead 
               style={{
                 background: `linear-gradient(to right, ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.primary}, ${SECTION_THEMES[AppState.OPERATOR_DASHBOARD].colors.darkest})`
@@ -261,45 +264,45 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             >
               <tr>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
                   onClick={() => handleSort('name')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     PROVOZOVATEL
                     <SortIcon field="name" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('ico')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     IČO
                     <SortIcon field="ico" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('address')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     ADRESA
                     <SortIcon field="address" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('premises')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     PRACOVIŠTĚ
                     <SortIcon field="premises" />
                   </div>
                 </th>
-                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider">
                   KONTAKT
                 </th>
-                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-right text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
                   AKCE
                 </th>
               </tr>
@@ -328,12 +331,11 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   return (
                     <Fragment key={operator.id}>
                       <tr className="hover:bg-primary-light/5 transition-colors">
-                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            <div className="relative group inline-block">
-                              <span className="cursor-help">{operator.operator_name || '-'}</span>
-                              {/* Tooltip s kompletními informacemi */}
-                              <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
+                        <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4">
+                          <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900">
+                            <DetailTooltip
+                              position={isLastRow ? 'top' : 'bottom'}
+                              content={
                                 <div className="space-y-1.5">
                                   <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
                                   {operator.operator_ico && (
@@ -365,36 +367,36 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                     <span className="text-white">{operatorPremises.length}</span>
                                   </div>
                                 </div>
-                                {/* Šipka tooltipu */}
-                                <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
-                              </div>
-                            </div>
+                              }
+                            >
+                              <span className="cursor-help truncate block w-full" title={operator.operator_name || ''}>{operator.operator_name || '-'}</span>
+                            </DetailTooltip>
                           </div>
+                        </TooltipCell>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600 overflow-hidden">
+                          <span className="truncate block w-full" title={operator.operator_ico || ''}>{operator.operator_ico || '-'}</span>
                         </td>
-                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-600">
-                          {operator.operator_ico || '-'}
-                        </td>
-                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-600 max-w-xs">
-                          <div className="truncate" title={operator.operator_address || ''}>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600 overflow-hidden">
+                          <div className="truncate w-full" title={operator.operator_address || ''}>
                             {operator.operator_address || '-'}
                           </div>
                         </td>
-                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4">
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4">
                           {operatorPremises.length > 0 ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 toggleOperator(operator.id);
                               }}
-                              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer group"
+                              className="flex items-center gap-2 md:gap-1 hover:opacity-80 transition-opacity cursor-pointer group"
                               title={isExpanded ? "Skrýt pracoviště" : "Zobrazit pracoviště"}
                             >
-                              <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold group-hover:bg-green-200 transition-colors">
+                              <span className="px-3 md:px-2 xl:px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs md:text-[10px] xl:text-xs font-semibold group-hover:bg-green-200 transition-colors">
                                 {operatorPremises.length}
                               </span>
-                              <span className="text-sm text-gray-600">pracovišť</span>
+                              <span className="text-sm md:text-xs xl:text-sm text-gray-600">pracovišť</span>
                               <ChevronDownIcon 
-                                className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                className={`h-4 w-4 md:h-3 md:w-3 xl:h-4 xl:w-4 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                               />
                             </button>
                           ) : (
@@ -406,64 +408,65 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             </div>
                           )}
                         </td>
-                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-600">
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600 overflow-hidden">
                           <div className="flex flex-col gap-1">
                             {operator.operator_phone && (
-                              <div className="flex items-center gap-1">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                 </svg>
-                                <span className="truncate">{operator.operator_phone}</span>
+                                <span className="truncate w-full" title={operator.operator_phone}>{operator.operator_phone}</span>
                               </div>
                             )}
                             {operator.operator_email && (
-                              <div className="flex items-center gap-1">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <div className="flex items-center gap-1 min-w-0">
+                                <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                 </svg>
-                                <span className="truncate">{operator.operator_email}</span>
+                                <span className="truncate w-full" title={operator.operator_email}>{operator.operator_email}</span>
                               </div>
                             )}
                             {!operator.operator_phone && !operator.operator_email && <span>-</span>}
                           </div>
                         </td>
-                        <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onAddPremise(operator.id);
-                              }}
-                              className="p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600 hover:text-green-700 relative group"
-                              title="Přidat pracoviště"
-                            >
-                              <PlusIcon className="h-5 w-5" />
-                              {/* Tooltip */}
-                              <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Přidat pracoviště
-                                <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
-                              </div>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEditOperator(operator.id);
-                              }}
-                              className="p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
-                              title="Upravit"
-                            >
-                              <EditIcon className="h-5 w-5" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeletingOperatorId(operator.id);
-                              }}
-                              className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
-                              title="Smazat"
-                            >
-                              <TrashIcon className="h-5 w-5" />
-                            </button>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right text-sm md:text-xs xl:text-sm font-medium">
+                          <div className="flex items-center justify-end gap-2 md:gap-1">
+                            <div className="relative group/button">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAddPremise(operator.id);
+                                }}
+                                className="p-2 md:p-1.5 xl:p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600 hover:text-green-700"
+                              >
+                                <PlusIcon className="h-5 w-5 md:h-4 md:w-4 xl:h-5 xl:w-5" />
+                              </button>
+                              <ActionIconTooltip text="Přidat pracoviště" isLastRow={isLastRow} />
+                            </div>
+                            <div className="relative group/button">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditOperator(operator.id);
+                                }}
+                                className="p-2 md:p-1.5 xl:p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
+                              >
+                                <EditIcon className="h-5 w-5 md:h-4 md:w-4 xl:h-5 xl:w-5" />
+                              </button>
+                              <ActionIconTooltip text="Upravit" isLastRow={isLastRow} />
+                            </div>
+                            <div className="relative group/button">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingOperatorId(operator.id);
+                                }}
+                                className="p-2 md:p-1.5 xl:p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
+                              >
+                                <TrashIcon className="h-5 w-5 md:h-4 md:w-4 xl:h-5 xl:w-5" />
+                              </button>
+                              <ActionIconTooltip text="Smazat" isLastRow={isLastRow} />
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -480,22 +483,13 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               const isLastPremise = premiseIndex === operatorPremises.length - 1 && isLastRow;
                               return (
                                 <tr key={premise.id} className="bg-white hover:bg-primary-light/10 transition-all duration-200 border-t border-gray-200/50">
-                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 pl-12" colSpan={2}>
-                                    <div className="flex items-start gap-3">
-                                      <div className="w-1 h-10 bg-gradient-to-b from-primary-light to-primary-dark rounded-full flex-shrink-0 mt-0.5"></div>
-                                      <div className="relative group flex-1 min-w-0">
-                                        <div className="font-semibold text-gray-900 text-sm cursor-help leading-relaxed break-words">{premise.premise_name || 'N/A'}</div>
-                                        {premise.premise_address && (
-                                          <div className="mt-1.5 flex items-start gap-2 text-sm text-gray-600">
-                                            <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                            <span className="break-words">{premise.premise_address}</span>
-                                          </div>
-                                        )}
-                                        {/* Tooltip s kompletními informacemi o pracovišti */}
-                                        <div className={`absolute left-0 ${isLastPremise ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
+                                  <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 pl-12 md:pl-8 xl:pl-12" colSpan={2}>
+                                    <div className="flex items-start gap-3 md:gap-2">
+                                      <div className="w-1 h-10 md:h-8 xl:h-10 bg-gradient-to-b from-primary-light to-primary-dark rounded-full flex-shrink-0 mt-0.5"></div>
+                                      <DetailTooltip
+                                        position={isLastPremise ? 'top' : 'bottom'}
+                                        className="flex-1 min-w-0"
+                                        content={
                                           <div className="space-y-1.5">
                                             <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
                                             {premise.premise_address && (
@@ -523,24 +517,33 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                               </div>
                                             )}
                                           </div>
-                                          {/* Šipka tooltipu */}
-                                          <div className={`absolute ${isLastPremise ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastPremise ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
-                                        </div>
-                                      </div>
+                                        }
+                                      >
+                                        <div className="font-semibold text-gray-900 text-sm md:text-xs xl:text-sm cursor-help leading-relaxed truncate w-full" title={premise.premise_name || 'N/A'}>{premise.premise_name || 'N/A'}</div>
+                                        {premise.premise_address && (
+                                          <div className="mt-1.5 md:mt-1 flex items-start gap-2 text-sm md:text-xs xl:text-sm text-gray-600 min-w-0">
+                                            <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                            <span className="break-words truncate block w-full" title={premise.premise_address}>{premise.premise_address}</span>
+                                          </div>
+                                        )}
+                                      </DetailTooltip>
                                     </div>
-                                  </td>
-                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4" colSpan={2}>
+                                  </TooltipCell>
+                                  <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4" colSpan={2}>
                                     {(() => {
                                       const metrics = getPremiseMetrics(premise.id);
                                       return (
-                                        <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-4 md:gap-2 xl:gap-4">
                                           {/* Počet auditů */}
                                           <div className="relative group">
-                                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
-                                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <div className="flex items-center gap-1.5 md:gap-1 px-2.5 md:px-2 xl:px-2.5 py-1.5 md:py-1 xl:py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+                                              <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                               </svg>
-                                              <span className="text-sm font-semibold text-blue-700">{metrics.totalAudits}</span>
+                                              <span className="text-sm md:text-xs xl:text-sm font-semibold text-blue-700">{metrics.totalAudits}</span>
                                             </div>
                                             <div className="absolute left-0 top-full mt-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                                               Celkem auditů
@@ -551,9 +554,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           {/* Aktivní audit */}
                                           {metrics.activeAudit && (
                                             <div className="relative group">
-                                              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-green-50 rounded-lg border border-green-200">
-                                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                                                <span className="text-xs font-medium text-green-700">
+                                              <div className="flex items-center gap-1.5 md:gap-1 px-2.5 md:px-2 xl:px-2.5 py-1.5 md:py-1 xl:py-1.5 bg-green-50 rounded-lg border border-green-200">
+                                                <div className="w-2 h-2 md:w-1.5 md:h-1.5 xl:w-2 xl:h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                                <span className="text-xs md:text-[10px] xl:text-xs font-medium text-green-700">
                                                   {metrics.activeAudit.status === AuditStatus.IN_PROGRESS ? 'Probíhá' : 'Nezapočatý'}
                                                 </span>
                                               </div>
@@ -567,11 +570,11 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           {/* Poslední audit - datum */}
                                           {metrics.lastCompletedDate && (
                                             <div className="relative group">
-                                              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
-                                                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <div className="flex items-center gap-1.5 md:gap-1 px-2.5 md:px-2 xl:px-2.5 py-1.5 md:py-1 xl:py-1.5 bg-gray-50 rounded-lg border border-gray-200">
+                                                <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                 </svg>
-                                                <span className="text-xs font-medium text-gray-700">{formatDate(metrics.lastCompletedDate)}</span>
+                                                <span className="text-xs md:text-[10px] xl:text-xs font-medium text-gray-700">{formatDate(metrics.lastCompletedDate)}</span>
                                               </div>
                                               <div className="absolute left-0 top-full mt-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                                                 Datum posledního auditu
@@ -583,24 +586,24 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           {/* Výsledek auditu */}
                                           {metrics.auditResult !== 'unknown' && (
                                             <div className="relative group">
-                                              <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
+                                              <div className={`flex items-center gap-1.5 md:gap-1 px-2.5 md:px-2 xl:px-2.5 py-1.5 md:py-1 xl:py-1.5 rounded-lg border ${
                                                 metrics.auditResult === 'compliant' 
                                                   ? 'bg-emerald-50 border-emerald-200' 
                                                   : 'bg-red-50 border-red-200'
                                               }`}>
                                                 {metrics.auditResult === 'compliant' ? (
                                                   <>
-                                                    <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                     </svg>
-                                                    <span className="text-xs font-medium text-emerald-700">Bez závad</span>
+                                                    <span className="text-xs md:text-[10px] xl:text-xs font-medium text-emerald-700">Bez závad</span>
                                                   </>
                                                 ) : (
                                                   <>
-                                                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                     </svg>
-                                                    <span className="text-xs font-medium text-red-700">Neshody</span>
+                                                    <span className="text-xs md:text-[10px] xl:text-xs font-medium text-red-700">Neshody</span>
                                                   </>
                                                 )}
                                               </div>
@@ -614,93 +617,93 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                       );
                                     })()}
                                   </td>
-                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-sm text-gray-800">
-                                    <div className="flex flex-col gap-1.5">
+                                  <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-800 overflow-hidden">
+                                    <div className="flex flex-col gap-1.5 md:gap-1">
                                       {premise.premise_phone && (
-                                        <div className="flex items-center gap-2">
-                                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <div className="flex items-center gap-2 md:gap-1 min-w-0">
+                                          <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                           </svg>
-                                          <span className="truncate font-medium text-gray-700">{premise.premise_phone}</span>
+                                          <span className="truncate font-medium text-gray-700 w-full" title={premise.premise_phone}>{premise.premise_phone}</span>
                                         </div>
                                       )}
                                       {premise.premise_email && (
-                                        <div className="flex items-center gap-2">
-                                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <div className="flex items-center gap-2 md:gap-1 min-w-0">
+                                          <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                           </svg>
-                                          <span className="truncate font-medium text-gray-700">{premise.premise_email}</span>
+                                          <span className="truncate font-medium text-gray-700 w-full" title={premise.premise_email}>{premise.premise_email}</span>
                                         </div>
                                       )}
                                       {!premise.premise_phone && !premise.premise_email && <span className="text-gray-400">-</span>}
                                     </div>
                                   </td>
-                                  <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right">
+                                  <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right">
                                     <div className="flex items-center justify-end gap-1">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setPreparingAuditPremiseId(premise.id);
-                                        }}
-                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-purple-50 transition-colors text-purple-600 hover:text-purple-700 relative group"
-                                        title="Předpřipravit audit"
-                                      >
-                                        <ClockIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
-                                        {/* Tooltip */}
-                                        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                          Předpřipravit audit
-                                          <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
-                                        </div>
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setStartingAuditPremiseId(premise.id);
-                                        }}
-                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-green-50 transition-colors text-green-600 hover:text-green-700 relative group"
-                                        title="Začít audit"
-                                      >
-                                        <svg className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" fill="currentColor" viewBox="0 0 24 24">
-                                          <path d="M8 5v14l11-7z"/>
-                                        </svg>
-                                        {/* Tooltip */}
-                                        <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                          Začít audit
-                                          <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
-                                        </div>
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onSelectPremise(premise.id);
-                                        }}
-                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-emerald-50 transition-colors text-emerald-600 hover:text-emerald-700"
-                                        title="Zobrazit audity"
-                                      >
-                                        <svg className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          onEditPremise(premise.id);
-                                        }}
-                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
-                                        title="Upravit pracoviště"
-                                      >
-                                        <EditIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setDeletingPremiseId(premise.id);
-                                        }}
-                                        className="p-1 md:p-2 xl:p-1 rounded hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
-                                        title="Smazat pracoviště"
-                                      >
-                                        <TrashIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
-                                      </button>
+                                      <div className="relative group/button">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setPreparingAuditPremiseId(premise.id);
+                                          }}
+                                          className="p-1 md:p-1.5 xl:p-1 rounded hover:bg-purple-50 transition-colors text-purple-600 hover:text-purple-700"
+                                        >
+                                          <ClockIcon className="h-4 w-4 md:h-3 md:w-3 xl:h-4 xl:w-4" />
+                                        </button>
+                                        <ActionIconTooltip text="Předpřipravit audit" isLastRow={isLastPremise} />
+                                      </div>
+                                      <div className="relative group/button">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setStartingAuditPremiseId(premise.id);
+                                          }}
+                                          className="p-1 md:p-1.5 xl:p-1 rounded hover:bg-green-50 transition-colors text-green-600 hover:text-green-700"
+                                        >
+                                          <svg className="h-4 w-4 md:h-3 md:w-3 xl:h-4 xl:w-4" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"/>
+                                          </svg>
+                                        </button>
+                                        <ActionIconTooltip text="Začít audit" isLastRow={isLastPremise} />
+                                      </div>
+                                      <div className="relative group/button">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onSelectPremise(premise.id);
+                                          }}
+                                          className="p-1 md:p-1.5 xl:p-1 rounded hover:bg-emerald-50 transition-colors text-emerald-600 hover:text-emerald-700"
+                                        >
+                                          <svg className="h-4 w-4 md:h-3 md:w-3 xl:h-4 xl:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                        </button>
+                                        <ActionIconTooltip text="Zobrazit audity" isLastRow={isLastPremise} />
+                                      </div>
+                                      <div className="relative group/button">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onEditPremise(premise.id);
+                                          }}
+                                          className="p-1 md:p-1.5 xl:p-1 rounded hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
+                                        >
+                                          <EditIcon className="h-4 w-4 md:h-3 md:w-3 xl:h-4 xl:w-4" />
+                                        </button>
+                                        <ActionIconTooltip text="Upravit pracoviště" isLastRow={isLastPremise} />
+                                      </div>
+                                      <div className="relative group/button">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeletingPremiseId(premise.id);
+                                          }}
+                                          className="p-1 md:p-1.5 xl:p-1 rounded hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
+                                        >
+                                          <TrashIcon className="h-4 w-4 md:h-3 md:w-3 xl:h-4 xl:w-4" />
+                                        </button>
+                                        <ActionIconTooltip text="Smazat pracoviště" isLastRow={isLastPremise} />
+                                      </div>
                                     </div>
                                   </td>
                                 </tr>
@@ -759,10 +762,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   <CardBody>
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex-1 min-w-0">
-                        <div className="relative group">
-                          <h3 className="text-base font-bold text-gray-900 mb-1 cursor-help">{operator.operator_name}</h3>
-                          {/* Tooltip s kompletními informacemi */}
-                          <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]">
+                        <DetailTooltip
+                          position="bottom"
+                          content={
                             <div className="space-y-1.5">
                               <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
                               {operator.operator_ico && (
@@ -794,10 +796,10 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                 <span className="text-white">{operatorPremises.length}</span>
                               </div>
                             </div>
-                            {/* Šipka tooltipu */}
-                            <div className="absolute bottom-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
-                          </div>
-                        </div>
+                          }
+                        >
+                          <h3 className="text-base font-bold text-gray-900 mb-1 cursor-help">{operator.operator_name}</h3>
+                        </DetailTooltip>
                         <div className="space-y-1 text-sm text-gray-600">
                           {operator.operator_ico && (
                             <div className="flex items-center gap-2">
@@ -845,41 +847,42 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                         </div>
                       </div>
                       <div className="flex gap-1 flex-shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAddPremise(operator.id);
-                          }}
-                          className="p-2 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors relative group"
-                          title="Přidat pracoviště"
-                        >
-                          <PlusIcon className="h-5 w-5" />
-                          {/* Tooltip */}
-                          <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                            Přidat pracoviště
-                            <div className="absolute left-full top-1/2 -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-gray-900"></div>
-                          </div>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditOperator(operator.id);
-                          }}
-                          className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                          title="Upravit"
-                        >
-                          <EditIcon className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingOperatorId(operator.id);
-                          }}
-                          className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                          title="Smazat"
-                        >
-                          <TrashIcon className="h-5 w-5" />
-                        </button>
+                        <div className="relative group/button">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAddPremise(operator.id);
+                            }}
+                            className="p-2 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
+                          >
+                            <PlusIcon className="h-5 w-5" />
+                          </button>
+                          <ActionIconTooltip text="Přidat pracoviště" isLastRow={false} />
+                        </div>
+                        <div className="relative group/button">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditOperator(operator.id);
+                            }}
+                            className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                          >
+                            <EditIcon className="h-5 w-5" />
+                          </button>
+                          <ActionIconTooltip text="Upravit" isLastRow={false} />
+                        </div>
+                        <div className="relative group/button">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingOperatorId(operator.id);
+                            }}
+                            className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                          <ActionIconTooltip text="Smazat" isLastRow={false} />
+                        </div>
                       </div>
                     </div>
                     {isExpanded && operatorPremises.length > 0 && (
@@ -923,12 +926,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                   </svg>
                                 </div>
-                                <div className="relative group">
-                                  <span className="font-semibold text-gray-900 text-sm cursor-help">
-                                    {premise.premise_name}
-                                  </span>
-                                  {/* Tooltip s kompletními informacemi o pracovišti */}
-                                  <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]">
+                                <DetailTooltip
+                                  position="bottom"
+                                  content={
                                     <div className="space-y-1.5">
                                       <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
                                       {premise.premise_address && (
@@ -956,34 +956,40 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                         </div>
                                       )}
                                     </div>
-                                    {/* Šipka tooltipu */}
-                                    <div className="absolute bottom-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
-                                  </div>
-                                </div>
+                                  }
+                                >
+                                  <span className="font-semibold text-gray-900 text-sm cursor-help">
+                                    {premise.premise_name}
+                                  </span>
+                                </DetailTooltip>
                               </div>
                               <div className="flex items-center gap-2 mt-2">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPreparingAuditPremiseId(premise.id);
-                                  }}
-                                  className="px-2 py-1.5 bg-purple-50 text-purple-700 text-xs rounded-lg border border-purple-200"
-                                  title="Předpřipravit audit"
-                                >
-                                  <ClockIcon className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setStartingAuditPremiseId(premise.id);
-                                  }}
-                                  className="px-2 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200"
-                                  title="Začít audit"
-                                >
-                                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                  </svg>
-                                </button>
+                                <div className="relative group/button">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPreparingAuditPremiseId(premise.id);
+                                    }}
+                                    className="px-2 py-1.5 bg-purple-50 text-purple-700 text-xs rounded-lg border border-purple-200"
+                                  >
+                                    <ClockIcon className="h-4 w-4" />
+                                  </button>
+                                  <ActionIconTooltip text="Předpřipravit audit" isLastRow={false} />
+                                </div>
+                                <div className="relative group/button">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setStartingAuditPremiseId(premise.id);
+                                    }}
+                                    className="px-2 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200"
+                                  >
+                                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                  </button>
+                                  <ActionIconTooltip text="Začít audit" isLastRow={false} />
+                                </div>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -993,26 +999,30 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                 >
                                   Zobrazit audity
                                 </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditPremise(premise.id);
-                                  }}
-                                  className="px-2 py-1.5 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-200"
-                                  title="Upravit"
-                                >
-                                  <EditIcon className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDeletingPremiseId(premise.id);
-                                  }}
-                                  className="px-2 py-1.5 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200"
-                                  title="Smazat"
-                                >
-                                  <TrashIcon className="h-4 w-4" />
-                                </button>
+                                <div className="relative group/button">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEditPremise(premise.id);
+                                    }}
+                                    className="px-2 py-1.5 bg-blue-50 text-blue-700 text-xs rounded-lg border border-blue-200"
+                                  >
+                                    <EditIcon className="h-4 w-4" />
+                                  </button>
+                                  <ActionIconTooltip text="Upravit" isLastRow={false} />
+                                </div>
+                                <div className="relative group/button">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeletingPremiseId(premise.id);
+                                    }}
+                                    className="px-2 py-1.5 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200"
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                  </button>
+                                  <ActionIconTooltip text="Smazat" isLastRow={false} />
+                                </div>
                               </div>
                             </div>
                           ))}

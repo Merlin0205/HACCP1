@@ -19,7 +19,7 @@ export const Card: React.FC<CardProps> = ({
   
   return (
     <FlowbiteCard
-      className={`${hoverClasses} ${clickableClasses} ${className}`}
+      className={`w-full ${hoverClasses} ${clickableClasses} ${className}`}
       onClick={onClick}
     >
       {children}
@@ -50,8 +50,12 @@ export interface CardBodyProps {
 }
 
 export const CardBody: React.FC<CardBodyProps> = ({ children, className = '' }) => {
+  // Pokud je className="p-0", odstranit defaultní padding úplně
+  const hasNoPadding = className.includes('p-0');
+  const paddingClasses = hasNoPadding ? '' : 'px-6 py-4';
+  
   return (
-    <div className={`w-full px-6 py-4 ${className}`}>
+    <div className={`w-full ${paddingClasses} ${className}`}>
       {children}
     </div>
   );

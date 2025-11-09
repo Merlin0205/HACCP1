@@ -5,6 +5,9 @@ import { TextField } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
+import { DetailTooltip } from './ui/DetailTooltip';
+import { TooltipCell } from './ui/TooltipCell';
+import { ActionIconTooltip } from './ui/ActionIconTooltip';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -253,7 +256,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
+    <div className="w-full max-w-7xl mx-auto pb-6">
       <PageHeader
         section={SECTION_THEMES[AppState.ALL_AUDITS]}
         title={title}
@@ -314,10 +317,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
       </Card>
 
       {/* Table - Desktop */}
-      <Card className="hidden md:block">
+      <Card className="hidden md:block w-full">
         <CardBody className="p-0">
-          <div className="min-w-[900px] xl:min-w-0 overflow-x-auto xl:overflow-x-visible overflow-y-visible">
-            <table className="w-full">
+          <div className="w-full">
+            <table className="w-full table-fixed">
             <thead 
               style={{
                 background: `linear-gradient(to right, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.primary}, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.darkest})`
@@ -325,54 +328,54 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
             >
               <tr>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity rounded-tl-lg"
                   onClick={() => handleSort('operator')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Provozovatel
                     <SortIcon field="operator" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('premise')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Pracoviště
                     <SortIcon field="premise" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('status')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Status
                     <SortIcon field="status" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('createdAt')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Datum založení
                     <SortIcon field="createdAt" />
                   </div>
                 </th>
                 <th
-                  className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('completedAt')}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:gap-1">
                     Datum dokončení
                     <SortIcon field="completedAt" />
                   </div>
                 </th>
-                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider">
                   Report
                 </th>
-                <th className="px-3 md:px-4 xl:px-6 py-3 md:py-4 text-right text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
+                <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-right text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider rounded-tr-lg">
                   Akce
                 </th>
               </tr>
@@ -407,202 +410,176 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                         className="hover:bg-primary-light/5 transition-colors cursor-pointer"
                         onClick={() => onSelectAudit(audit.id)}
                       >
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="relative group">
-                          <div className="text-sm font-medium text-gray-900 cursor-help">
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <DetailTooltip
+                          position={isLastRow ? 'top' : 'bottom'}
+                          content={
+                            <div className="space-y-1.5">
+                              <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
+                              {operator.operator_ico && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
+                                  <span className="text-white">{operator.operator_ico}</span>
+                                </div>
+                              )}
+                              {operator.operator_address && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
+                                  <span className="text-white">{operator.operator_address}</span>
+                                </div>
+                              )}
+                              {operator.operator_phone && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">Telefon:</span>
+                                  <span className="text-white">{operator.operator_phone}</span>
+                                </div>
+                              )}
+                              {operator.operator_email && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">Email:</span>
+                                  <span className="text-white break-all">{operator.operator_email}</span>
+                                </div>
+                              )}
+                            </div>
+                          }
+                        >
+                          <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900 cursor-help truncate block w-full" title={operator?.operator_name || ''}>
                             {operator?.operator_name || '-'}
                           </div>
-                          {/* Tooltip s kompletními informacemi o provozovateli */}
-                          {operator && (
-                            <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
-                              <div className="space-y-1.5">
-                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
-                                {operator.operator_ico && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
-                                    <span className="text-white">{operator.operator_ico}</span>
-                                  </div>
-                                )}
-                                {operator.operator_address && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
-                                    <span className="text-white">{operator.operator_address}</span>
-                                  </div>
-                                )}
-                                {operator.operator_phone && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">Telefon:</span>
-                                    <span className="text-white">{operator.operator_phone}</span>
-                                  </div>
-                                )}
-                                {operator.operator_email && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">Email:</span>
-                                    <span className="text-white break-all">{operator.operator_email}</span>
-                                  </div>
-                                )}
-                              </div>
-                              {/* Šipka tooltipu */}
-                              <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
+                        </DetailTooltip>
+                      </TooltipCell>
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <DetailTooltip
+                          position={isLastRow ? 'top' : 'bottom'}
+                          content={
+                            <div className="space-y-1.5">
+                              <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
+                              {premise.premise_address && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[60px]">Adresa:</span>
+                                  <span className="text-white">{premise.premise_address}</span>
+                                </div>
+                              )}
+                              {premise.premise_responsible_person && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[60px]">Odpovědná osoba:</span>
+                                  <span className="text-white">{premise.premise_responsible_person}</span>
+                                </div>
+                              )}
+                              {premise.premise_phone && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[60px]">Telefon:</span>
+                                  <span className="text-white">{premise.premise_phone}</span>
+                                </div>
+                              )}
+                              {premise.premise_email && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[60px]">Email:</span>
+                                  <span className="text-white break-all">{premise.premise_email}</span>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="relative group">
-                          <div className="text-sm text-gray-900 cursor-help">
+                          }
+                        >
+                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 cursor-help truncate block w-full" title={premise?.premise_name || ''}>
                             {premise?.premise_name || '-'}
                           </div>
-                          {/* Tooltip s kompletními informacemi o pracovišti */}
-                          {premise && (
-                            <div className={`absolute left-0 ${isLastRow ? 'bottom-full mb-2' : 'top-full mt-2'} px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]`}>
-                              <div className="space-y-1.5">
-                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
-                                {premise.premise_address && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Adresa:</span>
-                                    <span className="text-white">{premise.premise_address}</span>
-                                  </div>
-                                )}
-                                {premise.premise_responsible_person && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Odpovědná osoba:</span>
-                                    <span className="text-white">{premise.premise_responsible_person}</span>
-                                  </div>
-                                )}
-                                {premise.premise_phone && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Telefon:</span>
-                                    <span className="text-white">{premise.premise_phone}</span>
-                                  </div>
-                                )}
-                                {premise.premise_email && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Email:</span>
-                                    <span className="text-white break-all">{premise.premise_email}</span>
-                                  </div>
-                                )}
-                              </div>
-                              {/* Šipka tooltipu */}
-                              <div className={`absolute ${isLastRow ? 'top-full' : 'bottom-full'} left-4 w-0 h-0 border-l-4 border-r-4 ${isLastRow ? 'border-t-4 border-transparent border-t-gray-900' : 'border-b-4 border-transparent border-b-gray-900'}`}></div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
+                        </DetailTooltip>
+                      </TooltipCell>
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getStatusBadge(audit.status)}
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
+                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={formatDate(audit.createdAt)}>
                           {formatDate(audit.createdAt)}
                         </div>
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
+                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={audit.completedAt ? formatDate(audit.completedAt) : '-'}>
                           {audit.completedAt ? formatDate(audit.completedAt) : '-'}
                         </div>
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getReportBadge(audit.id)}
                       </td>
-                      <td className="px-3 md:px-4 xl:px-6 py-3 md:py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right text-sm md:text-xs xl:text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2 md:gap-1">
                           {/* Pokračovat v auditu nebo Zobrazit report */}
                           {isCompleted(audit.status) ? (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-primary-light/20 transition-colors text-primary hover:text-primary-dark"
-                                title="Zobrazit report"
                               >
                                 <ReportIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Zobrazit report
-                              </div>
+                              <ActionIconTooltip text="Zobrazit report" isLastRow={isLastRow} />
                             </div>
                           ) : (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-green-50 transition-colors text-green-600 hover:text-green-700"
-                                title="Pokračovat v auditu"
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                 </svg>
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Pokračovat v auditu
-                              </div>
+                              <ActionIconTooltip text="Pokračovat v auditu" isLastRow={isLastRow} />
                             </div>
                           )}
 
                           {/* Editovat (pouze pokud není dokončen) */}
                           {isEditable(audit.status) && (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
-                                title="Editovat audit"
                               >
                                 <EditIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Editovat audit
-                              </div>
+                              <ActionIconTooltip text="Editovat audit" isLastRow={isLastRow} />
                             </div>
                           )}
 
                           {/* Odemknout (pouze pokud je dokončen) */}
                           {isCompleted(audit.status) && onUnlockAudit && (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setUnlockingAuditId(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-yellow-50 transition-colors text-yellow-600 hover:text-yellow-700"
-                                title="Odemknout pro úpravy"
                               >
                                 <EditIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Odemknout pro úpravy
-                              </div>
+                              <ActionIconTooltip text="Odemknout pro úpravy" isLastRow={isLastRow} />
                             </div>
                           )}
 
                           {/* Smazat */}
                           {onDeleteAudit && (
-                            <div className="relative group">
+                            <div className="relative group/button">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeletingAuditId(audit.id);
                                 }}
                                 className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600 hover:text-red-700"
-                                title="Smazat audit"
                               >
                                 <TrashIcon className="h-5 w-5" />
                               </button>
-                              {/* Tooltip */}
-                              <div className="absolute right-0 top-full mt-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                Smazat audit
-                              </div>
+                              <ActionIconTooltip text="Smazat audit" isLastRow={isLastRow} />
                             </div>
                           )}
                         </div>
@@ -690,41 +667,47 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                     <div className="flex items-center gap-1 flex-shrink-0">
                                       {report.status === ReportStatus.DONE ? (
                                         <>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              onSelectAudit(audit.id, report.id);
-                                            }}
-                                            className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
-                                            title="Otevřít tuto verzi reportu"
-                                          >
-                                            <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                          </button>
-                                          {!report.isLatest && onSetReportAsLatest && (
+                                          <div className="relative group/button">
                                             <button
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSettingLatestReportId(report.id);
+                                                onSelectAudit(audit.id, report.id);
                                               }}
-                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200 hover:shadow-sm transition-all duration-200 border border-green-200"
-                                              title="Nastavit jako aktuální verzi"
+                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
                                             >
-                                              <svg className="h-3.5 w-3.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                              </svg>
+                                              <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </button>
+                                            <ActionIconTooltip text="Otevřít tuto verzi reportu" isLastRow={index === reportVersions.length - 1} />
+                                          </div>
+                                          {!report.isLatest && onSetReportAsLatest && (
+                                            <div className="relative group/button">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSettingLatestReportId(report.id);
+                                                }}
+                                                className="p-1 md:p-1.5 rounded bg-gradient-to-br from-green-50 to-green-100 text-green-700 hover:from-green-100 hover:to-green-200 hover:shadow-sm transition-all duration-200 border border-green-200"
+                                              >
+                                                <svg className="h-3.5 w-3.5 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              </button>
+                                              <ActionIconTooltip text="Nastavit jako aktuální verzi" isLastRow={index === reportVersions.length - 1} />
+                                            </div>
                                           )}
                                           {onDeleteReportVersion && (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeletingReportId(report.id);
-                                              }}
-                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-red-50 to-red-100 text-red-700 hover:from-red-100 hover:to-red-200 hover:shadow-sm transition-all duration-200 border border-red-200"
-                                              title="Smazat tuto verzi"
-                                            >
-                                              <TrashIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                                            </button>
+                                            <div className="relative group/button">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setDeletingReportId(report.id);
+                                                }}
+                                                className="p-1 md:p-1.5 rounded bg-gradient-to-br from-red-50 to-red-100 text-red-700 hover:from-red-100 hover:to-red-200 hover:shadow-sm transition-all duration-200 border border-red-200"
+                                              >
+                                                <TrashIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                                              </button>
+                                              <ActionIconTooltip text="Smazat tuto verzi" isLastRow={index === reportVersions.length - 1} />
+                                            </div>
                                           )}
                                         </>
                                       ) : (
@@ -800,80 +783,40 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   <CardBody>
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="flex-1 min-w-0">
-                        <div className="relative group mb-1">
+                        <DetailTooltip
+                          position="bottom"
+                          content={
+                            <div className="space-y-1.5">
+                              <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
+                              {operator.operator_ico && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
+                                  <span className="text-white">{operator.operator_ico}</span>
+                                </div>
+                              )}
+                              {operator.operator_address && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
+                                  <span className="text-white">{operator.operator_address}</span>
+                                </div>
+                              )}
+                              {operator.operator_phone && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">Telefon:</span>
+                                  <span className="text-white">{operator.operator_phone}</span>
+                                </div>
+                              )}
+                              {operator.operator_email && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[50px]">Email:</span>
+                                  <span className="text-white break-all">{operator.operator_email}</span>
+                                </div>
+                              )}
+                            </div>
+                          }
+                        >
                           <h3 className="text-base font-bold text-gray-900 cursor-help">{operator?.operator_name || '-'}</h3>
-                          {/* Tooltip s kompletními informacemi o provozovateli */}
-                          {operator && (
-                            <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]">
-                              <div className="space-y-1.5">
-                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
-                                {operator.operator_ico && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
-                                    <span className="text-white">{operator.operator_ico}</span>
-                                  </div>
-                                )}
-                                {operator.operator_address && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
-                                    <span className="text-white">{operator.operator_address}</span>
-                                  </div>
-                                )}
-                                {operator.operator_phone && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">Telefon:</span>
-                                    <span className="text-white">{operator.operator_phone}</span>
-                                  </div>
-                                )}
-                                {operator.operator_email && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[50px]">Email:</span>
-                                    <span className="text-white break-all">{operator.operator_email}</span>
-                                  </div>
-                                )}
-                              </div>
-                              {/* Šipka tooltipu */}
-                              <div className="absolute bottom-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="relative group mb-2">
-                          <p className="text-sm text-gray-600 cursor-help">{premise?.premise_name || '-'}</p>
-                          {/* Tooltip s kompletními informacemi o pracovišti */}
-                          {premise && (
-                            <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] min-w-[250px] max-w-[350px]">
-                              <div className="space-y-1.5">
-                                <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{premise.premise_name || 'Neznámé pracoviště'}</div>
-                                {premise.premise_address && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Adresa:</span>
-                                    <span className="text-white">{premise.premise_address}</span>
-                                  </div>
-                                )}
-                                {premise.premise_responsible_person && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Odpovědná osoba:</span>
-                                    <span className="text-white">{premise.premise_responsible_person}</span>
-                                  </div>
-                                )}
-                                {premise.premise_phone && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Telefon:</span>
-                                    <span className="text-white">{premise.premise_phone}</span>
-                                  </div>
-                                )}
-                                {premise.premise_email && (
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-semibold text-gray-300 min-w-[60px]">Email:</span>
-                                    <span className="text-white break-all">{premise.premise_email}</span>
-                                  </div>
-                                )}
-                              </div>
-                              {/* Šipka tooltipu */}
-                              <div className="absolute bottom-full left-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
-                            </div>
-                          )}
-                        </div>
+                        </DetailTooltip>
                         <div className="flex items-center gap-2 flex-wrap">
                           {getStatusBadge(audit.status)}
                           {getReportBadge(audit.id)}
@@ -966,7 +909,6 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                           setSettingLatestReportId(report.id);
                                         }}
                                         className="px-2 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg border border-green-200"
-                                        title="Nastavit jako aktuální"
                                       >
                                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -980,7 +922,6 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                           setDeletingReportId(report.id);
                                         }}
                                         className="px-2 py-1.5 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200"
-                                        title="Smazat"
                                       >
                                         <TrashIcon className="h-4 w-4" />
                                       </button>
@@ -1027,16 +968,18 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                           </Button>
                         )}
                         {onDeleteAudit && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingAuditId(audit.id);
-                            }}
-                            className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex-shrink-0"
-                            title="Smazat audit"
-                          >
-                            <TrashIcon className="h-5 w-5" />
-                          </button>
+                          <div className="relative group/button">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingAuditId(audit.id);
+                              }}
+                              className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex-shrink-0"
+                            >
+                              <TrashIcon className="h-5 w-5" />
+                            </button>
+                            <ActionIconTooltip text="Smazat audit" isLastRow={false} />
+                          </div>
                         )}
                       </div>
                     </div>

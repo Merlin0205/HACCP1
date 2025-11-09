@@ -191,6 +191,9 @@ HACCP1/
 ├── components/          # React komponenty
 │   ├── ui/              # Flowbite wrapper komponenty (Button, Card, Input, Modal)
 │   │   ├── Pagination.tsx       # Stránkování tabulek (NOVÁ)
+│   │   ├── DetailTooltip.tsx    # Detailní tooltip komponenta (NOVÁ)
+│   │   ├── TooltipCell.tsx      # Wrapper pro td s tooltipem (NOVÁ)
+│   │   ├── ActionIconTooltip.tsx # Tooltip pro ikony akcí (NOVÁ)
 │   │   └── ...
 │   ├── icons/           # SVG ikony
 │   ├── report/          # Smart Template komponenty (NOVÁ)
@@ -241,6 +244,9 @@ HACCP1/
 - **`AppWithAuth.tsx`** - wrapper s autentifikací
 - **`firebaseConfig.ts`** - Firebase SDK inicializace
 - **`components/ui/Pagination.tsx`** - reusable pagination komponenta pro tabulky
+- **`components/ui/DetailTooltip.tsx`** - reusable detailní tooltip komponenta pro zobrazení komplexních informací
+- **`components/ui/TooltipCell.tsx`** - wrapper pro `<td>` element s tooltipem (automaticky řeší overflow)
+- **`components/ui/ActionIconTooltip.tsx`** - reusable tooltip komponenta pro ikony akcí v tabulkách
 - **`vite.config.ts`** - automatické verzování z package.json při buildu
 - **`components/ReportView.tsx`** - zobrazení reportů (UPRAVENO - přidány záložky Legacy/Smart)
 - **`SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`** - detailní plán Smart Template systému
@@ -258,6 +264,7 @@ HACCP1/
 3. **Použij Flowbite komponentu** podle dokumentace
 4. **Zachovej původní barvy** přes inline styles
 5. **Otestuj v light mode** - aplikace je vždy světlá
+6. **Pro tooltips použij reusable komponenty** - `DetailTooltip`, `TooltipCell` a `ActionIconTooltip` z `components/ui/`
 
 ### Při práci s Firebase:
 
@@ -468,6 +475,70 @@ Každý tab má `title` atribut s detaily:
 - Ikony: `h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4`
 - Tlačítka: `p-1 md:p-2 xl:p-1`
 - Horizontální scroll: `min-w-[900px] xl:min-w-0` wrapper
+
+---
+
+## 📑 TOOLTIP SYSTÉM
+
+### Reusable Tooltip Komponenty
+
+**DetailTooltip** (`components/ui/DetailTooltip.tsx`):
+- Komponenta pro zobrazení detailních informací při hoveru
+- Automaticky řeší pozicování (top/bottom) a z-index
+- Používá se pro provozovatele, pracoviště a další komplexní tooltips
+
+**TooltipCell** (`components/ui/TooltipCell.tsx`):
+- Wrapper pro `<td>` element s tooltipem
+- Automaticky přidává `overflow-hidden` a `has-[.group:hover]:overflow-visible`
+- Zajišťuje správné zobrazení tooltipu mimo řádek
+
+**ActionIconTooltip** (`components/ui/ActionIconTooltip.tsx`):
+- Komponenta pro zobrazení tooltipu u ikon akcí v tabulkách
+- Automaticky řeší pozicování (pod ikonou, nebo nad pokud je poslední řádek)
+- Zajišťuje okamžité zobrazení bez zpoždění
+- Používá se pro všechny ikony akcí (Edit, Delete, Add, atd.)
+
+**Použití:**
+```tsx
+import { DetailTooltip } from './ui/DetailTooltip';
+import { TooltipCell } from './ui/TooltipCell';
+import { ActionIconTooltip } from './ui/ActionIconTooltip';
+
+<TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4">
+  <DetailTooltip
+    position={isLastRow ? 'top' : 'bottom'}
+    content={
+      <div className="space-y-1.5">
+        <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">
+          {operator.operator_name}
+        </div>
+        {/* další obsah */}
+      </div>
+    }
+  >
+    <span className="cursor-help truncate block w-full">
+      {operator.operator_name}
+    </span>
+  </DetailTooltip>
+</TooltipCell>
+
+<div className="relative group/button">
+  <button className="...">
+    <Icon />
+  </button>
+  <ActionIconTooltip text="Upravit" isLastRow={isLastRow} />
+</div>
+```
+
+**Pravidla:**
+- VŽDY používej `DetailTooltip` a `TooltipCell` pro detailní tooltips
+- VŽDY používej `ActionIconTooltip` pro tooltips u ikon akcí
+- Tooltip se zobrazuje pouze při hoveru na konkrétní hodnotu/ikonu, ne na celý řádek
+- Pro poslední řádek tabulky použij `isLastRow={true}` pro `DetailTooltip` a `ActionIconTooltip`, jinak `isLastRow={false}` nebo vynechej (default je `false`)
+- Tooltip obsahuje tmavé pozadí (`bg-gray-900`) a bílý text
+- Minimální šířka pro `DetailTooltip`: `250px`, maximální: `350px` (lze změnit přes props)
+- `ActionIconTooltip` se zobrazuje okamžitě, bez zpoždění (`transition-opacity` je odstraněn)
+- NIKDY nepoužívej `title` atributy na tlačítkách s ikonami - způsobují duplicitní tooltips
 
 ---
 

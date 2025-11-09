@@ -120,7 +120,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
       {/* Mobile/Tablet Navigation - Horizontal bar */}
       <nav className="flex xl:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 shadow-sm">
-        <div className="flex items-center justify-between w-full px-2 md:px-4 py-3 md:py-2.5 min-h-[64px] md:min-h-[56px]">
+        <div className="flex items-center justify-between w-full px-2 md:px-4 py-3 md:py-2.5 h-16 md:h-14">
           {/* Logo */}
           <div className="flex items-center gap-2 md:gap-1.5">
             <div className="w-8 h-8 md:w-7 md:h-7 bg-gradient-to-br from-primary-dark to-primary rounded-lg flex items-center justify-center">
@@ -264,7 +264,7 @@ export const Layout: React.FC<LayoutProps> = ({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header Bar - vlastní implementace s Flowbite styling */}
-        <header className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40 print:hidden pt-[64px] md:pt-[56px] xl:pt-0">
+        <header className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 xl:px-6 sticky top-0 z-40 print:hidden pt-16 md:pt-14 xl:pt-0">
           {/* Mobile/Tablet: Empty space (top bar handles navigation) */}
           <div className="hidden xl:block flex-1" />
 
@@ -312,7 +312,7 @@ export const Layout: React.FC<LayoutProps> = ({
         )}
 
         {/* Content Area */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1">
           {children}
         </main>
       </div>
