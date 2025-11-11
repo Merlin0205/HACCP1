@@ -7,13 +7,14 @@ import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { StopIcon } from './icons/StopIcon';
 import { CameraIcon } from './icons/CameraIcon';
 import { TrashIcon } from './icons/TrashIcon';
-import { EditIcon, PlusIcon } from './icons';
-import { getNonComplianceLocations, addNonComplianceLocation, findBestMatchLocation } from '../services/firestore';
+import { EditIcon, PlusIcon, XIcon } from './icons';
+import { getNonComplianceLocations, addNonComplianceLocation, findBestMatchLocation, deleteNonComplianceLocation, addToBlacklist } from '../services/firestore';
 import { toast } from '../utils/toast';
 import { rewriteFinding, generateRecommendation } from '../services/nonComplianceAI';
 import { compressImage } from '../utils/imageCompression';
 import { uploadAuditPhoto } from '../services/storage';
 import { fileToBase64 } from '../services/storage';
+import ConfirmationModal from './ConfirmationModal';
 
 interface NonComplianceFormProps {
     data: NonComplianceData;
@@ -53,10 +54,13 @@ const LocationDropdownWithMic: React.FC<{
     getPendingLocation?: () => string | null; // Funkce pro získání nového místa k uložení
 }> = ({ value, onChange, label, id, log, isOtherFieldRecording, onRecordingStateChange, onLocationSave, getPendingLocation }) => {
     const [locations, setLocations] = useState<string[]>([]);
+    const [onlyInCollection, setOnlyInCollection] = useState<string[]>([]); // Místa pouze v kolekci (lze smazat)
+    const [usedInAudits, setUsedInAudits] = useState<string[]>([]); // Místa používaná v auditech
     const [isLoadingLocations, setIsLoadingLocations] = useState(true);
     const [showDropdown, setShowDropdown] = useState(false);
     const [filterText, setFilterText] = useState(''); // Text pro filtrování při psaní
     const [isNewLocation, setIsNewLocation] = useState(false); // Flag pro nové místo (transkribované)
+    const [confirmDeleteLocation, setConfirmDeleteLocation] = useState<string | null>(null); // Místo k potvrzení smazání
 
     // Načíst existující místa při mount
     useEffect(() => {
@@ -64,6 +68,8 @@ const LocationDropdownWithMic: React.FC<{
             try {
                 const result = await getNonComplianceLocations();
                 setLocations(result.available);
+                setOnlyInCollection(result.onlyInCollection);
+                setUsedInAudits(result.usedInAudits);
             } catch (error) {
                 console.error('[LocationDropdownWithMic] Error loading locations:', error);
                 toast.error('Nepodařilo se načíst existující místa');
@@ -120,9 +126,58 @@ const LocationDropdownWithMic: React.FC<{
         ? locations.filter(loc => loc.toLowerCase().includes(filterText.toLowerCase()))
         : locations;
 
+    const handleDeleteLocation = async (locationName: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        // Zkontrolovat, jestli je místo použito v auditech
+        const isUsedInAudits = usedInAudits.some(loc => loc.toLowerCase() === locationName.toLowerCase());
+        
+        if (isUsedInAudits) {
+            // Místo je použito v auditech - zobrazit potvrzovací dialog
+            setConfirmDeleteLocation(locationName);
+            return;
+        }
+        
+        // Místo není použito v auditech - smazat přímo
+        await performDeleteLocation(locationName);
+    };
+
+    const performDeleteLocation = async (locationName: string) => {
+        try {
+            // Zkontrolovat, jestli je místo použito v auditech
+            const isUsedInAudits = usedInAudits.some(loc => loc.toLowerCase() === locationName.toLowerCase());
+            
+            if (isUsedInAudits) {
+                // Místo je použito v auditech - přidat do blacklistu
+                await addToBlacklist(locationName);
+            } else {
+                // Místo není použito v auditech - smazat z kolekce
+                await deleteNonComplianceLocation(locationName);
+            }
+            
+            // Aktualizovat seznam míst
+            const result = await getNonComplianceLocations();
+            setLocations(result.available);
+            setOnlyInCollection(result.onlyInCollection);
+            setUsedInAudits(result.usedInAudits);
+            
+            // Pokud bylo smazáno aktuálně vybrané místo, vymazat hodnotu
+            if (value.toLowerCase() === locationName.toLowerCase()) {
+                onChange('');
+            }
+            
+            toast.success(`Místo "${locationName}" bylo smazáno ze seznamu`);
+            log(`Místo "${locationName}" bylo smazáno ze seznamu`);
+        } catch (error: any) {
+            console.error('[LocationDropdownWithMic] Error deleting location:', error);
+            toast.error(error.message || 'Nepodařilo se smazat místo');
+        }
+    };
+
     return (
         <div className="relative">
-            <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+            <label htmlFor={id} className="block text-sm md:text-base font-medium text-gray-700 mb-1.5 md:mb-2">{label}</label>
             <div className="relative">
                 <div className="relative">
                     <input
@@ -150,17 +205,17 @@ const LocationDropdownWithMic: React.FC<{
                                 }, 200);
                             }
                         }}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md pr-12"
+                        className="w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base bg-white border border-gray-300 rounded-md pr-14 md:pr-16"
                         placeholder="-- Vyberte místo --"
                         disabled={isLoading || isOtherFieldRecording}
                     />
                     <button 
                         onClick={toggleRecording}
                         disabled={isOtherFieldRecording || (isTranscribing && !isRecording)}
-                        className={`absolute top-1/2 -translate-y-1/2 right-2 p-1.5 sm:p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed z-10`}
+                        className={`absolute top-1/2 -translate-y-1/2 right-2 md:right-3 p-2 md:p-2.5 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed z-10`}
                         title="Přepisovat hlasem"
                     >
-                        {buttonIcon}
+                        <MicrophoneIcon className="h-5 w-5 md:h-6 md:w-6" />
                     </button>
                 </div>
                 
@@ -180,21 +235,48 @@ const LocationDropdownWithMic: React.FC<{
                         }}
                     >
                         {filteredLocations.length > 0 ? (
-                            filteredLocations.map(loc => (
-                                <div
-                                    key={loc}
-                                    className="flex items-center justify-between px-3 py-2 hover:bg-gray-100 cursor-pointer"
-                                    onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        onChange(loc);
-                                        setShowDropdown(false);
-                                        setFilterText(''); // Resetovat filtr po výběru
-                                        setIsNewLocation(false); // Resetovat flag nového místa
-                                    }}
-                                >
-                                    <span className={value === loc ? 'font-semibold text-blue-600' : ''}>{loc}</span>
-                                </div>
-                            ))
+                            filteredLocations.map(loc => {
+                                const canDelete = onlyInCollection.some(l => l.toLowerCase() === loc.toLowerCase());
+                                const isUsedInAudits = usedInAudits.some(l => l.toLowerCase() === loc.toLowerCase());
+                                
+                                return (
+                                    <div
+                                        key={loc}
+                                        className="flex items-center justify-between px-3 py-2 hover:bg-gray-100 cursor-pointer group"
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            onChange(loc);
+                                            setShowDropdown(false);
+                                            setFilterText(''); // Resetovat filtr po výběru
+                                            setIsNewLocation(false); // Resetovat flag nového místa
+                                        }}
+                                    >
+                                        <span className={value === loc ? 'font-semibold text-blue-600' : ''}>{loc}</span>
+                                        {(canDelete || isUsedInAudits) && (
+                                            <button
+                                                onMouseDown={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    handleDeleteLocation(loc, e);
+                                                }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                }}
+                                                className={`ml-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                                                    isUsedInAudits 
+                                                        ? 'text-red-500 hover:text-red-700 hover:bg-red-50' 
+                                                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                                                }`}
+                                                title={isUsedInAudits ? "Odstranit ze seznamu (místo zůstane v existujících auditech)" : "Smazat místo ze seznamu"}
+                                                aria-label="Smazat místo"
+                                            >
+                                                <XIcon className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })
                         ) : (
                             <div className="px-3 py-2 text-gray-500 text-sm">Žádná místa</div>
                         )}
@@ -202,6 +284,23 @@ const LocationDropdownWithMic: React.FC<{
                 )}
             </div>
             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+            
+            {/* Potvrzovací dialog pro smazání místa používaného v auditech */}
+            <ConfirmationModal
+                isOpen={confirmDeleteLocation !== null}
+                title="Odstranit místo ze seznamu?"
+                message={confirmDeleteLocation ? `Místo "${confirmDeleteLocation}" je použito v existujících auditech. Opravdu ho chcete odstranit ze seznamu? Místo zůstane v existujících auditech, ale zmizí ze seznamu pro nové audity.` : ''}
+                onConfirm={() => {
+                    if (confirmDeleteLocation) {
+                        performDeleteLocation(confirmDeleteLocation);
+                        setConfirmDeleteLocation(null);
+                    }
+                }}
+                onCancel={() => setConfirmDeleteLocation(null)}
+                confirmButtonText="Odstranit"
+                cancelButtonText="Zrušit"
+                confirmButtonVariant="danger"
+            />
         </div>
     );
 };
@@ -242,52 +341,52 @@ const TextAreaWithMic: React.FC<{
 
     // Počet ikon: mikrofon (1) + AI ikony (2 pokud jsou zobrazeny)
     const iconCount = showAIIcons ? 3 : 1;
-    const rightPadding = iconCount * 48 + 8; // 48px pro každou ikonu + 8px padding
+    const rightPadding = iconCount * 56 + 16; // 56px pro každou ikonu + 16px padding (větší pro mobily)
 
     return (
         <div className="relative">
-            <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+            <label htmlFor={id} className="block text-sm md:text-base font-medium text-gray-700 mb-1.5 md:mb-2">{label}</label>
             <textarea
                 id={id}
-                rows={3}
+                rows={4}
                 value={value}
                 onChange={e => onChange(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md"
+                className="w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base bg-white border border-gray-300 rounded-md resize-y"
                 style={{ paddingRight: `${rightPadding}px` }}
                 placeholder={isRecording ? "Nahrávám..." : (isTranscribing ? "Přepisuji..." : "")}
                 readOnly={isLoading || isAIRewriting || isAIGenerating}
             />
-            <div className="absolute top-8 right-2 flex items-center gap-1 z-10">
+            <div className="absolute top-10 md:top-11 right-2 md:right-3 flex items-center gap-1.5 md:gap-2 z-10">
                 <button 
                     onClick={toggleRecording}
                     disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating}
-                    className={`p-1.5 sm:p-2 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                    className={`p-2 md:p-2.5 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
                     title="Přepisovat hlasem"
                 >
-                    {buttonIcon}
+                    {isLoading ? (isRecording ? <StopIcon className="h-5 w-5 md:h-6 md:w-6" /> : <Spinner small />) : <MicrophoneIcon className="h-5 w-5 md:h-6 md:w-6" />}
                 </button>
                 {showAIIcons && onRewrite && (
                     <button
                         onClick={onRewrite}
                         disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
-                        className={`p-1.5 sm:p-2 rounded-full text-white bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        className={`p-2 md:p-2.5 rounded-full text-white bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
                         title="Přepiš text pomocí AI"
                     >
-                        {isAIRewriting ? <Spinner small /> : <EditIcon className="h-3 w-3 sm:h-4 sm:w-4" />}
+                        {isAIRewriting ? <Spinner small /> : <EditIcon className="h-4 w-4 md:h-5 md:w-5" />}
                     </button>
                 )}
                 {showAIIcons && onGenerate && (
                     <button
                         onClick={onGenerate}
                         disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
-                        className={`p-1.5 sm:p-2 rounded-full text-white bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        className={`p-2 md:p-2.5 rounded-full text-white bg-indigo-500 hover:bg-indigo-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
                         title="Vygeneruj doporučení pomocí AI"
                     >
-                        {isAIGenerating ? <Spinner small /> : <PlusIcon className="h-3 w-3 sm:h-4 sm:w-4" />}
+                        {isAIGenerating ? <Spinner small /> : <PlusIcon className="h-4 w-4 md:h-5 md:w-5" />}
                     </button>
                 )}
             </div>
-            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+            {error && <p className="text-red-500 text-xs md:text-sm mt-1">{error}</p>}
         </div>
     );
 };
@@ -462,17 +561,7 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
     };
     
     return (
-        <div className="w-full p-4 border bg-white rounded-md shadow-sm space-y-4 relative mt-2">
-             <div className="flex justify-between items-center">
-                <h4 className="font-semibold text-gray-700">Detail neshody #{index + 1}</h4>
-                <button 
-                    onClick={onRemove} 
-                    className="p-1.5 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-full"
-                    aria-label="Smazat neshodu"
-                >
-                    <TrashIcon />
-                </button>
-            </div>
+        <div className="w-full space-y-4 md:space-y-5 relative">
             <LocationDropdownWithMic
                 id={`location-${index}`}
                 label="Místo neshody"
@@ -509,16 +598,16 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
             />
 
             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Fotky</label>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <label className="block text-sm md:text-base font-medium text-gray-700 mb-2 md:mb-3">Fotky</label>
+                <div className="flex flex-col sm:flex-row gap-2 md:gap-3">
                     {/* Tlačítko pro galerii */}
                     <button
                         type="button"
                         onClick={handleGalleryClick}
-                        className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors flex-1"
+                        className="flex items-center justify-center px-4 md:px-5 py-3 md:py-3.5 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors flex-1"
                     >
-                        <CameraIcon />
-                        <span className="ml-3 font-medium text-gray-600">Vybrat z galerie</span>
+                        <CameraIcon className="h-5 w-5 md:h-6 md:w-6" />
+                        <span className="ml-3 font-medium text-gray-600 text-sm md:text-base">Vybrat z galerie</span>
                     </button>
                     <input
                         ref={galleryInputRef}
@@ -533,10 +622,10 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
                     <button
                         type="button"
                         onClick={handleCameraClick}
-                        className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-green-400 transition-colors flex-1"
+                        className="flex items-center justify-center px-4 md:px-5 py-3 md:py-3.5 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 hover:border-green-400 transition-colors flex-1"
                     >
-                        <CameraIcon />
-                        <span className="ml-3 font-medium text-gray-600">Vyfotit</span>
+                        <CameraIcon className="h-5 w-5 md:h-6 md:w-6" />
+                        <span className="ml-3 font-medium text-gray-600 text-sm md:text-base">Vyfotit</span>
                     </button>
                     <input
                         ref={cameraInputRef}

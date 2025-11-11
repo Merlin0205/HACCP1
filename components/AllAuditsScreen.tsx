@@ -8,9 +8,11 @@ import { Badge } from './ui/Badge';
 import { DetailTooltip } from './ui/DetailTooltip';
 import { TooltipCell } from './ui/TooltipCell';
 import { ActionIconTooltip } from './ui/ActionIconTooltip';
+import { SimpleTooltip } from './ui/SimpleTooltip';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
+import { SectionTheme } from '../constants/designSystem';
 import { AppState } from '../types';
 import { Pagination } from './ui/Pagination';
 
@@ -29,6 +31,7 @@ interface AllAuditsScreenProps {
   description?: string;
   onAddNewAudit?: () => void;
   showStatusFilter?: boolean;
+  sectionTheme?: SectionTheme;
 }
 
 type SortField = 'operator' | 'premise' | 'status' | 'createdAt' | 'completedAt';
@@ -49,6 +52,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   description = 'Kompletní seznam všech auditů v systému',
   onAddNewAudit,
   showStatusFilter = true,
+  sectionTheme = SECTION_THEMES[AppState.ALL_AUDITS],
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AuditStatus | 'all'>('all');
@@ -258,7 +262,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   return (
     <div className="w-full max-w-7xl mx-auto pb-6">
       <PageHeader
-        section={SECTION_THEMES[AppState.ALL_AUDITS]}
+        section={sectionTheme}
         title={title}
         description={description}
         action={onAddNewAudit && (
@@ -309,7 +313,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
             )}
             <div className="flex items-end">
               <p className="text-sm text-gray-600">
-                Zobrazeno: <span className="font-semibold text-primary">{filteredAndSortedAudits.length}</span> z {audits.length}
+                Zobrazeno: <span className="font-semibold" style={{ color: sectionTheme.colors.primary }}>{filteredAndSortedAudits.length}</span> z {audits.length}
               </p>
             </div>
           </div>
@@ -323,7 +327,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
             <table className="w-full table-fixed">
             <thead 
               style={{
-                background: `linear-gradient(to right, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.primary}, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.darkest})`
+                background: `linear-gradient(to right, ${sectionTheme.colors.primary}, ${sectionTheme.colors.darkest})`
               }}
             >
               <tr>
@@ -407,7 +411,16 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                   return (
                     <React.Fragment key={audit.id}>
                       <tr
-                        className="hover:bg-primary-light/5 transition-colors cursor-pointer"
+                        className="transition-colors cursor-pointer"
+                        style={{ 
+                          '--hover-bg': `${sectionTheme.colors.light}0D`
+                        } as React.CSSProperties & { '--hover-bg': string }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = `${sectionTheme.colors.light}0D`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '';
+                        }}
                         onClick={() => onSelectAudit(audit.id)}
                       >
                       <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
@@ -443,7 +456,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                             </div>
                           }
                         >
-                          <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900 cursor-help truncate block w-full" title={operator?.operator_name || ''}>
+                          <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900 cursor-help truncate block w-full">
                             {operator?.operator_name || '-'}
                           </div>
                         </DetailTooltip>
@@ -481,7 +494,7 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                             </div>
                           }
                         >
-                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 cursor-help truncate block w-full" title={premise?.premise_name || ''}>
+                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 cursor-help truncate block w-full">
                             {premise?.premise_name || '-'}
                           </div>
                         </DetailTooltip>
@@ -489,16 +502,20 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                       <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getStatusBadge(audit.status)}
                       </td>
-                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
-                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={formatDate(audit.createdAt)}>
-                          {formatDate(audit.createdAt)}
-                        </div>
-                      </td>
-                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
-                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={audit.completedAt ? formatDate(audit.completedAt) : '-'}>
-                          {audit.completedAt ? formatDate(audit.completedAt) : '-'}
-                        </div>
-                      </td>
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <SimpleTooltip text={formatDate(audit.createdAt)} isLastRow={isLastRow}>
+                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full">
+                            {formatDate(audit.createdAt)}
+                          </div>
+                        </SimpleTooltip>
+                      </TooltipCell>
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <SimpleTooltip text={audit.completedAt ? formatDate(audit.completedAt) : '-'} isLastRow={isLastRow}>
+                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full">
+                            {audit.completedAt ? formatDate(audit.completedAt) : '-'}
+                          </div>
+                        </SimpleTooltip>
+                      </TooltipCell>
                       <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getReportBadge(audit.id)}
                       </td>
@@ -512,7 +529,18 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                   e.stopPropagation();
                                   onSelectAudit(audit.id);
                                 }}
-                                className="p-2 rounded-lg hover:bg-primary-light/20 transition-colors text-primary hover:text-primary-dark"
+                                className="p-2 rounded-lg transition-colors"
+                                style={{
+                                  color: sectionTheme.colors.primary
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = `${sectionTheme.colors.light}33`;
+                                  e.currentTarget.style.color = sectionTheme.colors.darkest;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '';
+                                  e.currentTarget.style.color = sectionTheme.colors.primary;
+                                }}
                               >
                                 <ReportIcon className="h-5 w-5" />
                               </button>
@@ -673,7 +701,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                                 e.stopPropagation();
                                                 onSelectAudit(audit.id, report.id);
                                               }}
-                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
+                                              className="p-1 md:p-1.5 rounded text-white hover:shadow-md hover:scale-105 transition-all duration-200"
+                                              style={{
+                                                background: `linear-gradient(to bottom right, ${sectionTheme.colors.primary}, ${sectionTheme.colors.darkest})`
+                                              }}
                                             >
                                               <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </button>
@@ -898,7 +929,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                         e.stopPropagation();
                                         onSelectAudit(audit.id, report.id);
                                       }}
-                                      className="flex-1 px-3 py-1.5 bg-gradient-to-br from-primary to-primary-dark text-white text-xs rounded-lg font-medium hover:shadow-md transition-all"
+                                      className="flex-1 px-3 py-1.5 text-white text-xs rounded-lg font-medium hover:shadow-md transition-all"
+                                      style={{
+                                        background: `linear-gradient(to bottom right, ${sectionTheme.colors.primary}, ${sectionTheme.colors.darkest})`
+                                      }}
                                     >
                                       Otevřít verzi
                                     </button>
@@ -1126,7 +1160,10 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
         <div className="fixed bottom-6 right-6 z-50 group">
           <button
             onClick={onAddNewAudit}
-            className="w-14 h-14 bg-gradient-to-br from-primary-dark to-primary text-white rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all flex items-center justify-center relative"
+            className="w-14 h-14 text-white rounded-full shadow-2xl hover:shadow-3xl hover:scale-110 transition-all flex items-center justify-center relative"
+            style={{
+              background: `linear-gradient(to bottom right, ${sectionTheme.colors.darkest}, ${sectionTheme.colors.primary})`
+            }}
             aria-label="Zadat audit"
             title="Zadat audit"
           >

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppState } from '../types';
-import { HomeIcon, SettingsIcon, ClockIcon, ChecklistIcon } from '../components/icons';
+import { HomeIcon, SettingsIcon, ClockIcon, ChecklistIcon, InProgressIcon } from '../components/icons';
 
 // Section Theme Type
 export interface SectionTheme {
@@ -37,6 +37,22 @@ export const SECTION_THEMES: Record<string, SectionTheme> = {
       textLight: 'text-indigo-700',
     },
     icon: ClockIcon,
+  },
+  [AppState.IN_PROGRESS_AUDITS]: {
+    name: 'Probíhající audity',
+    colors: {
+      primary: '#F59E0B', // amber-500
+      light: '#FBBF24', // amber-400
+      lighter: '#FCD34D', // amber-300
+      darkest: '#D97706', // amber-600
+      gradient: 'from-amber-500 to-amber-600',
+      gradientDark: 'from-amber-600 to-amber-700',
+      bgLight: 'bg-amber-50',
+      bgLighter: 'bg-amber-100',
+      text: 'text-amber-600',
+      textLight: 'text-amber-700',
+    },
+    icon: InProgressIcon,
   },
   [AppState.ALL_AUDITS]: {
     name: 'Audity vše',
@@ -124,6 +140,9 @@ export const getSectionTheme = (appState: AppState): SectionTheme | null => {
   // Map AppState to section theme
   if (appState === AppState.INCOMPLETE_AUDITS) {
     return SECTION_THEMES[AppState.INCOMPLETE_AUDITS];
+  }
+  if (appState === AppState.IN_PROGRESS_AUDITS) {
+    return SECTION_THEMES[AppState.IN_PROGRESS_AUDITS];
   }
   if (appState === AppState.ALL_AUDITS || appState === AppState.AUDIT_LIST) {
     return SECTION_THEMES[AppState.ALL_AUDITS];

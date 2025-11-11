@@ -96,6 +96,7 @@ export enum AppState {
   AUDIT_LIST = 'audit_list',
   ALL_AUDITS = 'all_audits',
   INCOMPLETE_AUDITS = 'incomplete_audits',
+  IN_PROGRESS_AUDITS = 'in_progress_audits',
   HEADER_FORM = 'header_form',
   AUDIT_IN_PROGRESS = 'audit_in_progress',
   REPORT_VIEW = 'report_view',

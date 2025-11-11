@@ -160,6 +160,14 @@ service cloud.firestore {
       allow delete: if canDelete();
     }
     
+    // Non-compliance Locations Blacklist - schválené uživatele vidí své, admini vidí všechna
+    match /nonComplianceLocationsBlacklist/{blacklistId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
     // Report Templates - schválené uživatele mohou číst, vytvářet/upravovat/mazat mohou vlastní nebo admin
     match /reportTemplates/{templateId} {
       allow read: if isApproved();

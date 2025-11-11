@@ -6,6 +6,8 @@ import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { Badge } from './ui/Badge';
 import { ActionIconTooltip } from './ui/ActionIconTooltip';
+import { SimpleTooltip } from './ui/SimpleTooltip';
+import { TooltipCell } from './ui/TooltipCell';
 import { PlusIcon, EditIcon, TrashIcon, ReportIcon, ClockIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -494,24 +496,30 @@ export const AuditList: React.FC<AuditListProps> = ({
                         className="hover:bg-primary-light/5 transition-colors cursor-pointer"
                         onClick={() => onSelectAudit(audit.id)}
                       >
-                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
-                        <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900 truncate w-full" title={audit.id}>
-                          {audit.id}
-                        </div>
-                      </td>
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <SimpleTooltip text={audit.id} isLastRow={isLastRow}>
+                          <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900 truncate w-full">
+                            {audit.id}
+                          </div>
+                        </SimpleTooltip>
+                      </TooltipCell>
                       <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getStatusBadge(audit.status)}
                       </td>
-                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
-                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={formatDate(audit.createdAt)}>
-                          {formatDate(audit.createdAt)}
-                        </div>
-                      </td>
-                      <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
-                        <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full" title={audit.completedAt ? formatDate(audit.completedAt) : '-'}>
-                          {audit.completedAt ? formatDate(audit.completedAt) : '-'}
-                        </div>
-                      </td>
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <SimpleTooltip text={formatDate(audit.createdAt)} isLastRow={isLastRow}>
+                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full">
+                            {formatDate(audit.createdAt)}
+                          </div>
+                        </SimpleTooltip>
+                      </TooltipCell>
+                      <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap">
+                        <SimpleTooltip text={audit.completedAt ? formatDate(audit.completedAt) : '-'} isLastRow={isLastRow}>
+                          <div className="text-sm md:text-xs xl:text-sm text-gray-900 truncate w-full">
+                            {audit.completedAt ? formatDate(audit.completedAt) : '-'}
+                          </div>
+                        </SimpleTooltip>
+                      </TooltipCell>
                       <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap overflow-hidden">
                         {getReportBadge(audit.id)}
                       </td>

@@ -7,6 +7,7 @@ import { Modal } from './ui/Modal';
 import { DetailTooltip } from './ui/DetailTooltip';
 import { TooltipCell } from './ui/TooltipCell';
 import { ActionIconTooltip } from './ui/ActionIconTooltip';
+import { SimpleTooltip } from './ui/SimpleTooltip';
 import { PlusIcon, EditIcon, TrashIcon, ChevronDownIcon, ClockIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -373,14 +374,18 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             </DetailTooltip>
                           </div>
                         </TooltipCell>
-                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600 overflow-hidden">
-                          <span className="truncate block w-full" title={operator.operator_ico || ''}>{operator.operator_ico || '-'}</span>
-                        </td>
-                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600 overflow-hidden">
-                          <div className="truncate w-full" title={operator.operator_address || ''}>
-                            {operator.operator_address || '-'}
-                          </div>
-                        </td>
+                        <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600">
+                          <SimpleTooltip text={operator.operator_ico || '-'} isLastRow={isLastRow}>
+                            <span className="truncate block w-full">{operator.operator_ico || '-'}</span>
+                          </SimpleTooltip>
+                        </TooltipCell>
+                        <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600">
+                          <SimpleTooltip text={operator.operator_address || '-'} isLastRow={isLastRow}>
+                            <div className="truncate w-full">
+                              {operator.operator_address || '-'}
+                            </div>
+                          </SimpleTooltip>
+                        </TooltipCell>
                         <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4">
                           {operatorPremises.length > 0 ? (
                             <button
@@ -408,14 +413,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             </div>
                           )}
                         </td>
-                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600 overflow-hidden">
+                        <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600">
                           <div className="flex flex-col gap-1">
                             {operator.operator_phone && (
                               <div className="flex items-center gap-1 min-w-0">
                                 <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                 </svg>
-                                <span className="truncate w-full" title={operator.operator_phone}>{operator.operator_phone}</span>
+                                <SimpleTooltip text={operator.operator_phone} isLastRow={isLastRow}>
+                                  <span className="truncate w-full">{operator.operator_phone}</span>
+                                </SimpleTooltip>
                               </div>
                             )}
                             {operator.operator_email && (
@@ -423,12 +430,14 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                 <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                 </svg>
-                                <span className="truncate w-full" title={operator.operator_email}>{operator.operator_email}</span>
+                                <SimpleTooltip text={operator.operator_email} isLastRow={isLastRow}>
+                                  <span className="truncate w-full">{operator.operator_email}</span>
+                                </SimpleTooltip>
                               </div>
                             )}
                             {!operator.operator_phone && !operator.operator_email && <span>-</span>}
                           </div>
-                        </td>
+                        </TooltipCell>
                         <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right text-sm md:text-xs xl:text-sm font-medium">
                           <div className="flex items-center justify-end gap-2 md:gap-1">
                             <div className="relative group/button">
@@ -519,14 +528,18 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           </div>
                                         }
                                       >
-                                        <div className="font-semibold text-gray-900 text-sm md:text-xs xl:text-sm cursor-help leading-relaxed truncate w-full" title={premise.premise_name || 'N/A'}>{premise.premise_name || 'N/A'}</div>
+                                        <SimpleTooltip text={premise.premise_name || 'N/A'} isLastRow={isLastPremise}>
+                                          <div className="font-semibold text-gray-900 text-sm md:text-xs xl:text-sm cursor-help leading-relaxed truncate w-full">{premise.premise_name || 'N/A'}</div>
+                                        </SimpleTooltip>
                                         {premise.premise_address && (
                                           <div className="mt-1.5 md:mt-1 flex items-start gap-2 text-sm md:text-xs xl:text-sm text-gray-600 min-w-0">
                                             <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                             </svg>
-                                            <span className="break-words truncate block w-full" title={premise.premise_address}>{premise.premise_address}</span>
+                                            <SimpleTooltip text={premise.premise_address} isLastRow={isLastPremise}>
+                                              <span className="break-words truncate block w-full">{premise.premise_address}</span>
+                                            </SimpleTooltip>
                                           </div>
                                         )}
                                       </DetailTooltip>
@@ -617,14 +630,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                       );
                                     })()}
                                   </td>
-                                  <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-800 overflow-hidden">
+                                  <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-800">
                                     <div className="flex flex-col gap-1.5 md:gap-1">
                                       {premise.premise_phone && (
                                         <div className="flex items-center gap-2 md:gap-1 min-w-0">
                                           <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                                           </svg>
-                                          <span className="truncate font-medium text-gray-700 w-full" title={premise.premise_phone}>{premise.premise_phone}</span>
+                                          <SimpleTooltip text={premise.premise_phone} isLastRow={isLastPremise}>
+                                            <span className="truncate font-medium text-gray-700 w-full">{premise.premise_phone}</span>
+                                          </SimpleTooltip>
                                         </div>
                                       )}
                                       {premise.premise_email && (
@@ -632,12 +647,14 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                           <svg className="w-4 h-4 md:w-3 md:h-3 xl:w-4 xl:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                           </svg>
-                                          <span className="truncate font-medium text-gray-700 w-full" title={premise.premise_email}>{premise.premise_email}</span>
+                                          <SimpleTooltip text={premise.premise_email} isLastRow={isLastPremise}>
+                                            <span className="truncate font-medium text-gray-700 w-full">{premise.premise_email}</span>
+                                          </SimpleTooltip>
                                         </div>
                                       )}
                                       {!premise.premise_phone && !premise.premise_email && <span className="text-gray-400">-</span>}
                                     </div>
-                                  </td>
+                                  </TooltipCell>
                                   <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right">
                                     <div className="flex items-center justify-end gap-1">
                                       <div className="relative group/button">

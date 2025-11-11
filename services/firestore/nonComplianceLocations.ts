@@ -18,6 +18,7 @@ import { db, auth } from '../../firebaseConfig';
 import { fetchAudits } from './audits';
 
 const COLLECTION_NAME = 'nonComplianceLocations';
+const BLACKLIST_COLLECTION_NAME = 'nonComplianceLocationsBlacklist';
 
 /**
  * Získá aktuálního uživatele
@@ -46,6 +47,7 @@ function formatLocationName(name: string): string {
  * Načte všechna místa neshod pro aktuálního uživatele
  * - z kolekce nonComplianceLocations
  * - ze všech existujících auditů (z nonComplianceData.location) - REAL-TIME
+ * - filtruje místa v blacklistu
  * Vrátí objekt s dostupnými místy a místy používanými v jakémkoliv auditu (nelze smazat)
  */
 export async function getNonComplianceLocations(): Promise<{ available: string[], usedInAudits: string[], onlyInCollection: string[] }> {
@@ -54,6 +56,10 @@ export async function getNonComplianceLocations(): Promise<{ available: string[]
     const locationsSet = new Set<string>();
     const usedInAuditsSet = new Set<string>();
     const collectionOnlySet = new Set<string>();
+    
+    // Načíst blacklist
+    const blacklist = await getBlacklist();
+    const blacklistSet = new Set(blacklist.map(loc => loc.toLowerCase()));
     
     // 1. Načíst místa z kolekce nonComplianceLocations
     try {
@@ -67,8 +73,11 @@ export async function getNonComplianceLocations(): Promise<{ available: string[]
         const data = doc.data();
         if (data.name && data.name.trim()) {
           const formatted = formatLocationName(data.name);
-          locationsSet.add(formatted);
-          collectionOnlySet.add(formatted); // Zatím označit jako pouze v kolekci
+          // Přeskočit místa v blacklistu
+          if (!blacklistSet.has(formatted.toLowerCase())) {
+            locationsSet.add(formatted);
+            collectionOnlySet.add(formatted); // Zatím označit jako pouze v kolekci
+          }
         }
       });
     } catch (error) {
@@ -88,9 +97,12 @@ export async function getNonComplianceLocations(): Promise<{ available: string[]
                 if (nc.location && nc.location.trim()) {
                   const formatted = formatLocationName(nc.location);
                   if (formatted) {
-                    locationsSet.add(formatted);
-                    usedInAuditsSet.add(formatted); // Přidat do použité v auditech
-                    collectionOnlySet.delete(formatted); // Odstranit z "pouze v kolekci" - je použito v auditu
+                    // Přeskočit místa v blacklistu
+                    if (!blacklistSet.has(formatted.toLowerCase())) {
+                      locationsSet.add(formatted);
+                      usedInAuditsSet.add(formatted); // Přidat do použité v auditech
+                      collectionOnlySet.delete(formatted); // Odstranit z "pouze v kolekci" - je použito v auditu
+                    }
                   }
                 }
               });
@@ -122,7 +134,7 @@ export async function getNonComplianceLocations(): Promise<{ available: string[]
 }
 
 /**
- * Přidá nové místo neshody (pokud ještě neexistuje)
+ * Přidá nové místo neshody (pokud ještě neexistuje a není v blacklistu)
  */
 export async function addNonComplianceLocation(locationName: string): Promise<void> {
   try {
@@ -131,6 +143,12 @@ export async function addNonComplianceLocation(locationName: string): Promise<vo
     
     if (!formattedName) {
       return;
+    }
+
+    // Zkontrolovat blacklist
+    const blacklist = await getBlacklist();
+    if (blacklist.some(loc => loc.toLowerCase() === formattedName.toLowerCase())) {
+      return; // Je v blacklistu, neukládat
     }
 
     // Zkontrolovat, jestli už neexistuje (case-insensitive)
@@ -156,8 +174,70 @@ export async function addNonComplianceLocation(locationName: string): Promise<vo
 }
 
 /**
- * Najde nejbližší shodu místa v existujících místech (case-insensitive)
+ * Načte blacklist míst neshod pro aktuálního uživatele
  */
+export async function getBlacklist(): Promise<string[]> {
+  try {
+    const userId = getCurrentUserId();
+    const blacklistSet = new Set<string>();
+    
+    try {
+      const q = query(
+        collection(db, BLACKLIST_COLLECTION_NAME),
+        where('userId', '==', userId)
+      );
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.locationName && data.locationName.trim()) {
+          const formatted = formatLocationName(data.locationName);
+          if (formatted) {
+            blacklistSet.add(formatted);
+          }
+        }
+      });
+    } catch (error) {
+      console.error('[getBlacklist] Error loading blacklist:', error);
+    }
+    
+    return Array.from(blacklistSet).sort((a, b) => 
+      a.localeCompare(b, 'cs', { sensitivity: 'base' })
+    );
+  } catch (error) {
+    console.error('[getBlacklist] Error:', error);
+    return [];
+  }
+}
+
+/**
+ * Přidá místo do blacklistu
+ */
+export async function addToBlacklist(locationName: string): Promise<void> {
+  try {
+    const userId = getCurrentUserId();
+    const formattedName = formatLocationName(locationName);
+    
+    if (!formattedName) {
+      return;
+    }
+
+    // Zkontrolovat, jestli už není v blacklistu
+    const blacklist = await getBlacklist();
+    if (blacklist.some(loc => loc.toLowerCase() === formattedName.toLowerCase())) {
+      return; // Už je v blacklistu
+    }
+
+    // Přidat do blacklistu
+    await addDoc(collection(db, BLACKLIST_COLLECTION_NAME), {
+      userId,
+      locationName: formattedName,
+      createdAt: Timestamp.now(),
+    });
+  } catch (error) {
+    console.error('[addToBlacklist] Error:', error);
+    throw error;
+  }
+}
 export function findBestMatchLocation(transcribedText: string, existingLocations: string[]): string | null {
   // Odstranit tečku na konci a formátovat
   const formatted = transcribedText.trim().replace(/\.+$/, '').toLowerCase();
@@ -194,7 +274,8 @@ export function findBestMatchLocation(transcribedText: string, existingLocations
 }
 
 /**
- * Smaže místo neshody z kolekce nonComplianceLocations (pouze pokud není použito v auditech)
+ * Smaže místo neshody z kolekce nonComplianceLocations
+ * Pokud je místo použito v auditech, přidá ho do blacklistu místo smazání
  */
 export async function deleteNonComplianceLocation(locationName: string): Promise<void> {
   try {
@@ -205,13 +286,17 @@ export async function deleteNonComplianceLocation(locationName: string): Promise
       return;
     }
 
-    // Zkontrolovat, jestli je místo použito v jakémkoliv auditu (nelze smazat)
+    // Zkontrolovat, jestli je místo použito v jakémkoliv auditu
     const { usedInAudits } = await getNonComplianceLocations();
-    if (usedInAudits.some(loc => loc.toLowerCase() === formattedName.toLowerCase())) {
-      throw new Error('Nelze smazat místo, které je použito v existujících auditech');
+    const isUsedInAudits = usedInAudits.some(loc => loc.toLowerCase() === formattedName.toLowerCase());
+    
+    if (isUsedInAudits) {
+      // Místo je použito v auditech - přidat do blacklistu místo smazání
+      await addToBlacklist(formattedName);
+      return;
     }
 
-    // Najít a smazat všechny dokumenty s tímto názvem
+    // Místo není použito v auditech - smazat z kolekce
     const q = query(
       collection(db, COLLECTION_NAME),
       where('userId', '==', userId),

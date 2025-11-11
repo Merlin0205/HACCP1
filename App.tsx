@@ -46,6 +46,7 @@ import { toast } from './utils/toast';
 import { useAppData } from './hooks/useAppData';
 import { useReportGenerator } from './hooks/useReportGenerator';
 import { useAuth } from './contexts/AuthContext';
+import { SECTION_THEMES } from './constants/designSystem';
 import {
   createOperator,
   updateOperator,
@@ -1433,6 +1434,7 @@ const App: React.FC = () => {
           onSelectAudit={handleSelectAudit}
           onDeleteAudit={handleDeleteAudit}
           onUnlockAudit={handleUnlockAudit}
+          sectionTheme={SECTION_THEMES[AppState.ALL_AUDITS]}
           onCancelReportGeneration={handleCancelReportGeneration}
           onDeleteReportVersion={handleDeleteReportVersion}
           onSetReportAsLatest={handleSetReportAsLatest}
@@ -1469,6 +1471,43 @@ const App: React.FC = () => {
           title="Nezapočaté audity"
           description="Seznam auditů, které ještě nebyly započaty"
           showStatusFilter={false}
+          sectionTheme={SECTION_THEMES[AppState.INCOMPLETE_AUDITS]}
+          onCancelReportGeneration={handleCancelReportGeneration}
+          onDeleteReportVersion={handleDeleteReportVersion}
+          onSetReportAsLatest={handleSetReportAsLatest}
+        />;
+      case AppState.IN_PROGRESS_AUDITS:
+        // Filtrovat pouze probíhající audity (IN_PROGRESS)
+        const inProgressAudits = audits.filter(a => 
+          a.status === AuditStatus.IN_PROGRESS
+        );
+        return <AllAuditsScreen
+          audits={inProgressAudits}
+          operators={operators}
+          premises={premises}
+          reports={reports}
+          onSelectAudit={handleSelectAudit}
+          onAddNewAudit={() => {
+            // Nejprve vybrat pracoviště - pokud není žádné, musí uživatel jít do Zákazníků
+            if (premises.length === 0) {
+              toast.error('Nejprve musíte vytvořit pracoviště v sekci Zákazníci');
+              setAppState(AppState.OPERATOR_DASHBOARD);
+              return;
+            }
+            // Pokud je jen jedno pracoviště, použít ho
+            if (premises.length === 1) {
+              setActivePremiseId(premises[0].id);
+              handlePrepareNewAudit();
+            } else {
+              // Pokud je více pracovišť, jít na dashboard
+              toast.info('Vyberte pracoviště pro nový audit');
+              setAppState(AppState.OPERATOR_DASHBOARD);
+            }
+          }}
+          title="Probíhající audity"
+          description="Seznam auditů, které jsou právě v procesu"
+          showStatusFilter={false}
+          sectionTheme={SECTION_THEMES[AppState.IN_PROGRESS_AUDITS]}
           onCancelReportGeneration={handleCancelReportGeneration}
           onDeleteReportVersion={handleDeleteReportVersion}
           onSetReportAsLatest={handleSetReportAsLatest}

@@ -3,7 +3,7 @@ import { AppState, Tab } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateAIUsageStats } from '../services/firestore';
 import { APP_VERSION, BUILD_DATE } from '../constants';
-import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon } from './icons/index';
+import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon, InProgressIcon } from './icons/index';
 import { MobileMenu } from './MobileMenu';
 import { TabBar } from './TabBar';
 import { getSectionTheme, SECTION_THEMES } from '../constants/designSystem';
@@ -64,6 +64,13 @@ export const Layout: React.FC<LayoutProps> = ({
       icon: ClockIcon,
       active: currentView === AppState.INCOMPLETE_AUDITS,
       theme: SECTION_THEMES[AppState.INCOMPLETE_AUDITS],
+    },
+    {
+      id: AppState.IN_PROGRESS_AUDITS,
+      label: 'Probíhající',
+      icon: InProgressIcon,
+      active: currentView === AppState.IN_PROGRESS_AUDITS,
+      theme: SECTION_THEMES[AppState.IN_PROGRESS_AUDITS],
     },
     {
       id: AppState.ALL_AUDITS,

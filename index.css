@@ -26,6 +26,16 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
+/* Skrytí scrollbaru pro TabBar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 
 /* Animace */
 @keyframes slideIn {

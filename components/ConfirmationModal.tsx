@@ -8,6 +8,7 @@ interface ConfirmationModalProps {
   onCancel: () => void;
   confirmButtonText?: string;
   cancelButtonText?: string;
+  confirmButtonVariant?: 'primary' | 'danger'; // Nová prop pro variantu tlačítka
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -18,8 +19,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   onCancel,
   confirmButtonText = 'Potvrdit',
   cancelButtonText = 'Zrušit',
+  confirmButtonVariant = 'primary',
 }) => {
   if (!isOpen) return null;
+
+  const confirmButtonClass = confirmButtonVariant === 'danger'
+    ? 'px-4 py-2 bg-red-600 text-sm font-medium text-white border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500'
+    : 'px-4 py-2 bg-blue-600 text-sm font-medium text-white border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4 animate-fade-in">
@@ -40,7 +46,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-blue-600 text-sm font-medium text-white border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className={confirmButtonClass}
           >
             {confirmButtonText}
           </button>
