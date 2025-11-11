@@ -48,7 +48,8 @@ async function logAIUsage(
       completionTokens: completionTokens || 0,
       totalTokens: totalTokens || 0,
       costUsd,
-      costCzk
+      costCzk,
+      source: 'cloud-functions' // Označit jako Cloud Functions volání
     });
   } catch (error) {
     console.error('[logAIUsage] Error:', error);

@@ -1,85 +1,105 @@
 /**
- * Gemini Service - wrapper pro Cloud Functions
- * Všechna AI volání jdou přes Cloud Functions, kde jsou bezpečně uložené API klíče
+ * Gemini Service - wrapper pro Firebase AI Logic SDK
+ * Všechna AI volání používají pouze Firebase AI Logic SDK
  */
 
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebaseConfig';
 import { Part } from "@google/generative-ai";
-
-// Cloud Function references
-const transcribeAudioFunction = httpsCallable(functions, 'transcribeAudio');
-const analyzeImageFunction = httpsCallable(functions, 'analyzeImage');
-const generateTextFunction = httpsCallable(functions, 'generateText');
-
-/**
- * Převod Part na base64 string pro Cloud Functions
- */
-function partToBase64(part: Part): { data: string; mimeType: string } {
-  if (part.inlineData) {
-    return {
-      data: part.inlineData.data,
-      mimeType: part.inlineData.mimeType || 'application/octet-stream'
-    };
-  }
-  throw new Error('Unsupported part format - only inlineData is supported');
-}
+import { generateContentWithSDK, type AIGenerateContentResponse } from '../services/aiLogic';
+import { fetchAIModelsConfig } from '../services/firestore/settings';
+import { addAIUsageLog } from '../services/firestore/aiUsageLogs';
 
 // --- FUNKCE PRO PŘEPIS ZVUKU ---
 /**
- * Převede zvuková data na text přes Cloud Functions.
+ * Převede zvuková data na text přes Firebase AI Logic SDK.
  * @param audioPart Zvuková data ve formátu, kterému Gemini rozumí.
  * @returns Přepsaný text.
  */
 export const transcribeAudio = async (audioPart: Part): Promise<string> => {
-  try {
-    const { data, mimeType } = partToBase64(audioPart);
-    
-    const result = await transcribeAudioFunction({
-      audioData: data,
-      mimeType: mimeType || 'audio/webm'
-    });
-    
-    const response = result.data as any;
-    return response.transcription || '';
-  } catch (error: any) {
-    console.error("[transcribeAudio] Chyba při komunikaci s Cloud Functions:", error);
-    throw new Error(error.message || "Nepodařilo se přepsat audio.");
+  if (!audioPart.inlineData) {
+    throw new Error('Audio part musí obsahovat inlineData');
   }
+
+  const audioData = audioPart.inlineData.data;
+  const mimeType = audioPart.inlineData.mimeType || 'audio/webm';
+  const prompt = "Proveďte přímý přepis následujícího zvukového záznamu na text. Neodpovídejte celou větou, neformátujte text, neuvádějte žádný doprovodný text ani poznámky. Vraťte pouze samotný přepis.";
+
+  const modelsConfig = await fetchAIModelsConfig();
+  const modelName = modelsConfig.models?.['audio-transcription'] || 'gemini-2.0-flash-exp';
+
+  const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, [
+    prompt,
+    {
+      inlineData: {
+        data: audioData,
+        mimeType: mimeType
+      }
+    }
+  ]);
+  
+  await addAIUsageLog(
+    modelName,
+    'audio-transcription',
+    response.usageMetadata.promptTokenCount,
+    response.usageMetadata.candidatesTokenCount,
+    response.usageMetadata.totalTokenCount,
+    'sdk'
+  );
+  
+  return response.text || '';
 };
 
 // --- FUNKCE PRO ANALÝZU OBRAZKŮ ---
 export const analyzeImageWithAI = async (photo: Part): Promise<string> => {
-  try {
-    const { data, mimeType } = partToBase64(photo);
-    
-    const result = await analyzeImageFunction({
-      imageData: data,
-      mimeType: mimeType || 'image/jpeg'
-    });
-    
-    const response = result.data as any;
-    return response.analysis || '';
-  } catch (error: any) {
-    console.error("[analyzeImageWithAI] Chyba při komunikaci s Cloud Functions:", error);
-    throw new Error(error.message || "Nepodařilo se analyzovat obrázek.");
+  if (!photo.inlineData) {
+    throw new Error('Photo part musí obsahovat inlineData');
   }
+
+  const imageData = photo.inlineData.data;
+  const mimeType = photo.inlineData.mimeType || 'image/jpeg';
+  const prompt = "Analyzuj tuto fotografii z potravinářského provozu. Popiš, co na ní je, a identifikuj případná hygienická rizika nebo neshody s HACCP. Buď stručný a věcný.";
+
+  const modelsConfig = await fetchAIModelsConfig();
+  const modelName = modelsConfig.models?.['image-analysis'] || 'gemini-2.5-flash';
+
+  const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, [
+    prompt,
+    {
+      inlineData: {
+        data: imageData,
+        mimeType: mimeType
+      }
+    }
+  ]);
+  
+  await addAIUsageLog(
+    modelName,
+    'image-analysis',
+    response.usageMetadata.promptTokenCount,
+    response.usageMetadata.candidatesTokenCount,
+    response.usageMetadata.totalTokenCount,
+    'sdk'
+  );
+  
+  return response.text || '';
 };
 
 // --- FUNKCE PRO GENEROVÁNÍ TEXTU ---
 export const generateReportConclusionWithAI = async (summary: string): Promise<string> => {
-  try {
-    const prompt = `Na základě následujícího souhrnu neshod z HACCP auditu vygeneruj profesionální slovní hodnocení a závěr. Zdůrazni hlavní problematické oblasti a navrhni obecná doporučení. Celý text formuluj jako jeden odstavec. Souhrn neshod: ${summary}`;
-    
-    const result = await generateTextFunction({
-      prompt,
-      operation: 'text-generation'
-    });
-    
-    const response = result.data as any;
-    return response.text || '';
-  } catch (error: any) {
-    console.error("[generateReportConclusionWithAI] Chyba při komunikaci s Cloud Functions:", error);
-    throw new Error(error.message || "Nepodařilo se vygenerovat závěr.");
-  }
+  const prompt = `Na základě následujícího souhrnu neshod z HACCP auditu vygeneruj profesionální slovní hodnocení a závěr. Zdůrazni hlavní problematické oblasti a navrhni obecná doporučení. Celý text formuluj jako jeden odstavec. Souhrn neshod: ${summary}`;
+
+  const modelsConfig = await fetchAIModelsConfig();
+  const modelName = modelsConfig.models?.['text-generation'] || 'gemini-2.5-flash';
+
+  const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
+  
+  await addAIUsageLog(
+    modelName,
+    'text-generation',
+    response.usageMetadata.promptTokenCount,
+    response.usageMetadata.candidatesTokenCount,
+    response.usageMetadata.totalTokenCount,
+    'sdk'
+  );
+  
+  return response.text || '';
 };

@@ -1,5 +1,11 @@
 /**
  * Cloud Function pro aktualizaci cen Gemini modelů pomocí LLM
+ * 
+ * ⚠️ DEPRECATED: Tato Cloud Function byla nahrazena client-side implementací
+ * v `services/firestore/priceUpdater.ts`, která používá Firebase AI Logic SDK.
+ * 
+ * Tato Cloud Function je zachována pouze pro zpětnou kompatibilitu,
+ * ale již se nepoužívá v aplikaci. Všechna AI volání nyní procházejí přes SDK.
  */
 
 import * as functions from 'firebase-functions/v1';

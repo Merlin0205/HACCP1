@@ -356,7 +356,7 @@ const TextAreaWithMic: React.FC<{
                 placeholder={isRecording ? "Nahrávám..." : (isTranscribing ? "Přepisuji..." : "")}
                 readOnly={isLoading || isAIRewriting || isAIGenerating}
             />
-            <div className="absolute top-10 md:top-11 right-2 md:right-3 flex items-center gap-1.5 md:gap-2 z-10">
+            <div className="absolute top-10 md:top-11 right-2 md:right-3 flex items-center gap-1.5 md:gap-2" style={{ zIndex: 1000 }}>
                 <button 
                     onClick={toggleRecording}
                     disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating}
@@ -367,9 +367,19 @@ const TextAreaWithMic: React.FC<{
                 </button>
                 {showAIIcons && onRewrite && (
                     <button
-                        onClick={onRewrite}
+                        type="button"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isOtherFieldRecording && !isAIRewriting && !isAIGenerating && value) {
+                                onRewrite();
+                            }
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
                         disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating || !value}
                         className={`p-2 md:p-2.5 rounded-full text-white bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                        style={{ zIndex: 1001, position: 'relative', pointerEvents: 'auto' }}
                         title="Přepiš text pomocí AI"
                     >
                         {isAIRewriting ? <Spinner small /> : <EditIcon className="h-4 w-4 md:h-5 md:w-5" />}
@@ -431,7 +441,6 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
             log('Text přepsán pomocí AI');
             toast.success('Text byl úspěšně přepsán');
         } catch (error: any) {
-            console.error('[NonComplianceForm] Error rewriting finding:', error);
             toast.error(error.message || 'Chyba při přepisování textu');
             log(`Chyba při přepisování: ${error.message}`);
         } finally {

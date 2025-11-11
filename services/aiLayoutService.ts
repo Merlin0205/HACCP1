@@ -1,13 +1,11 @@
 /**
- * AI Layout Service - wrapper pro Cloud Functions
- * Volá Cloud Functions místo přímého Gemini API
+ * AI Layout Service - wrapper pro Firebase AI Logic SDK
  */
 
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebaseConfig';
 import { EditableNonCompliance, ReportLayout, AILayoutSuggestion } from '../types/reportEditor';
-
-const suggestLayoutFunction = httpsCallable(functions, 'generateText');
+import { generateContentWithSDK, type AIGenerateContentResponse } from './aiLogic';
+import { fetchAIModelsConfig } from './firestore/settings';
+import { addAIUsageLog } from './firestore/aiUsageLogs';
 
 /**
  * Odhaduje výšku položky v pixelech - PŘESNÝ výpočet jako v editoru
@@ -108,17 +106,23 @@ Vrať mi JSON odpověď ve formátu:
 }
 `;
 
+  const modelsConfig = await fetchAIModelsConfig();
+  const modelName = modelsConfig.models?.['text-generation'] || 'gemini-2.5-flash';
+
   try {
-    const result = await suggestLayoutFunction({
-      prompt,
-      operation: 'text-generation'
-    });
+    const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
     
-    const response = result.data as any;
-    const text = response.text || '';
+    await addAIUsageLog(
+      modelName,
+      'text-generation',
+      response.usageMetadata.promptTokenCount,
+      response.usageMetadata.candidatesTokenCount,
+      response.usageMetadata.totalTokenCount,
+      'sdk'
+    );
     
     // Parsujeme JSON z odpovědi
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = response.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('AI nevrátila validní JSON');
     }
@@ -143,45 +147,8 @@ Vrať mi JSON odpověď ve formátu:
     };
   } catch (error) {
     console.error('[AILayoutService] Chyba při generování layoutu:', error);
-    
-    // Fallback - pokud AI selže, použije se inteligentní algoritmus
-    return fallbackLayout(nonCompliances, pageHeight, pageWidth);
+    throw error;
   }
-}
-
-/**
- * Fallback - inteligentní algoritmus pro rozložení bez AI
- */
-function fallbackLayout(nonCompliances: EditableNonCompliance[], pageHeight: number = 1100, pageWidth: number = 800): AILayoutSuggestion {
-  const pages: any[] = [];
-  let currentPage: any = { pageNumber: 1, items: [], estimatedHeight: 0 };
-
-  nonCompliances.forEach(nc => {
-    const itemHeight = estimateItemHeight(nc, pageWidth);
-    
-    if (currentPage.estimatedHeight + itemHeight > pageHeight) {
-      // Nová stránka
-      pages.push(currentPage);
-      currentPage = { pageNumber: pages.length + 1, items: [], estimatedHeight: 0 };
-    }
-    
-    currentPage.items.push(nc);
-    currentPage.estimatedHeight += itemHeight;
-  });
-
-  if (currentPage.items.length > 0) {
-    pages.push(currentPage);
-  }
-
-  return {
-    confidence: 0.6,
-    reason: 'Použito jednoduché rozložení (AI nedostupná)',
-    layout: {
-      pages,
-      pageHeight,
-      pageWidth,
-    },
-  };
 }
 
 /**

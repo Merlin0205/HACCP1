@@ -10,6 +10,7 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 
 // Firebase configuration z environment variables
 const firebaseConfig = {
@@ -36,6 +37,23 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const functions = getFunctions(app, 'europe-west1'); // Region pro Cloud Functions
+
+// Inicializace App Check (bez reCAPTCHA pro přihlášené uživatele)
+// App Check se automaticky použije pro Firebase AI Logic SDK volání
+if (import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+  try {
+    const appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+      isTokenAutoRefreshEnabled: true,
+    });
+    console.log('[Firebase] ✅ App Check initialized');
+  } catch (error) {
+    console.warn('[Firebase] ⚠️  App Check initialization failed:', error);
+    // App Check není kritické - aplikace může fungovat i bez něj
+  }
+} else {
+  console.warn('[Firebase] ⚠️  App Check not configured - set VITE_RECAPTCHA_SITE_KEY in .env');
+}
 
 // Pro development s Firebase Emulators
 // POZNÁMKA: Pro plné emulátory potřebujete Java JDK

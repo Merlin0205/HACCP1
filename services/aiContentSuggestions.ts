@@ -1,7 +1,7 @@
 /**
  * AI Content Suggestions Service
  * 
- * Generuje návrhy vylepšení obsahu reportu pomocí Gemini AI přes Cloud Functions
+ * Generuje návrhy vylepšení obsahu reportu pomocí Firebase AI Logic SDK
  * - Gramatika a pravopis
  * - Profesionalita textu
  * - Struktura a formátování
@@ -9,10 +9,9 @@
  */
 
 import { EditableNonCompliance } from '../types/reportEditor';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebaseConfig';
-
-const generateTextFunction = httpsCallable(functions, 'generateText');
+import { generateContentWithSDK, type AIGenerateContentResponse } from './aiLogic';
+import { fetchAIModelsConfig } from './firestore/settings';
+import { addAIUsageLog } from './firestore/aiUsageLogs';
 
 export interface ContentSuggestion {
   nonComplianceId: string;
@@ -88,17 +87,23 @@ Pro každou neshodu analyzuj pole "location" (místo), "finding" (zjištění) a
 
 VRAŤ POUZE ČISTÝ JSON BEZ MARKDOWN FORMATOVÁNÍ.`;
 
+  const modelsConfig = await fetchAIModelsConfig();
+  const modelName = modelsConfig.models?.['text-generation'] || 'gemini-2.5-flash';
+
   try {
-    const result = await generateTextFunction({
-      prompt,
-      operation: 'text-generation'
-    });
+    const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
     
-    const response = result.data as any;
-    const responseText = response.text || '';
+    await addAIUsageLog(
+      modelName,
+      'text-generation',
+      response.usageMetadata.promptTokenCount,
+      response.usageMetadata.candidatesTokenCount,
+      response.usageMetadata.totalTokenCount,
+      'sdk'
+    );
     
     // Odstraníme markdown code blocks pokud existují
-    const cleanedText = responseText
+    const cleanedText = response.text
       .replace(/```json\s*/g, '')
       .replace(/```\s*/g, '')
       .trim();
@@ -113,13 +118,7 @@ VRAŤ POUZE ČISTÝ JSON BEZ MARKDOWN FORMATOVÁNÍ.`;
     return parsedResult;
   } catch (error) {
     console.error('Chyba při generování AI návrhů:', error);
-    
-    // Fallback - žádné návrhy
-    return {
-      suggestions: [],
-      summary: 'Nepodařilo se vygenerovat návrhy změn. Zkuste to prosím znovu.',
-      totalImprovements: 0,
-    };
+    throw error;
   }
 }
 

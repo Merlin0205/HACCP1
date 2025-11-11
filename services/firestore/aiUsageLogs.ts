@@ -14,7 +14,7 @@ import {
   addDoc
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
-import { fetchAIPricingConfig } from './settings';
+import { fetchAIPricingConfig, DEFAULT_GEMINI_MODELS } from './settings';
 
 const COLLECTION_NAME = 'aiUsageLogs';
 
@@ -39,6 +39,7 @@ export interface AIUsageLog {
   totalTokens: number;
   costUsd: number;
   costCzk: number;
+  source?: 'sdk' | 'cloud-functions'; // Zdroj volání: SDK nebo Cloud Functions
 }
 
 /**
@@ -86,16 +87,29 @@ export async function clearAIUsageLogs(): Promise<void> {
 
 /**
  * Vypočítá náklady za AI volání podle pricing configu
+ * Používá ceny z aiPricingConfig nebo fallback na DEFAULT_GEMINI_MODELS
  */
 async function calculateCost(model: string, promptTokens: number, completionTokens: number): Promise<{ usd: number; czk: number }> {
   try {
     const pricingConfig = await fetchAIPricingConfig();
-    const pricing = pricingConfig.models?.[model];
     const usdToCzk = pricingConfig.usdToCzk || 25;
     
+    // Zkusit najít ceny v pricing configu
+    let pricing = pricingConfig.models?.[model];
+    
+    // Pokud není v pricing configu, použít výchozí ceny z DEFAULT_GEMINI_MODELS
     if (!pricing) {
-      console.warn(`[AI-USAGE] Pricing config pro model "${model}" nenalezen`);
-      return { usd: 0, czk: 0 };
+      const defaultModel = DEFAULT_GEMINI_MODELS[model];
+      if (defaultModel) {
+        pricing = {
+          inputPrice: defaultModel.inputPrice,
+          outputPrice: defaultModel.outputPrice,
+        };
+        console.log(`[AI-USAGE] Použity výchozí ceny pro model "${model}" z DEFAULT_GEMINI_MODELS`);
+      } else {
+        console.warn(`[AI-USAGE] Pricing config pro model "${model}" nenalezen, ani v DEFAULT_GEMINI_MODELS`);
+        return { usd: 0, czk: 0 };
+      }
     }
     
     const inputPrice = pricing.inputPrice || 0;
@@ -122,7 +136,8 @@ export async function addAIUsageLog(
   operation: string,
   promptTokens: number,
   completionTokens: number,
-  totalTokens: number
+  totalTokens: number,
+  source?: 'sdk' | 'cloud-functions'
 ): Promise<void> {
   try {
     const userId = getCurrentUserId();
@@ -140,10 +155,12 @@ export async function addAIUsageLog(
       completionTokens: completionTokens || 0,
       totalTokens: totalTokens || 0,
       costUsd: cost.usd,
-      costCzk: cost.czk
+      costCzk: cost.czk,
+      source: source || 'cloud-functions' // Default je cloud-functions pro zpětnou kompatibilitu
     });
     
-    console.log(`[AI-USAGE] Zalogováno: ${model}, ${totalTokens} tokens, $${cost.usd.toFixed(4)} (${cost.czk.toFixed(2)} Kč)`);
+    const sourceLabel = source === 'sdk' ? 'SDK' : 'Cloud Functions';
+    console.log(`[AI-USAGE] Zalogováno (${sourceLabel}): ${model}, ${totalTokens} tokens, $${cost.usd.toFixed(6)} (${cost.czk.toFixed(6)} Kč)`);
   } catch (error) {
     console.error('[AI-USAGE] Chyba při logování:', error);
     // Nevyhodit chybu - logování nesmí blokovat hlavní funkcionalitu

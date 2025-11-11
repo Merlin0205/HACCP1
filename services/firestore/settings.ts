@@ -137,6 +137,7 @@ export interface GeminiModelInfo {
   inputPrice: number;
   outputPrice: number;
   description?: string;
+  useCase?: string; // Na co je model dobrý
   lastPriceUpdate?: string;
 }
 
@@ -182,7 +183,7 @@ const DEPRECATED_MODELS: Record<string, string> = {
  * Výchozí seznam všech Gemini modelů podle dokumentace
  * ZASTARALÉ MODELY (gemini-1.5-pro, gemini-1.5-flash) byly odstraněny - byly ukončeny Googlem
  */
-const DEFAULT_GEMINI_MODELS: Record<string, GeminiModelInfo> = {
+export const DEFAULT_GEMINI_MODELS: Record<string, GeminiModelInfo> = {
   'gemini-2.5-flash': {
     name: 'gemini-2.5-flash',
     category: 'střední',

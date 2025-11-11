@@ -72,6 +72,7 @@ import { fetchAuditStructure } from './services/firestore/settings';
 import { writeBatch, doc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { generateHumanReadableId } from './utils/idGenerator';
+import { getAIInstance } from './services/aiLogic';
 
 const App: React.FC = () => {
   // --- DATA MANAGEMENT (using custom hooks) ---
@@ -87,6 +88,16 @@ const App: React.FC = () => {
     isLoading,
     error,
   } = useAppData();
+
+  // --- SDK INITIALIZATION ---
+  useEffect(() => {
+    // Inicializovat Firebase AI Logic SDK při načtení aplikace
+    try {
+      getAIInstance();
+    } catch (error) {
+      // Silent fail - aplikace bude fungovat s Cloud Functions fallback
+    }
+  }, []);
 
   // --- STATE MANAGEMENT ---
   const [appState, setAppState] = useState<AppState>(AppState.INCOMPLETE_AUDITS);

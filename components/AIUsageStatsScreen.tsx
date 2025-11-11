@@ -2,9 +2,10 @@
  * AI Usage Stats Screen - Statistiky a náklady na AI volání
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { fetchAIUsageLogs, clearAIUsageLogs } from '../services/firestore/aiUsageLogs';
 import { toast } from '../utils/toast';
+import { Pagination } from './ui/Pagination';
 
 interface AIUsageLog {
   id: string;
@@ -16,6 +17,35 @@ interface AIUsageLog {
   totalTokens: number;
   costUsd: number;
   costCzk: number;
+  source?: 'sdk' | 'cloud-functions';
+}
+
+/**
+ * Formátuje náklady s více desetinnými místy pro velmi malé hodnoty
+ */
+function formatCost(value: number, currency: 'usd' | 'czk'): string {
+  if (value === 0) {
+    return currency === 'usd' ? '$0.00' : '0.00 Kč';
+  }
+  
+  // Pro hodnoty menší než 0.0001 použijeme více desetinných míst
+  if (value < 0.0001) {
+    return currency === 'usd' 
+      ? `$${value.toFixed(8)}`
+      : `${value.toFixed(8)} Kč`;
+  }
+  
+  // Pro hodnoty menší než 0.01 použijeme 6 desetinných míst
+  if (value < 0.01) {
+    return currency === 'usd'
+      ? `$${value.toFixed(6)}`
+      : `${value.toFixed(6)} Kč`;
+  }
+  
+  // Pro větší hodnoty použijeme 4 desetinná místa
+  return currency === 'usd'
+    ? `$${value.toFixed(4)}`
+    : `${value.toFixed(4)} Kč`;
 }
 
 interface AIUsageStats {
@@ -29,6 +59,8 @@ interface AIUsageStatsScreenProps {
 const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
   const [stats, setStats] = useState<AIUsageStats>({ logs: [] });
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   useEffect(() => {
     loadStats();
@@ -37,7 +69,13 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
   const loadStats = async () => {
     try {
       const logs = await fetchAIUsageLogs(1000); // Načíst maximálně 1000 záznamů
-      setStats({ logs });
+      // Seřadit podle timestampu sestupně (nejnovější nahoře)
+      const sortedLogs = logs.sort((a, b) => {
+        const dateA = new Date(a.timestamp).getTime();
+        const dateB = new Date(b.timestamp).getTime();
+        return dateB - dateA; // Sestupně
+      });
+      setStats({ logs: sortedLogs });
     } catch (error) {
       console.error('Chyba při načítání AI usage stats:', error);
       toast.error('Chyba při načítání statistik');
@@ -45,6 +83,18 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
       setLoading(false);
     }
   };
+
+  // Stránkování - vypočítat zobrazené logy
+  const paginatedLogs = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return stats.logs.slice(startIndex, endIndex);
+  }, [stats.logs, currentPage, itemsPerPage]);
+
+  // Resetovat na první stránku při změně počtu položek na stránku
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [itemsPerPage]);
 
   const handleClearLog = async () => {
     if (confirm('Opravdu chcete smazat celou historii nákladů?')) {
@@ -116,11 +166,11 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
           </div>
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="text-sm text-gray-600 mb-1">Náklady USD</div>
-            <div className="text-3xl font-bold text-green-600">${totalStats.costUsd.toFixed(4)}</div>
+            <div className="text-3xl font-bold text-green-600">{formatCost(totalStats.costUsd, 'usd')}</div>
           </div>
           <div className="bg-white rounded-xl shadow-md p-6">
             <div className="text-sm text-gray-600 mb-1">Náklady Kč</div>
-            <div className="text-3xl font-bold text-orange-600">{totalStats.costCzk.toFixed(4)} Kč</div>
+            <div className="text-3xl font-bold text-orange-600">{formatCost(totalStats.costCzk, 'czk')}</div>
           </div>
         </div>
 
@@ -141,11 +191,11 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
                   </div>
                   <div>
                     <span className="text-gray-600">USD:</span>
-                    <span className="font-bold ml-2">${(data.costUsd || 0).toFixed(4)}</span>
+                    <span className="font-bold ml-2">{formatCost(data.costUsd || 0, 'usd')}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Kč:</span>
-                    <span className="font-bold ml-2">{(data.costCzk || 0).toFixed(4)} Kč</span>
+                    <span className="font-bold ml-2">{formatCost(data.costCzk || 0, 'czk')}</span>
                   </div>
                 </div>
               </div>
@@ -173,33 +223,42 @@ const AIUsageStatsScreen: React.FC<AIUsageStatsScreenProps> = ({ onBack }) => {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Čas</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Model</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Operace</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Input</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Output</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Total</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">USD</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Kč</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Čas</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Model</th>
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Operace</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Input</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Output</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Total</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">USD</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Kč</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {stats.logs.slice().reverse().map((log, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-600">{new Date(log.timestamp).toLocaleString('cs-CZ')}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-800">{log.model}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{log.operation}</td>
-                    <td className="px-4 py-3 text-sm text-right text-gray-600">{(log.promptTokens || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm text-right text-gray-600">{(log.completionTokens || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium text-gray-800">{(log.totalTokens || 0).toLocaleString()}</td>
-                    <td className="px-4 py-3 text-sm text-right font-bold text-green-600">${(log.costUsd || 0).toFixed(4)}</td>
-                    <td className="px-4 py-3 text-sm text-right font-bold text-orange-600">{(log.costCzk || 0).toFixed(4)} Kč</td>
+                {paginatedLogs.map((log, index) => (
+                  <tr key={log.id || index} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{new Date(log.timestamp).toLocaleString('cs-CZ')}</td>
+                    <td className="px-3 py-2 text-xs font-medium text-gray-800 truncate max-w-[150px]" title={log.model}>{log.model}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600 truncate max-w-[120px]" title={log.operation}>{log.operation}</td>
+                    <td className="px-3 py-2 text-xs text-right text-gray-600 whitespace-nowrap">{(log.promptTokens || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-xs text-right text-gray-600 whitespace-nowrap">{(log.completionTokens || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-xs text-right font-medium text-gray-800 whitespace-nowrap">{(log.totalTokens || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2 text-xs text-right font-bold text-green-600 whitespace-nowrap">{formatCost(log.costUsd || 0, 'usd')}</td>
+                    <td className="px-3 py-2 text-xs text-right font-bold text-orange-600 whitespace-nowrap">{formatCost(log.costCzk || 0, 'czk')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {stats.logs.length === 0 && (
               <p className="text-gray-500 text-center py-8">Zatím žádná volání AI</p>
+            )}
+            {stats.logs.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalItems={stats.logs.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
             )}
           </div>
         </div>
