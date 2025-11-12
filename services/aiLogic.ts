@@ -60,14 +60,36 @@ export interface AIGenerateContentResponse {
 
 /**
  * Wrapper pro generateContent s extrakcí usage metadata
+ * @param timeout Timeout v milisekundách (default: 120000 = 2 minuty)
  */
 export async function generateContentWithSDK(
   modelName: string,
-  prompt: string | Array<string | { inlineData: { data: string; mimeType: string } }>
+  prompt: string | Array<string | { inlineData: { data: string; mimeType: string } }>,
+  timeout: number = 120000 // 2 minuty default timeout
 ): Promise<AIGenerateContentResponse> {
+  // Vytvořit AbortController pro timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeout);
+
   try {
     const model = getModel(modelName);
-    const result = await model.generateContent(prompt);
+    
+    // Zkusit volat generateContent s timeout
+    // Poznámka: Firebase AI Logic SDK nemusí podporovat AbortSignal přímo,
+    // ale můžeme použít Promise.race pro timeout
+    const generatePromise = model.generateContent(prompt);
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Timeout: Request trval déle než ${timeout / 1000} sekund`));
+      }, timeout);
+    });
+
+    const result = await Promise.race([generatePromise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    
     const response = result.response;
     
     const text = response.text();
@@ -88,6 +110,8 @@ export async function generateContentWithSDK(
       },
     };
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    
     const errorDetails = {
       message: error?.message,
       code: error?.code,
@@ -95,6 +119,12 @@ export async function generateContentWithSDK(
       stack: error?.stack,
     };
     console.error('[AI Logic SDK] ❌ Chyba při generování obsahu:', errorDetails);
+    
+    // Pokud je to timeout nebo abort error, poskytnout lepší zprávu
+    if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('Timeout')) {
+      throw new Error(`Request byl přerušen (timeout nebo abort). Zkuste zkrátit prompt nebo použít jiný model. Původní chyba: ${error?.message || 'Neznámá chyba'}`);
+    }
+    
     throw new Error(`Firebase AI Logic SDK selhalo: ${error?.message || 'Neznámá chyba'}. Kód: ${error?.code || 'N/A'}`);
   }
 }

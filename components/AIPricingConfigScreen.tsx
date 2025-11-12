@@ -28,6 +28,8 @@ interface ModelPricing {
   inputPriceHigh?: number;
   outputPriceHigh?: number;
   threshold?: number;
+  audioInputPrice?: number; // Speciální cena pro audio vstup (např. $1.00 pro Flash místo $0.30)
+  imageInputPrice?: number; // Speciální cena pro image vstup (většinou stejná jako text, ale může být jiná)
   note?: string;
   lastPriceUpdate?: string;
 }
@@ -60,6 +62,12 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     useCase?: string;
     foundOnPage?: boolean; // Označit, zda byl model nalezen na stránce
   }> | null>(null);
+  const [lastLLMStatus, setLastLLMStatus] = useState<{
+    status: 'running' | 'success' | 'error';
+    message: string;
+    timestamp: string; // ISO string pro localStorage
+    details?: string;
+  } | null>(null);
   const [hiddenModels, setHiddenModels] = useState<Set<string>>(new Set()); // Skryté modely
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set()); // Rozbalené modely v accordionu
   const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({}); // Otevřené dropdowny pro výběr modelů
@@ -71,6 +79,35 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
 
   useEffect(() => {
     loadConfig();
+    // Načíst poslední status LLM parsingu z localStorage
+    const savedStatus = localStorage.getItem('aiPricing_llmStatus');
+    if (savedStatus) {
+      try {
+        const status = JSON.parse(savedStatus);
+        // Pokud je status "running" a je starší než 10 minut, považovat za timeout
+        if (status.status === 'running') {
+          const statusTime = new Date(status.timestamp);
+          const now = new Date();
+          const diffMinutes = (now.getTime() - statusTime.getTime()) / 1000 / 60;
+          if (diffMinutes > 10) {
+            // Považovat za timeout
+            setLastLLMStatus({
+              status: 'error',
+              message: 'Parsing byl přerušen (timeout)',
+              timestamp: status.timestamp,
+              details: 'Operace trvala déle než 10 minut a byla pravděpodobně přerušena.'
+            });
+            localStorage.removeItem('aiPricing_llmStatus');
+          } else {
+            setLastLLMStatus(status);
+          }
+        } else {
+          setLastLLMStatus(status);
+        }
+      } catch (e) {
+        console.error('Chyba při načítání statusu:', e);
+      }
+    }
   }, []);
 
   const loadConfig = async () => {
@@ -284,14 +321,44 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       setUpdateProgress({ step: 'Spouštím aktualizaci pomocí LLM...' });
       setParsingResults(null);
       
+      // Uložit status "running" do localStorage
+      const runningStatus = {
+        status: 'running' as const,
+        message: 'Parsing probíhá...',
+        timestamp: new Date().toISOString(),
+        details: 'Operace může trvat několik minut'
+      };
+      setLastLLMStatus(runningStatus);
+      localStorage.setItem('aiPricing_llmStatus', JSON.stringify(runningStatus));
+      
       const result = await updateGeminiPricesWithLLM((step, details) => {
         setUpdateProgress({ step, details });
+        // Aktualizovat status při progressu
+        const progressStatus = {
+          status: 'running' as const,
+          message: step,
+          timestamp: new Date().toISOString(),
+          details: details
+        };
+        setLastLLMStatus(progressStatus);
+        localStorage.setItem('aiPricing_llmStatus', JSON.stringify(progressStatus));
       });
       
       setUpdateProgress(null);
       setParsingResults(result.parsedModels || null);
       console.log('[AIPricingConfigScreen] Výsledky parsování (LLM):', result.parsedModels);
       console.log('[AIPricingConfigScreen] Počet nalezených modelů (LLM):', result.parsedModels ? Object.keys(result.parsedModels).length : 0);
+      
+      // Uložit úspěšný status
+      const successStatus = {
+        status: 'success' as const,
+        message: `Úspěšně aktualizováno ${result.updated} modelů`,
+        timestamp: new Date().toISOString(),
+        details: result.failed.length > 0 ? `Nepodařilo se aktualizovat: ${result.failed.join(', ')}` : undefined
+      };
+      setLastLLMStatus(successStatus);
+      localStorage.setItem('aiPricing_llmStatus', JSON.stringify(successStatus));
+      
       toast.success(`Aktualizováno ${result.updated} modelů pomocí LLM. ${result.failed.length > 0 ? `Nepodařilo se aktualizovat: ${result.failed.join(', ')}` : ''}`);
       
       await loadConfig();
@@ -299,7 +366,30 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       console.error('Chyba při aktualizaci cen pomocí LLM:', error);
       setUpdateProgress(null);
       setParsingResults(null);
-      toast.error(`Chyba při aktualizaci cen pomocí LLM: ${error.message}`);
+      
+      // Uložit chybový status s lepší zprávou
+      let errorMessage = error.message || 'Neznámá chyba';
+      let errorDetails = error.message;
+      
+      // Zlepšit zprávu pro 503 chyby
+      if (error?.message?.includes('503') || 
+          error?.message?.includes('Service Unavailable') ||
+          error?.message?.includes('overloaded') ||
+          error?.message?.includes('unavailable')) {
+        errorMessage = 'Model Gemini je momentálně přetížený';
+        errorDetails = 'Systém automaticky zkoušel opakovat požadavek 3x, ale model je stále nedostupný. Zkuste to prosím znovu za chvíli nebo použijte HTML parsing místo LLM parsingu.';
+      }
+      
+      const errorStatus = {
+        status: 'error' as const,
+        message: errorMessage,
+        timestamp: new Date().toISOString(),
+        details: errorDetails
+      };
+      setLastLLMStatus(errorStatus);
+      localStorage.setItem('aiPricing_llmStatus', JSON.stringify(errorStatus));
+      
+      toast.error(errorMessage);
     } finally {
       setUpdatingPrices(false);
     }
@@ -363,6 +453,83 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-3 md:p-4">
       <div className="max-w-5xl mx-auto">
+        {/* Status banner pro LLM parsing */}
+        {lastLLMStatus && (
+          <div className={`mb-4 rounded-xl shadow-lg p-4 ${
+            lastLLMStatus.status === 'running' 
+              ? 'bg-blue-50 border-2 border-blue-300' 
+              : lastLLMStatus.status === 'success'
+              ? 'bg-green-50 border-2 border-green-300'
+              : 'bg-red-50 border-2 border-red-300'
+          }`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  {lastLLMStatus.status === 'running' && (
+                    <>
+                      <span className="animate-spin text-blue-600">⏳</span>
+                      <span className="font-bold text-blue-800">LLM Parsing probíhá...</span>
+                    </>
+                  )}
+                  {lastLLMStatus.status === 'success' && (
+                    <>
+                      <span className="text-green-600">✓</span>
+                      <span className="font-bold text-green-800">LLM Parsing dokončen</span>
+                    </>
+                  )}
+                  {lastLLMStatus.status === 'error' && (
+                    <>
+                      <span className="text-red-600">✗</span>
+                      <span className="font-bold text-red-800">LLM Parsing selhal</span>
+                    </>
+                  )}
+                </div>
+                <div className={`text-sm ${
+                  lastLLMStatus.status === 'running' ? 'text-blue-700' :
+                  lastLLMStatus.status === 'success' ? 'text-green-700' :
+                  'text-red-700'
+                }`}>
+                  {lastLLMStatus.message}
+                </div>
+                {lastLLMStatus.details && (
+                  <div className={`text-xs mt-1 ${
+                    lastLLMStatus.status === 'running' ? 'text-blue-600' :
+                    lastLLMStatus.status === 'success' ? 'text-green-600' :
+                    'text-red-600'
+                  }`}>
+                    {lastLLMStatus.details}
+                  </div>
+                )}
+                <div className={`text-xs mt-2 ${
+                  lastLLMStatus.status === 'running' ? 'text-blue-500' :
+                  lastLLMStatus.status === 'success' ? 'text-green-600' :
+                  'text-red-600'
+                }`}>
+                  {new Date(lastLLMStatus.timestamp).toLocaleString('cs-CZ')}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setLastLLMStatus(null);
+                  localStorage.removeItem('aiPricing_llmStatus');
+                }}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                title="Zavřít"
+              >
+                ×
+              </button>
+            </div>
+            {lastLLMStatus.status === 'running' && updateProgress && (
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                <div className="text-xs text-blue-600 font-medium">{updateProgress.step}</div>
+                {updateProgress.details && (
+                  <div className="text-xs text-blue-500 mt-1">{updateProgress.details}</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Header */}
         <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
           <div className="flex items-center justify-between gap-3">
@@ -670,12 +837,26 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                     )}
                   </div>
                   {selectedModel && (
-                    <div className={`text-xs ${colors.text} font-medium flex items-center gap-2 px-2 py-1 rounded ${colors.bg}`}>
-                      <span className="font-semibold">Input:</span>
-                      <span>${selectedPricing?.inputPrice || selectedModelInfo?.inputPrice || 0}/1M</span>
-                      <span className="text-gray-400">•</span>
-                      <span className="font-semibold">Output:</span>
-                      <span>${selectedPricing?.outputPrice || selectedModelInfo?.outputPrice || 0}/1M</span>
+                    <div className={`text-xs ${colors.text} font-medium space-y-1 px-2 py-1 rounded ${colors.bg}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">Input:</span>
+                        <span>${selectedPricing?.inputPrice || selectedModelInfo?.inputPrice || 0}/1M</span>
+                        <span className="text-gray-400">•</span>
+                        <span className="font-semibold">Output:</span>
+                        <span>${selectedPricing?.outputPrice || selectedModelInfo?.outputPrice || 0}/1M</span>
+                      </div>
+                      {operation === 'audio-transcription' && (selectedPricing?.audioInputPrice !== undefined || selectedModelInfo?.audioInputPrice !== undefined) && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-semibold">Audio Input:</span>
+                          <span>${selectedPricing?.audioInputPrice || selectedModelInfo?.audioInputPrice || 0}/1M</span>
+                        </div>
+                      )}
+                      {operation === 'image-analysis' && (selectedPricing?.imageInputPrice !== undefined || selectedModelInfo?.imageInputPrice !== undefined) && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="font-semibold">Image Input:</span>
+                          <span>${selectedPricing?.imageInputPrice || selectedModelInfo?.imageInputPrice || 0}/1M</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -871,7 +1052,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Input ($/1M)
+                              Input ($/1M) <span className="text-gray-400">(text/image/video)</span>
                             </label>
                             <input
                               type="number"
@@ -901,6 +1082,47 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                             {config.usdToCzk && (
                               <div className="text-xs text-gray-500 mt-1">
                                 {(pricing.outputPrice * config.usdToCzk).toFixed(2)} Kč/1M
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Audio a Image Input Price */}
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Audio Input ($/1M) <span className="text-gray-400">(volitelné)</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={pricing.audioInputPrice !== undefined ? pricing.audioInputPrice : ''}
+                              onChange={(e) => updateModelPrice(modelName, 'audioInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                              placeholder={pricing.inputPrice?.toString() || '0.00'}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            {config.usdToCzk && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {pricing.audioInputPrice !== undefined ? ((pricing.audioInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Image Input ($/1M) <span className="text-gray-400">(volitelné)</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={pricing.imageInputPrice !== undefined ? pricing.imageInputPrice : ''}
+                              onChange={(e) => updateModelPrice(modelName, 'imageInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                              placeholder={pricing.inputPrice?.toString() || '0.00'}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            {config.usdToCzk && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {pricing.imageInputPrice !== undefined ? ((pricing.imageInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
                               </div>
                             )}
                           </div>
@@ -1038,7 +1260,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Input ($/1M)
+                              Input ($/1M) <span className="text-gray-400">(text/image/video)</span>
                             </label>
                             <input
                               type="number"
@@ -1068,6 +1290,47 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                             {config.usdToCzk && (
                               <div className="text-xs text-gray-500 mt-1">
                                 {(pricing.outputPrice * config.usdToCzk).toFixed(2)} Kč/1M
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Audio a Image Input Price */}
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Audio Input ($/1M) <span className="text-gray-400">(volitelné)</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={pricing.audioInputPrice !== undefined ? pricing.audioInputPrice : ''}
+                              onChange={(e) => updateModelPrice(modelName, 'audioInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                              placeholder={pricing.inputPrice?.toString() || '0.00'}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            {config.usdToCzk && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {pricing.audioInputPrice !== undefined ? ((pricing.audioInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Image Input ($/1M) <span className="text-gray-400">(volitelné)</span>
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={pricing.imageInputPrice !== undefined ? pricing.imageInputPrice : ''}
+                              onChange={(e) => updateModelPrice(modelName, 'imageInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                              placeholder={pricing.inputPrice?.toString() || '0.00'}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                            {config.usdToCzk && (
+                              <div className="text-xs text-gray-500 mt-1">
+                                {pricing.imageInputPrice !== undefined ? ((pricing.imageInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
                               </div>
                             )}
                           </div>

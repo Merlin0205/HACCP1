@@ -17,6 +17,15 @@ echo.
 pause
 
 echo.
+echo Aktualizuji build cislo...
+call node scripts/incrementVersion.js
+if errorlevel 1 (
+    echo AKTUALIZACE VERZE SELHALA! Nelze pokracovat s deployem.
+    pause
+    exit /b 1
+)
+
+echo.
 echo Building application...
 call npm run build
 if errorlevel 1 (

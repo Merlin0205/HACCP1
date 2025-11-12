@@ -18,12 +18,13 @@ export const fetchPricingPage = functions
         throw new functions.https.HttpsError('unauthenticated', 'Uživatel musí být přihlášen');
       }
 
-      const url = 'https://ai.google.dev/gemini-api/docs/pricing';
+      const url = 'https://ai.google.dev/gemini-api/docs/pricing?hl=en';
       console.log('[fetchPricingPage] Načítám HTML stránku:', url);
       
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; FirebaseFunctionsBot/1.0)'
+          'User-Agent': 'Mozilla/5.0 (compatible; FirebaseFunctionsBot/1.0)',
+          'Accept-Language': 'en-US,en;q=0.9' // Zajistit anglickou verzi stránky
         }
       });
       

@@ -14,14 +14,12 @@ import * as admin from 'firebase-admin';
 admin.initializeApp();
 
 // Export všech functions
-// AI functions jsou deprecated - používají se SDK na klientovi
-// export { generateReport } from './generateReport'; // DEPRECATED - používá se services/reports.ts
-// export { transcribeAudio } from './transcribeAudio'; // DEPRECATED - používá se src/geminiService.ts
-// export { analyzeImage } from './analyzeImage'; // DEPRECATED - používá se src/geminiService.ts
-// export { generateText } from './generateText'; // DEPRECATED - nepoužívá se
-// export { updateGeminiPrices } from './updateGeminiPrices'; // DEPRECATED - používá se services/firestore/priceUpdater.ts
+// Všechna LLM volání používají Firebase AI Logic SDK na klientovi
+// Cloud Functions se používají pouze pro:
+// - PDF generování (Puppeteer)
+// - HTML parsing bez LLM (Cheerio)
+// - Fetch HTML stránky (kvůli CORS)
 
-// Aktivní functions (nepoužívají AI)
 export { generatePdf } from './generatePdf';
 export { generateSmartReportPdf } from './generateSmartReportPdf';
 export { parseGeminiPricing } from './parseGeminiPricing';

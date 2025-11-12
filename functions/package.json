@@ -15,7 +15,6 @@
     "node": "20"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "@react-pdf/renderer": "^4.2.0",
     "cheerio": "^1.1.2",
     "firebase-admin": "^13.0.0",

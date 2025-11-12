@@ -60,6 +60,8 @@ export async function updateGeminiPricesFromWeb(
         name: string;
         inputPrice: number;
         outputPrice: number;
+        audioInputPrice?: number;
+        imageInputPrice?: number;
         description?: string;
         useCase?: string;
       }>;
@@ -100,6 +102,8 @@ export async function updateGeminiPricesFromWeb(
       name: string;
       inputPrice: number;
       outputPrice: number;
+      audioInputPrice?: number;
+      imageInputPrice?: number;
       description?: string;
       useCase?: string;
       foundOnPage?: boolean; // Označit, zda byl model nalezen na stránce
@@ -140,6 +144,8 @@ export async function updateGeminiPricesFromWeb(
         // Model byl nalezen na stránce - použít parsované ceny
         allParsedModels[modelName] = {
           ...parsedModel,
+          audioInputPrice: parsedModel.audioInputPrice !== undefined ? parsedModel.audioInputPrice : defaultModel.audioInputPrice,
+          imageInputPrice: parsedModel.imageInputPrice !== undefined ? parsedModel.imageInputPrice : (parsedModel.inputPrice || defaultModel.imageInputPrice || defaultModel.inputPrice),
           useCase: parsedModel.useCase || useCase, // Zajistit, že useCase je vždy vyplněno
           foundOnPage: true
         };
@@ -149,6 +155,8 @@ export async function updateGeminiPricesFromWeb(
           name: modelName,
           inputPrice: defaultModel.inputPrice || 0,
           outputPrice: defaultModel.outputPrice || 0,
+          audioInputPrice: defaultModel.audioInputPrice,
+          imageInputPrice: defaultModel.imageInputPrice || defaultModel.inputPrice || 0,
           description: defaultModel.description || '',
           useCase: useCase, // VŽDY vyplněno
           foundOnPage: false
@@ -235,6 +243,8 @@ export async function updateGeminiPricesFromWeb(
       // Pokud model nebyl nalezen v parsovaných datech, použít výchozí ceny
       const inputPrice = parsedModel?.inputPrice !== undefined ? parsedModel.inputPrice : (defaultModel.inputPrice || 0);
       const outputPrice = parsedModel?.outputPrice !== undefined ? parsedModel.outputPrice : (defaultModel.outputPrice || 0);
+      const audioInputPrice = parsedModel?.audioInputPrice !== undefined ? parsedModel.audioInputPrice : (defaultModel.audioInputPrice);
+      const imageInputPrice = parsedModel?.imageInputPrice !== undefined ? parsedModel.imageInputPrice : (parsedModel?.inputPrice || defaultModel.imageInputPrice || defaultModel.inputPrice || inputPrice);
 
       if (inputPrice === 0 && outputPrice === 0 && !modelName.includes('exp')) {
         // Pokud jsou obě ceny 0 a není to exp model, označit jako failed
@@ -271,6 +281,8 @@ export async function updateGeminiPricesFromWeb(
         ...pricingConfig.models[modelName],
         inputPrice,
         outputPrice,
+        audioInputPrice: audioInputPrice !== undefined ? audioInputPrice : undefined,
+        imageInputPrice: imageInputPrice !== undefined ? imageInputPrice : undefined,
         note: parsedModel?.description || defaultModel?.description || '',
         useCase: useCase.trim(), // VŽDY vyplněno
         lastPriceUpdate: updateDate
@@ -328,9 +340,7 @@ export async function updateGeminiPricesWithLLM(
   try {
     progressCallback?.('Inicializace LLM', 'Načítám konfiguraci...');
 
-    const { generateContentWithSDK } = await import('../aiLogic');
     const { fetchAIModelsConfig } = await import('./settings');
-    const { addAIUsageLog } = await import('./aiUsageLogs');
     
     // Použít DEFAULT_GEMINI_MODELS jako základní seznam modelů
     const knownModelNames = Object.keys(DEFAULT_GEMINI_MODELS);
@@ -398,8 +408,9 @@ export async function updateGeminiPricesWithLLM(
       console.log('[PRICE-UPDATER-LLM] Nenalezeny sekce s modely, používám celý HTML');
     }
     
-    // Omezit na 80000 znaků kvůli token limitům (zvýšeno, protože potřebujeme tabulky)
-    relevantHtml = relevantHtml.substring(0, 80000);
+    // Omezit na 30000 znaků kvůli token limitům a timeoutům
+    // Zmenšeno z 50000, protože Firebase AI Logic SDK má vnitřní timeout
+    relevantHtml = relevantHtml.substring(0, 30000);
     
     // Logování pro debugging
     console.log('[PRICE-UPDATER-LLM] Délka HTML:', relevantHtml.length, 'znaků');
@@ -422,7 +433,7 @@ export async function updateGeminiPricesWithLLM(
     progressCallback?.('Parsování HTML', 'Posílám HTML do LLM pro parsování...');
     
     // Vytvořit prompt pro LLM s HTML obsahem
-    const prompt = `Jsi parser HTML stránky s cenami Gemini modelů. Tvá úloha je VÝHRADNĚ extrahovat přesné ceny z poskytnutého HTML kódu.
+    const prompt = `Jsi parser HTML stránky s cenami Gemini modelů z oficiální dokumentace Google AI (https://ai.google.dev/gemini-api/docs/pricing). Tvá úloha je VÝHRADNĚ extrahovat přesné ceny z poskytnutého HTML kódu.
 
 HTML obsah stránky (sekce s modely):
 ${relevantHtml}
@@ -431,9 +442,21 @@ INSTRUKCE PRO PARSOVÁNÍ:
 1. Najdi každý model podle jeho ID (např. "gemini-2.5-flash") v HTML
 2. Pro každý model najdi tabulku s cenami (obvykle v sekci "Standard" nebo "Paid Tier")
 3. V tabulce najdi řádek "Input price" a "Output price"
-4. Extrahuj přesné číselné hodnoty z těchto řádků (např. "$0.07" = 0.07, "$1.25" = 1.25)
-5. Pokud model má více cen (např. "$1.25, prompts <= 200k tokens"), použij první cenu
-6. Pokud model není v HTML nebo nemá ceny, vrať {"inputPrice": 0, "outputPrice": 0}
+4. Extrahuj přesné číselné hodnoty z těchto řádků:
+   - Pokud řádek obsahuje více cen (např. "$0.30 (text / image / video)$1.00 (audio)"):
+     * inputPrice = cena pro text/image/video (první cena, např. 0.30)
+     * audioInputPrice = cena pro audio (druhá cena, např. 1.00)
+     * imageInputPrice = stejná jako inputPrice (obrázky používají stejnou cenu jako text)
+   - Pokud řádek obsahuje pouze jednu cenu (např. "$1.25"):
+     * inputPrice = tato cena (např. 1.25)
+     * audioInputPrice = 0 (není specifikováno)
+     * imageInputPrice = stejná jako inputPrice
+   - Pokud řádek obsahuje více cen podle velikosti (např. "$1.25, prompts <= 200k tokens$2.50, prompts > 200k tokens"):
+     * inputPrice = první cena (např. 1.25)
+     * inputPriceHigh = druhá cena (např. 2.50)
+     * threshold = 200000 (200k tokenů)
+5. Output price extrahuj stejně - pokud má více cen podle velikosti, použij první pro outputPrice a druhou pro outputPriceHigh
+6. Pokud model není v HTML nebo nemá ceny, vrať všechny ceny jako 0
 
 Modely k nalezení: ${knownModelNames.join(', ')}
 
@@ -441,10 +464,21 @@ Vrať POUZE JSON ve formátu (bez dalšího textu):
 {
   "models": {
     "gemini-2.5-flash": {
-      "inputPrice": 0.07,
-      "outputPrice": 0.21,
+      "inputPrice": 0.30,
+      "outputPrice": 2.50,
+      "audioInputPrice": 1.00,
+      "imageInputPrice": 0.30,
       "description": "Rychlý a cenově efektivní multimodální model",
       "useCase": "Rychlé generování textu, analýza obrázků"
+    },
+    "gemini-2.5-pro": {
+      "inputPrice": 1.25,
+      "outputPrice": 10.00,
+      "inputPriceHigh": 2.50,
+      "outputPriceHigh": 15.00,
+      "threshold": 200000,
+      "description": "Nejpokročilejší multipurpose model",
+      "useCase": "Komplexní úlohy, kódování, reasoning"
     },
     ...
   }
@@ -454,11 +488,19 @@ KRITICKÉ PRAVIDLA:
 - POUŽIJ POUZE ceny z HTML - NEPOUŽÍVEJ své znalosti nebo staré informace
 - Ceny musí být přesné čísla z HTML tabulek
 - Pokud cena není v HTML, vrať 0 (ne hádej!)
+- audioInputPrice se extrahuje pouze pokud je v HTML explicitně uvedeno "(audio)" nebo podobné
+- imageInputPrice je vždy stejná jako inputPrice (obrázky používají stejnou cenu jako text)
 - Všechny texty (description, useCase) musí být v češtině
 - useCase musí být vyplněno pro každý model (i když je cena 0)`;
 
     const startTime = Date.now();
-    const response = await generateContentWithSDK(llmModel, prompt);
+    // Použít SDK stejně jako všechna ostatní LLM volání v aplikaci
+    progressCallback?.('LLM parsing', 'Posílám HTML do LLM pro parsování...');
+    const { generateContentWithSDK } = await import('../aiLogic');
+    const { addAIUsageLog } = await import('./aiUsageLogs');
+    
+    // Pro LLM parsing cen použít delší timeout (5 minut) kvůli velkému HTML promptu
+    const response = await generateContentWithSDK(llmModel, prompt, 300000); // 5 minut timeout
     const endTime = Date.now();
     
     // Logování odpovědi od LLM pro debugging
@@ -522,6 +564,12 @@ KRITICKÉ PRAVIDLA:
     }
     
     const parsedModels = pricesData.models;
+    
+    // Logování pro debugging
+    console.log('[PRICE-UPDATER-LLM] SDK odpověď:', {
+      modelsCount: Object.keys(parsedModels).length,
+      usage: response.usageMetadata
+    });
     progressCallback?.('Ceny načteny', `Získal ceny pro ${Object.keys(parsedModels).length} modelů z LLM`);
     
     // Přidat všechny modely z DEFAULT_GEMINI_MODELS, i když nebyly nalezeny
@@ -529,6 +577,8 @@ KRITICKÉ PRAVIDLA:
       name: string;
       inputPrice: number;
       outputPrice: number;
+      audioInputPrice?: number;
+      imageInputPrice?: number;
       description?: string;
       useCase?: string;
       foundOnPage?: boolean;
@@ -567,6 +617,8 @@ KRITICKÉ PRAVIDLA:
       if (parsedModel) {
         allParsedModels[modelName] = {
           ...parsedModel,
+          audioInputPrice: parsedModel.audioInputPrice !== undefined ? parsedModel.audioInputPrice : defaultModel.audioInputPrice,
+          imageInputPrice: parsedModel.imageInputPrice !== undefined ? parsedModel.imageInputPrice : (parsedModel.inputPrice || defaultModel.imageInputPrice || defaultModel.inputPrice),
           useCase: parsedModel.useCase || useCase,
           foundOnPage: true
         };
@@ -575,6 +627,8 @@ KRITICKÉ PRAVIDLA:
           name: modelName,
           inputPrice: defaultModel.inputPrice || 0,
           outputPrice: defaultModel.outputPrice || 0,
+          audioInputPrice: defaultModel.audioInputPrice,
+          imageInputPrice: defaultModel.imageInputPrice || defaultModel.inputPrice || 0,
           description: defaultModel.description || '',
           useCase: useCase,
           foundOnPage: false
@@ -617,11 +671,16 @@ KRITICKÉ PRAVIDLA:
         }
       }
 
+      const audioInputPrice = parsedModel?.audioInputPrice !== undefined ? parsedModel.audioInputPrice : (defaultModel.audioInputPrice);
+      const imageInputPrice = parsedModel?.imageInputPrice !== undefined ? parsedModel.imageInputPrice : (parsedModel?.inputPrice || defaultModel.imageInputPrice || defaultModel.inputPrice || inputPrice);
+
       allModelsList[modelName] = {
         name: modelName,
         category: calculateModelCategory(inputPrice, outputPrice),
         inputPrice: inputPrice,
         outputPrice: outputPrice,
+        audioInputPrice: audioInputPrice,
+        imageInputPrice: imageInputPrice,
         description: (parsedModel?.description || defaultModel.description || '').trim(),
         useCase: useCase,
         lastPriceUpdate: updateDate
@@ -654,6 +713,8 @@ KRITICKÉ PRAVIDLA:
 
       const inputPrice = parsedModel?.inputPrice !== undefined ? parsedModel.inputPrice : (defaultModel.inputPrice || 0);
       const outputPrice = parsedModel?.outputPrice !== undefined ? parsedModel.outputPrice : (defaultModel.outputPrice || 0);
+      const audioInputPrice = parsedModel?.audioInputPrice !== undefined ? parsedModel.audioInputPrice : (defaultModel.audioInputPrice);
+      const imageInputPrice = parsedModel?.imageInputPrice !== undefined ? parsedModel.imageInputPrice : (parsedModel?.inputPrice || defaultModel.imageInputPrice || defaultModel.inputPrice || inputPrice);
 
       if (inputPrice === 0 && outputPrice === 0 && !modelName.includes('exp')) {
         failedModels.push(modelName);
@@ -687,6 +748,8 @@ KRITICKÉ PRAVIDLA:
         ...pricingConfig.models[modelName],
         inputPrice,
         outputPrice,
+        audioInputPrice: audioInputPrice !== undefined ? audioInputPrice : undefined,
+        imageInputPrice: imageInputPrice !== undefined ? imageInputPrice : undefined,
         note: parsedModel?.description || defaultModel?.description || '',
         useCase: useCase.trim(),
         lastPriceUpdate: updateDate

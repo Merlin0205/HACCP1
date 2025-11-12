@@ -186,21 +186,17 @@ export const Layout: React.FC<LayoutProps> = ({
       <aside className={`
         hidden xl:flex flex-col bg-white border-r border-gray-200 transition-all duration-300
         ${isSidebarCollapsed ? 'w-16' : 'w-64'}
+        h-screen sticky top-0
       `}>
         {/* Logo */}
-        <div className={`px-6 py-4 border-b border-gray-200 flex items-center ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-          {!isSidebarCollapsed && (
+        {!isSidebarCollapsed && (
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center">
             <h1 className="text-xl font-bold text-primary-dark">HACCP Audit</h1>
-          )}
-          {isSidebarCollapsed && (
-            <div className="w-8 h-8 bg-gradient-to-br from-primary-dark to-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">H</span>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Menu Items */}
-        <nav className="flex-1 px-4 py-4 space-y-1">
+        <nav className={`flex-1 py-4 space-y-1 overflow-y-auto min-h-0 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
           {visibleMenuItems.map((item) => {
             const isActive = item.active;
             const theme = item.theme;
@@ -210,19 +206,19 @@ export const Layout: React.FC<LayoutProps> = ({
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
                 className={`
-                  w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
+                  w-full flex items-center rounded-lg transition-all duration-200
                   ${isActive 
                     ? 'text-white shadow-md' 
                     : 'text-gray-700 hover:bg-gray-100'
                   }
-                  ${isSidebarCollapsed ? 'justify-center' : ''}
+                  ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-4 py-3'}
                 `}
                 title={isSidebarCollapsed ? item.label : undefined}
                 style={isActive ? {
                   background: `linear-gradient(to right, ${theme.colors.primary}, ${theme.colors.darkest})`
                 } : undefined}
               >
-                <item.icon className={`h-6 w-6 ${isActive ? 'text-white' : 'text-gray-700'}`} />
+                <item.icon className={`h-7 w-7 ${isActive ? 'text-white' : 'text-gray-700'}`} />
                 {!isSidebarCollapsed && (
                   <span className="font-medium">{item.label}</span>
                 )}
@@ -231,41 +227,69 @@ export const Layout: React.FC<LayoutProps> = ({
           })}
         </nav>
 
-        {/* AI Cost Indicator */}
-        <div className={`px-4 py-3 border-t border-gray-200 ${isSidebarCollapsed ? 'px-2' : ''}`}>
-          <div className={`
-            bg-gray-50 rounded-lg p-3
-            ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}
-          `}>
-            {!isSidebarCollapsed && (
-              <div className="text-xs text-gray-500 mb-1">💰 AI Náklady</div>
-            )}
-            <div className={`text-sm font-semibold text-gray-900 ${isSidebarCollapsed ? 'text-xs' : ''}`}>
-              {totalCost.czk.toFixed(2)} Kč
+        {/* Spodní část - náklady, collapse toggle a verze - vždy viditelné */}
+        <div className="mt-auto flex-shrink-0 border-t border-gray-200">
+          {/* AI Cost Indicator - vždy viditelné */}
+          {isSidebarCollapsed ? (
+            <div className="px-2 py-2.5">
+              <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center gap-1">
+                <svg className="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-xs font-semibold text-gray-900 leading-tight">
+                  {totalCost.czk.toFixed(2)}
+                </div>
+                <div className="text-[10px] text-gray-500 leading-tight">Kč</div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="px-4 py-3">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="text-xs text-gray-500 mb-1">💰 AI Náklady</div>
+                <div className="text-sm font-semibold text-gray-900">
+                  {totalCost.czk.toFixed(2)} Kč
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Collapse Toggle */}
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className={`
+              w-full border-t border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors
+              ${isSidebarCollapsed ? 'px-2 py-2.5 flex items-center justify-center' : 'px-4 py-2 text-left text-sm'}
+            `}
+            title={isSidebarCollapsed ? 'Rozbalit menu' : 'Schovat menu'}
+          >
+            {isSidebarCollapsed ? (
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            ) : (
+              '← Schovat menu'
+            )}
+          </button>
+
+          {/* Version Info - vždy viditelné */}
+          {isSidebarCollapsed ? (
+            <div className="px-2 py-2 border-t border-gray-200">
+              <div className="flex flex-col items-center gap-1">
+                <svg className="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                <div className="text-[10px] text-gray-400 text-center font-medium leading-tight">
+                  v{APP_VERSION}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="px-4 py-2 border-t border-gray-200 text-xs text-gray-400 text-center">
+              <div>Verze: {APP_VERSION}</div>
+              <div className="text-gray-300">Build: {BUILD_DATE}</div>
+            </div>
+          )}
         </div>
-
-        {/* Collapse Toggle */}
-        <button
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="px-4 py-2 border-t border-gray-200 text-gray-500 hover:bg-gray-100 transition-colors text-sm"
-        >
-          {isSidebarCollapsed ? '→' : '← Schovat menu'}
-        </button>
-
-        {/* Version Info */}
-        {!isSidebarCollapsed && (
-          <div className="px-4 py-2 border-t border-gray-200 text-xs text-gray-400 text-center">
-            <div>Verze: {APP_VERSION}</div>
-            <div className="text-gray-300">Build: {BUILD_DATE}</div>
-          </div>
-        )}
-        {isSidebarCollapsed && (
-          <div className="px-2 py-2 border-t border-gray-200 text-xs text-gray-400 text-center">
-            v{APP_VERSION.split('.')[0]}
-          </div>
-        )}
       </aside>
 
       {/* Main Content */}

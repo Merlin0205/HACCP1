@@ -18,6 +18,8 @@ interface ModelPricing {
   name: string;
   inputPrice: number;
   outputPrice: number;
+  audioInputPrice?: number;
+  imageInputPrice?: number;
   description?: string;
   useCase?: string;
 }
@@ -46,6 +48,43 @@ function extractPrice(text: string): number {
   
   const price = parseFloat(match[1]);
   return isNaN(price) ? 0 : price;
+}
+
+/**
+ * Extrahuje audio input cenu z textu (např. "$0.30 (text / image / video)$1.00 (audio)" -> 1.00)
+ * Hledá cenu následovanou "(audio)" nebo podobným textem
+ */
+function extractAudioPrice(text: string): number | undefined {
+  if (!text) return undefined;
+  
+  // Najít všechny ceny v textu
+  const priceMatches = text.matchAll(/\$([\d.]+)\s*\([^)]*audio[^)]*\)/gi);
+  const matches = Array.from(priceMatches);
+  
+  if (matches.length > 0) {
+    const price = parseFloat(matches[0][1]);
+    return isNaN(price) ? undefined : price;
+  }
+  
+  return undefined;
+}
+
+/**
+ * Extrahuje image input cenu z textu (většinou stejná jako text, ale může být specifikována)
+ * Pokud není specifikována, vrátí undefined (bude použita inputPrice)
+ */
+function extractImagePrice(text: string): number | undefined {
+  if (!text) return undefined;
+  
+  // Pokud text obsahuje "(text / image / video)", použít první cenu
+  // Jinak vrátit undefined (bude použita inputPrice)
+  const match = text.match(/\$([\d.]+)\s*\([^)]*(?:text|image|video)[^)]*\)/i);
+  if (match) {
+    const price = parseFloat(match[1]);
+    return isNaN(price) ? undefined : price;
+  }
+  
+  return undefined;
 }
 
 /**
@@ -83,6 +122,70 @@ function findPriceInTable($: cheerio.CheerioAPI, table: cheerio.Cheerio<any>, ro
   const price = extractPrice(cellHtml);
   
   return price;
+}
+
+/**
+ * Najde audio input cenu v tabulce pro řádek "Input price"
+ */
+function findAudioPriceInTable($: cheerio.CheerioAPI, table: cheerio.Cheerio<any>): number | undefined {
+  if (table.length === 0) {
+    return undefined;
+  }
+  
+  const tbody = table.find('tbody');
+  if (tbody.length === 0) {
+    return undefined;
+  }
+  
+  const rows = tbody.find('tr');
+  const row = rows.filter((i: number, el: any) => {
+    const text = $(el).find('td').first().text().toLowerCase();
+    return text.includes('input price');
+  });
+  
+  if (row.length === 0) {
+    return undefined;
+  }
+  
+  const paidTierCell = row.find('td').eq(2);
+  if (paidTierCell.length === 0) {
+    return undefined;
+  }
+  
+  const cellHtml = paidTierCell.html() || '';
+  return extractAudioPrice(cellHtml);
+}
+
+/**
+ * Najde image input cenu v tabulce pro řádek "Input price"
+ */
+function findImagePriceInTable($: cheerio.CheerioAPI, table: cheerio.Cheerio<any>): number | undefined {
+  if (table.length === 0) {
+    return undefined;
+  }
+  
+  const tbody = table.find('tbody');
+  if (tbody.length === 0) {
+    return undefined;
+  }
+  
+  const rows = tbody.find('tr');
+  const row = rows.filter((i: number, el: any) => {
+    const text = $(el).find('td').first().text().toLowerCase();
+    return text.includes('input price');
+  });
+  
+  if (row.length === 0) {
+    return undefined;
+  }
+  
+  const paidTierCell = row.find('td').eq(2);
+  if (paidTierCell.length === 0) {
+    return undefined;
+  }
+  
+  const cellHtml = paidTierCell.html() || '';
+  return extractImagePrice(cellHtml);
 }
 
 /**
@@ -226,6 +329,8 @@ export const parseGeminiPricing = functions
         // Struktura: <devsite-selector><section role="tabpanel" data-tab="standard"><div class="devsite-table-wrapper"><table class="pricing-table">
         let inputPrice = 0;
         let outputPrice = 0;
+        let audioInputPrice: number | undefined = undefined;
+        let imageInputPrice: number | undefined = undefined;
         
         // Najít rozsah od tohoto H2 do dalšího H2
         const nextH2 = $(h2).nextAll('h2').first();
@@ -249,9 +354,11 @@ export const parseGeminiPricing = functions
               
               inputPrice = findPriceInTable($, table, 'Input price');
               outputPrice = findPriceInTable($, table, 'Output price');
+              audioInputPrice = findAudioPriceInTable($, table);
+              imageInputPrice = findImagePriceInTable($, table);
               
               if (inputPrice > 0 || outputPrice > 0) {
-                console.log('[parseGeminiPricing]   Nalezeny ceny - Input:', inputPrice, 'Output:', outputPrice);
+                console.log('[parseGeminiPricing]   Nalezeny ceny - Input:', inputPrice, 'Output:', outputPrice, 'Audio Input:', audioInputPrice, 'Image Input:', imageInputPrice);
               }
             } else {
               console.log('[parseGeminiPricing]   ⚠️ Tabulka nenalezena v standard section');
@@ -271,9 +378,11 @@ export const parseGeminiPricing = functions
               
               inputPrice = findPriceInTable($, table, 'Input price');
               outputPrice = findPriceInTable($, table, 'Output price');
+              audioInputPrice = findAudioPriceInTable($, table);
+              imageInputPrice = findImagePriceInTable($, table);
               
               if (inputPrice > 0 || outputPrice > 0) {
-                console.log('[parseGeminiPricing]   Nalezeny ceny - Input:', inputPrice, 'Output:', outputPrice);
+                console.log('[parseGeminiPricing]   Nalezeny ceny - Input:', inputPrice, 'Output:', outputPrice, 'Audio Input:', audioInputPrice, 'Image Input:', imageInputPrice);
               }
             }
           } else {
@@ -323,6 +432,8 @@ export const parseGeminiPricing = functions
             name: modelId,
             inputPrice: inputPrice,
             outputPrice: outputPrice,
+            audioInputPrice: audioInputPrice,
+            imageInputPrice: imageInputPrice,
             description: description || undefined,
             useCase: useCase
           };

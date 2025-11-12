@@ -88,8 +88,12 @@ export async function clearAIUsageLogs(): Promise<void> {
 /**
  * Vypočítá náklady za AI volání podle pricing configu
  * Používá ceny z aiPricingConfig nebo fallback na DEFAULT_GEMINI_MODELS
+ * @param model - Název modelu
+ * @param promptTokens - Počet prompt tokenů
+ * @param completionTokens - Počet completion tokenů
+ * @param operation - Typ operace ('audio-transcription', 'image-analysis', nebo jiné)
  */
-async function calculateCost(model: string, promptTokens: number, completionTokens: number): Promise<{ usd: number; czk: number }> {
+async function calculateCost(model: string, promptTokens: number, completionTokens: number, operation?: string): Promise<{ usd: number; czk: number }> {
   try {
     const pricingConfig = await fetchAIPricingConfig();
     const usdToCzk = pricingConfig.usdToCzk || 25;
@@ -104,6 +108,8 @@ async function calculateCost(model: string, promptTokens: number, completionToke
         pricing = {
           inputPrice: defaultModel.inputPrice,
           outputPrice: defaultModel.outputPrice,
+          audioInputPrice: defaultModel.audioInputPrice,
+          imageInputPrice: defaultModel.imageInputPrice,
         };
         console.log(`[AI-USAGE] Použity výchozí ceny pro model "${model}" z DEFAULT_GEMINI_MODELS`);
       } else {
@@ -112,7 +118,14 @@ async function calculateCost(model: string, promptTokens: number, completionToke
       }
     }
     
-    const inputPrice = pricing.inputPrice || 0;
+    // Vybrat správnou input cenu podle typu operace
+    let inputPrice = pricing.inputPrice || 0;
+    if (operation === 'audio-transcription' && pricing.audioInputPrice !== undefined) {
+      inputPrice = pricing.audioInputPrice;
+    } else if (operation === 'image-analysis' && pricing.imageInputPrice !== undefined) {
+      inputPrice = pricing.imageInputPrice;
+    }
+    
     const outputPrice = pricing.outputPrice || 0;
     
     // Ceny jsou obvykle za 1M tokenů
@@ -142,8 +155,8 @@ export async function addAIUsageLog(
   try {
     const userId = getCurrentUserId();
     
-    // Vypočítat náklady
-    const cost = await calculateCost(model, promptTokens, completionTokens);
+    // Vypočítat náklady s operation parametrem pro správný výběr ceny
+    const cost = await calculateCost(model, promptTokens, completionTokens, operation);
     
     // Přidat log do Firestore
     await addDoc(collection(db, COLLECTION_NAME), {

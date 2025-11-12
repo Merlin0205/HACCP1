@@ -136,6 +136,8 @@ export interface GeminiModelInfo {
   category: ModelCategory;
   inputPrice: number;
   outputPrice: number;
+  audioInputPrice?: number; // Speciální cena pro audio vstup (např. $1.00 pro Flash místo $0.30)
+  imageInputPrice?: number; // Speciální cena pro image vstup (většinou stejná jako text, ale může být jiná)
   description?: string;
   useCase?: string; // Na co je model dobrý
   lastPriceUpdate?: string;
@@ -187,9 +189,12 @@ export const DEFAULT_GEMINI_MODELS: Record<string, GeminiModelInfo> = {
   'gemini-2.5-flash': {
     name: 'gemini-2.5-flash',
     category: 'střední',
-    inputPrice: 0.15,
+    inputPrice: 0.30, // Text / image / video
     outputPrice: 2.5,
+    audioInputPrice: 1.00, // Speciální tarif pro audio vstup
+    imageInputPrice: 0.30, // Stejná jako text
     description: 'Model multimodální (text + obraz)',
+    useCase: 'Rychlé generování textu, analýza obrázků, transkribce audio',
     lastPriceUpdate: new Date().toISOString().split('T')[0]
   },
   'gemini-2.5-flash-lite': {
@@ -243,9 +248,12 @@ export const DEFAULT_GEMINI_MODELS: Record<string, GeminiModelInfo> = {
   'gemini-robotics-er-1.5-preview': {
     name: 'gemini-robotics-er-1.5-preview',
     category: 'střední',
-    inputPrice: 0.30,
+    inputPrice: 0.30, // Text / image / video
     outputPrice: 2.50,
+    audioInputPrice: 1.00, // Speciální tarif pro audio vstup
+    imageInputPrice: 0.30, // Stejná jako text
     description: 'Model pro robotické "reasoning" úlohy',
+    useCase: 'Robotické úlohy, reasoning, transkribce audio',
     lastPriceUpdate: new Date().toISOString().split('T')[0]
   },
   'gemini-2.5-pro': {
@@ -277,6 +285,8 @@ export async function fetchAIPricingConfig(): Promise<any> {
       defaultPricing.models[name] = {
         inputPrice: modelInfo.inputPrice,
         outputPrice: modelInfo.outputPrice,
+        audioInputPrice: modelInfo.audioInputPrice,
+        imageInputPrice: modelInfo.imageInputPrice,
         note: modelInfo.description,
         lastPriceUpdate: modelInfo.lastPriceUpdate
       };
