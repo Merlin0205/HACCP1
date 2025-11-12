@@ -23,7 +23,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { AppState, Audit, Operator, Premise, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues, Tab } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
 import { Layout } from './components/Layout';
-import AuditChecklist from './components/AuditChecklist';
+import AuditChecklistWrapper from './components/AuditChecklistWrapper';
 import AdminScreen from './components/AdminScreen';
 import SettingsScreen from './components/SettingsScreen';
 import UserManagementScreen from './components/UserManagementScreen';
@@ -1102,11 +1102,52 @@ const App: React.FC = () => {
     }
   }, [activeAuditId, audits]);
 
+  const handleCompletedAtUpdate = useCallback(async (completedAt: string) => {
+    if (!activeAuditId) return;
+    
+    try {
+      // Optimisticky aktualizovat UI
+      setAudits(prev => prev.map(audit => {
+        if (audit.id === activeAuditId) {
+          return { ...audit, completedAt };
+        }
+        return audit;
+      }));
+      
+      // Uložit do Firestore
+      await updateAudit(activeAuditId, { completedAt });
+    } catch (error) {
+      console.error('[handleCompletedAtUpdate] Error:', error);
+    }
+  }, [activeAuditId]);
+
+  const handleNoteUpdate = useCallback(async (note: string) => {
+    if (!activeAuditId) return;
+    
+    try {
+      // Optimisticky aktualizovat UI
+      setAudits(prev => prev.map(audit => {
+        if (audit.id === activeAuditId) {
+          return { ...audit, note };
+        }
+        return audit;
+      }));
+      
+      // Uložit do Firestore
+      await updateAudit(activeAuditId, { note });
+    } catch (error) {
+      console.error('[handleNoteUpdate] Error:', error);
+    }
+  }, [activeAuditId]);
+
   const handleFinishAudit = async () => {
     if (!activeAuditId) return;
 
     try {
-      const completedAt = new Date().toISOString();
+      // Najít aktuální audit pro získání existujícího completedAt
+      const currentAudit = audits.find(a => a.id === activeAuditId);
+      // Použít existující completedAt, pokud existuje, jinak aktuální datum
+      const completedAt = currentAudit?.completedAt || new Date().toISOString();
       
       // Aktualizovat audit status
       await updateAudit(activeAuditId, {
@@ -1375,7 +1416,7 @@ const App: React.FC = () => {
             />
           );
         } else if (activeTab.type === 'audit' && activeAudit) {
-          return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onBack={handleBackToAuditList} log={log} />;
+          return <AuditChecklistWrapper auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onCompletedAtUpdate={handleCompletedAtUpdate} onNoteUpdate={handleNoteUpdate} onBack={handleBackToAuditList} log={log} />;
         }
       }
     }
@@ -1533,7 +1574,7 @@ const App: React.FC = () => {
         if (!activeAudit) {
           return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
         }
-        return <AuditChecklist auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onBack={handleBackToAuditList} log={log} />;
+        return <AuditChecklistWrapper auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onCompletedAtUpdate={handleCompletedAtUpdate} onNoteUpdate={handleNoteUpdate} onBack={handleBackToAuditList} log={log} />;
       }
       case AppState.REPORT_VIEW: {
         // Tento case se už nepoužívá když jsou taby, ale zůstává pro zpětnou kompatibilitu

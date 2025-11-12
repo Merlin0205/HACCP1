@@ -1,12 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { AuditStructure, AuditData, AuditItem, AuditAnswer } from '../types';
-import { ChevronDownIcon, WarningIcon, SaveIcon } from './icons';
-import { iconMap, QuestionMarkIcon } from './AuditIcons';
+import { ChevronDownIcon, WarningIcon, SaveIcon, MicrophoneIcon, StopIcon } from './icons';
+import { getIconById, QuestionMarkIcon } from './AuditIcons';
 import { AuditItemModal } from './AuditItemModal';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Card, CardHeader, CardBody } from './ui/Card';
 import { BackButton } from './BackButton';
+import { useAudioRecorder } from '../hooks/useAudioRecorder';
+import Spinner from './Spinner';
 
 interface AuditChecklistProps {
   auditStructure: AuditStructure;
@@ -15,15 +17,29 @@ interface AuditChecklistProps {
   onComplete: () => void;
   onBack: () => void;
   onSaveProgress?: () => void; // Callback pro uložení průběhu
+  onCompletedAtUpdate?: (completedAt: string) => void; // Callback pro aktualizaci data dokončení
+  onNoteUpdate?: (note: string) => void; // Callback pro aktualizaci poznámky
   log: (message: string) => void;
 }
 
-const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete, onBack, onSaveProgress, log }) => {
+const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditData, onAnswerUpdate, onComplete, onBack, onSaveProgress, onCompletedAtUpdate, onNoteUpdate, log }) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [selectedItem, setSelectedItem] = useState<AuditItem | null>(null);
   const [isMobileNcSidebarOpen, setIsMobileNcSidebarOpen] = useState(false);
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Stavy pro datum dokončení a poznámku
+  const [completedAt, setCompletedAt] = useState<string>(() => {
+    // Pokud už existuje completedAt, použít ho, jinak aktuální datum
+    if (auditData.completedAt) {
+      // Převedení ISO stringu na formát pro input[type="date"] (YYYY-MM-DD)
+      return auditData.completedAt.split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+  const [note, setNote] = useState<string>(auditData.note || '');
+  const [isNoteRecording, setIsNoteRecording] = useState(false);
 
   // Sekce začínají sbalené - žádná automatická inicializace
   // Uživatel může kliknout na sekci aby ji otevřel/zavřel
@@ -91,6 +107,46 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
     }
   };
 
+  const handleCompletedAtChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDate = e.target.value;
+    setCompletedAt(newDate);
+    // Převést na ISO string pro uložení do databáze
+    if (onCompletedAtUpdate) {
+      const isoDate = newDate ? new Date(newDate).toISOString() : '';
+      onCompletedAtUpdate(isoDate);
+    }
+  };
+
+  const handleNoteChange = (newNote: string) => {
+    setNote(newNote);
+    if (onNoteUpdate) {
+      onNoteUpdate(newNote);
+    }
+  };
+
+  const handleNoteTranscription = useCallback((transcribedText: string) => {
+    // Odstranit tečku na konci
+    const cleaned = transcribedText.trim().replace(/\.+$/, '');
+    const newText = note ? `${note} ${cleaned}`.trim() : cleaned;
+    handleNoteChange(newText);
+  }, [note]);
+
+  const { isRecording: isNoteRecordingActive, isTranscribing: isNoteTranscribing, error: noteError, toggleRecording: toggleNoteRecording } = useAudioRecorder(handleNoteTranscription, log);
+
+  useEffect(() => {
+    setIsNoteRecording(isNoteRecordingActive || isNoteTranscribing);
+  }, [isNoteRecordingActive, isNoteTranscribing]);
+
+  // Aktualizovat stavy když se změní auditData
+  useEffect(() => {
+    if (auditData.completedAt) {
+      setCompletedAt(auditData.completedAt.split('T')[0]);
+    }
+    if (auditData.note !== undefined) {
+      setNote(auditData.note);
+    }
+  }, [auditData.completedAt, auditData.note]);
+
   const sidebarContent = (
       <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
           {nonCompliantItems.map(item => (
@@ -110,7 +166,21 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
     <div className="w-full max-w-7xl mx-auto pb-24">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Průběh auditu</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Průběh auditu</h1>
+        
+        {/* Datum dokončení */}
+        <div className="mb-4">
+          <label htmlFor="completedAt" className="block text-sm font-medium text-gray-700 mb-1.5">
+            Datum dokončení auditu
+          </label>
+          <input
+            type="date"
+            id="completedAt"
+            value={completedAt}
+            onChange={handleCompletedAtChange}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+          />
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -170,7 +240,7 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
                           const answer = auditData.answers[item.id];
                           const isCompliant = !answer || answer.compliant;
                           const isAnswered = answer !== undefined;
-                          const IconComponent = iconMap[item.icon || item.id] || QuestionMarkIcon;
+                          const IconComponent = getIconById(item.icon || item.id) || QuestionMarkIcon;
                           
                           return (
                             <button
@@ -217,6 +287,48 @@ const AuditChecklist: React.FC<AuditChecklistProps> = ({ auditStructure, auditDa
             })}
           </div>
         </div>
+      </div>
+
+      {/* Poznámka */}
+      <div className="mt-6 mb-4">
+        <Card>
+          <CardHeader>
+            <h3 className="text-base sm:text-lg font-bold text-gray-900">Poznámka</h3>
+          </CardHeader>
+          <CardBody>
+            <div className="relative">
+              <textarea
+                id="auditNote"
+                rows={4}
+                value={note}
+                onChange={e => handleNoteChange(e.target.value)}
+                className="w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base bg-white border border-gray-300 rounded-md resize-y"
+                style={{ paddingRight: '64px' }}
+                placeholder={isNoteRecordingActive ? "Nahrávám..." : (isNoteTranscribing ? "Přepisuji..." : "Zadejte poznámku k auditu...")}
+                readOnly={isNoteRecordingActive || isNoteTranscribing}
+              />
+              <div className="absolute top-10 md:top-11 right-2 md:right-3" style={{ zIndex: 1000 }}>
+                <button 
+                  onClick={toggleNoteRecording}
+                  disabled={isNoteTranscribing && !isNoteRecordingActive}
+                  className={`p-2 md:p-2.5 rounded-full text-white ${isNoteRecordingActive ? 'bg-red-500' : 'bg-blue-500'} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                  title="Přepisovat hlasem"
+                >
+                  {isNoteRecordingActive || isNoteTranscribing ? (
+                    isNoteRecordingActive ? (
+                      <StopIcon className="h-5 w-5 md:h-6 md:w-6" />
+                    ) : (
+                      <Spinner small />
+                    )
+                  ) : (
+                    <MicrophoneIcon className="h-5 w-5 md:h-6 md:w-6" />
+                  )}
+                </button>
+              </div>
+              {noteError && <p className="text-red-500 text-xs md:text-sm mt-1">{noteError}</p>}
+            </div>
+          </CardBody>
+        </Card>
       </div>
 
       {/* Bottom Sticky Bar */}

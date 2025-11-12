@@ -170,12 +170,16 @@ export interface Audit {
   status: AuditStatus;
   createdAt: string;
   completedAt?: string;
+  note?: string; // Poznámka k auditu (free text s možností audio transkripce)
   headerValues: AuditHeaderValues;
   answers: {
     [itemId: string]: AuditAnswer;
   };
   auditTypeId?: string; // ID typu auditu (optional pro zpětnou kompatibilitu)
 }
+
+// Alias pro zpětnou kompatibilitu
+export type AuditData = Audit;
 
 export enum ReportStatus {
   PENDING = 'Čeká na generování',

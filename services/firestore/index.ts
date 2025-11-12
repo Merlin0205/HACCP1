@@ -11,6 +11,7 @@ export * from './aiUsageLogs';
 export * from './nonComplianceLocations';
 export * from './priceUpdater';
 export * from './auditTypes';
+export * from './updateAuditIcons';
 
 // Zpětná kompatibilita - deprecated
 export * from './customers';

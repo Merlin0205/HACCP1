@@ -8,7 +8,8 @@ import { Badge } from './ui/Badge';
 import { ActionIconTooltip } from './ui/ActionIconTooltip';
 import { SimpleTooltip } from './ui/SimpleTooltip';
 import { TooltipCell } from './ui/TooltipCell';
-import { PlusIcon, EditIcon, TrashIcon, ReportIcon, ClockIcon } from './icons';
+import { DetailTooltip } from './ui/DetailTooltip';
+import { PlusIcon, EditIcon, TrashIcon, ReportIcon, ClockIcon, InfoIcon } from './icons';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
 import { AppState } from '../types';
@@ -341,10 +342,12 @@ export const AuditList: React.FC<AuditListProps> = ({
     }
   };
 
+  const sectionTheme = SECTION_THEMES[AppState.ALL_AUDITS];
+
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-6">
       <PageHeader
-        section={SECTION_THEMES[AppState.ALL_AUDITS]}
+        section={sectionTheme}
         title="Audity"
         description={`Kompletní seznam auditů pro pracoviště: ${premiseName}`}
         action={
@@ -424,7 +427,7 @@ export const AuditList: React.FC<AuditListProps> = ({
             <table className="w-full table-fixed">
             <thead 
               style={{
-                background: `linear-gradient(to right, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.primary}, ${SECTION_THEMES[AppState.ALL_AUDITS].colors.darkest})`
+                background: `linear-gradient(to right, ${sectionTheme.colors.primary}, ${sectionTheme.colors.darkest})`
               }}
             >
               <tr>
@@ -525,6 +528,59 @@ export const AuditList: React.FC<AuditListProps> = ({
                       </td>
                       <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 whitespace-nowrap text-right text-sm md:text-xs xl:text-sm font-medium">
                         <div className="flex items-center justify-end gap-2 md:gap-1">
+                          {/* Ikona poznámky - zobrazí se pouze pokud audit má poznámku */}
+                          {audit.note && audit.note.trim() && (
+                            <DetailTooltip
+                              position={isLastRow ? 'top' : 'bottom'}
+                              content={
+                                <div className="space-y-1.5">
+                                  <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">Poznámka k auditu</div>
+                                  <div className="text-white whitespace-pre-wrap max-w-xs">{audit.note}</div>
+                                </div>
+                              }
+                              maxWidth="400px"
+                            >
+                              <div className="relative group/button">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                  className="p-2 rounded-lg hover:bg-blue-50 transition-colors text-blue-600 hover:text-blue-700"
+                                >
+                                  <InfoIcon />
+                                </button>
+                              </div>
+                            </DetailTooltip>
+                          )}
+                          {/* Ikona s počtem verzí reportů - vlevo od ostatních ikon */}
+                          {hasMultipleVersions && (
+                            <div className="relative group/button">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleAuditExpansion(audit.id, e);
+                                }}
+                                className="flex items-center justify-center gap-1.5 px-2 py-1 bg-yellow-100 hover:bg-yellow-200 rounded-lg transition-colors"
+                              >
+                                <svg className="h-4 w-4 text-yellow-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <span className="text-xs font-semibold text-yellow-900">{reportVersions.length}</span>
+                                <svg 
+                                  className={`h-3 w-3 text-yellow-700 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              <ActionIconTooltip 
+                                text={`Historie verzí reportů (${reportVersions.length} ${reportVersions.length === 1 ? 'verze' : reportVersions.length >= 2 && reportVersions.length <= 4 ? 'verze' : 'verzí'})`}
+                                isLastRow={isLastRow} 
+                              />
+                            </div>
+                          )}
                           {/* Pokračovat v auditu nebo Zobrazit report */}
                           {isCompleted(audit.status) ? (
                             <div className="relative group/button">
@@ -606,47 +662,18 @@ export const AuditList: React.FC<AuditListProps> = ({
                         </div>
                       </td>
                     </tr>
-                    {/* Collapsible sekce s historií verzí reportů */}
+                    {/* Detail verzí reportů - zobrazí se po kliknutí na ikonu ve sloupci AKCE */}
                     {(() => {
                       const reportVersions = getAuditReportVersions(audit.id);
                       const hasMultipleVersions = reportVersions.length > 1;
                       const isExpanded = expandedAudits.has(audit.id);
                       
-                      if (!hasMultipleVersions) return null;
+                      if (!hasMultipleVersions || !isExpanded) return null;
                       
                       return (
                         <tr className="bg-gradient-to-r from-yellow-50 via-amber-50 to-yellow-50">
-                          <td colSpan={6} className="px-4 py-1 md:px-6 md:py-1.5">
-                            <button
-                              onClick={(e) => toggleAuditExpansion(audit.id, e)}
-                              className="w-full flex items-center justify-between text-left transition-all hover:opacity-80"
-                            >
-                              <div className="flex items-center gap-2 md:gap-3">
-                                <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 bg-yellow-400 rounded-full shadow-sm flex-shrink-0">
-                                  <svg className="h-3 w-3 md:h-4 md:w-4 text-yellow-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
-                                </div>
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                  <span className="font-semibold text-yellow-900 text-xs md:text-sm whitespace-nowrap">
-                                    Historie verzí reportů
-                                  </span>
-                                  <span className="px-1.5 py-0.5 bg-yellow-200 text-yellow-900 text-xs rounded-full font-medium whitespace-nowrap">
-                                    {reportVersions.length} {reportVersions.length === 1 ? 'verze' : reportVersions.length >= 2 && reportVersions.length <= 4 ? 'verze' : 'verzí'}
-                                  </span>
-                                </div>
-                              </div>
-                              <svg
-                                className={`h-3.5 w-3.5 md:h-4 md:w-4 text-yellow-700 transition-transform duration-200 flex-shrink-0 ml-2 ${isExpanded ? 'rotate-180' : ''}`}
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                            {isExpanded && (
-                              <div className="mt-1.5 md:mt-2 space-y-1 pl-7 md:pl-9">
+                          <td colSpan={6} className="px-4 py-2 md:px-6 md:py-3">
+                            <div className="space-y-1.5 md:space-y-2">
                                 {reportVersions.map((report, index) => (
                                   <div
                                     key={report.id}
@@ -694,7 +721,10 @@ export const AuditList: React.FC<AuditListProps> = ({
                                                 e.stopPropagation();
                                                 onSelectAudit(audit.id, report.id);
                                               }}
-                                              className="p-1 md:p-1.5 rounded bg-gradient-to-br from-primary to-primary-dark text-white hover:shadow-md hover:scale-105 transition-all duration-200"
+                                              className="p-1 md:p-1.5 rounded text-white hover:shadow-md hover:scale-105 transition-all duration-200"
+                                              style={{
+                                                background: `linear-gradient(to bottom right, ${sectionTheme.colors.primary}, ${sectionTheme.colors.darkest})`
+                                              }}
                                             >
                                               <ReportIcon className="h-3.5 w-3.5 md:h-4 md:w-4" />
                                             </button>
@@ -745,8 +775,7 @@ export const AuditList: React.FC<AuditListProps> = ({
                                     </div>
                                   </div>
                                 ))}
-                              </div>
-                            )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -945,7 +974,10 @@ export const AuditList: React.FC<AuditListProps> = ({
                                         e.stopPropagation();
                                         onSelectAudit(audit.id, report.id);
                                       }}
-                                      className="p-1 rounded bg-gradient-to-br from-primary to-primary-dark text-white"
+                                      className="p-1 rounded text-white"
+                                      style={{
+                                        background: `linear-gradient(to bottom right, ${sectionTheme.colors.primary}, ${sectionTheme.colors.darkest})`
+                                      }}
                                     >
                                       <ReportIcon className="h-3.5 w-3.5" />
                                     </button>

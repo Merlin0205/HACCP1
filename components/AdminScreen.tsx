@@ -21,6 +21,7 @@ import {
     copyAuditType,
     migrateAuditStructureToTypes
 } from '../services/firestore/auditTypes';
+import { updateAllAuditTypeIcons } from '../services/firestore/updateAuditIcons';
 import { fetchAuditStructure } from '../services/firestore/settings';
 import { toast } from '../utils/toast';
 
@@ -594,6 +595,33 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
         setEditingItemInfo(null);
     };
 
+    const handleUpdateIcons = async () => {
+        try {
+            setSaving(true);
+            toast.info('Aktualizuji ikony ve všech typech auditů...');
+            await updateAllAuditTypeIcons(false); // false = nepřepisovat existující ikony
+            toast.success('Ikony byly úspěšně aktualizovány');
+            
+            // Znovu načíst typy auditů
+            const updatedTypes = await fetchAllAuditTypes();
+            setAuditTypes(updatedTypes);
+            
+            // Pokud je vybrán typ, aktualizovat i jeho strukturu
+            if (selectedTypeId) {
+                const updatedType = updatedTypes.find(t => t.id === selectedTypeId);
+                if (updatedType) {
+                    setAuditStructure(updatedType.auditStructure);
+                    setInitialStructure(updatedType.auditStructure);
+                }
+            }
+        } catch (error) {
+            console.error('[AdminScreen] Error updating icons:', error);
+            toast.error('Chyba při aktualizaci ikon');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleManualSave = async () => {
         await saveToFirestore(auditStructure);
     };
@@ -990,8 +1018,19 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                             <span className="ml-2">Přidat novou sekci</span>
                         </button>
 
-                        {/* Tlačítko Uložit */}
-                        <div className="mt-6 pt-6 border-t border-gray-200">
+                        {/* Tlačítka pro správu */}
+                        <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
+                            <button
+                                onClick={handleUpdateIcons}
+                                disabled={saving}
+                                className={`w-full font-bold py-3 px-6 rounded-lg transition-colors ${
+                                    saving
+                                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                                        : 'bg-green-600 text-white hover:bg-green-700'
+                                }`}
+                            >
+                                {saving ? '⏳ Aktualizuji...' : '🎨 Aktualizovat ikony ve všech typech auditů'}
+                            </button>
                             <button
                                 onClick={handleManualSave}
                                 disabled={saving || !hasUnsavedChanges}
