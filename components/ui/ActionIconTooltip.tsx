@@ -39,7 +39,7 @@ export const ActionIconTooltip: React.FC<ActionIconTooltipProps> = ({
     : 'bottom-full left-1/2 -translate-x-1/2 border-b-4 border-transparent border-b-gray-900';
 
   return (
-    <div className={`absolute ${positionClasses} px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/button:opacity-100 pointer-events-none z-[101] ${className}`}>
+    <div className={`absolute ${positionClasses} px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/button:opacity-100 pointer-events-none z-[101] ${className}`} style={{ transition: 'opacity 0s' }}>
       {text}
       {/* Šipka tooltipu */}
       <div className={`absolute ${arrowPositionClasses} w-0 h-0 border-l-4 border-r-4`} />

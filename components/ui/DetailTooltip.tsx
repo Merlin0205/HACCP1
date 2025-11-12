@@ -138,7 +138,7 @@ export const DetailTooltip: React.FC<DetailTooltipProps> = ({
           absolute left-0 
           ${position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'} 
           px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl 
-          opacity-0 group-hover:opacity-100 transition-opacity 
+          opacity-0 group-hover:opacity-100 
           pointer-events-none z-[100]
         `}
         style={{

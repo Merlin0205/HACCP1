@@ -81,6 +81,7 @@ export const SimpleTooltip: React.FC<SimpleTooltipProps> = ({
       {children}
       <div 
         className={`absolute ${positionClasses} px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-[101]`}
+        style={{ transition: 'opacity 0s' }}
       >
         {text}
         {/* Šipka tooltipu */}

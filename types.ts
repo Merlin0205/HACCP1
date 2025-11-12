@@ -135,9 +135,18 @@ export interface Operator {
   operator_name: string;
   operator_address: string;
   operator_ico: string;
+  operator_dic?: string;
   operator_statutory_body: string;
   operator_phone: string;
   operator_email: string;
+  vatVerification?: {
+    valid: boolean;
+    verifiedAt: string;
+    name?: string;
+    address?: string;
+    countryCode?: string;
+    vatNumber?: string;
+  };
 }
 
 export interface Premise {

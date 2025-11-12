@@ -275,15 +275,6 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 </th>
                 <th
                   className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
-                  onClick={() => handleSort('ico')}
-                >
-                  <div className="flex items-center gap-2 md:gap-1">
-                    IČO
-                    <SortIcon field="ico" />
-                  </div>
-                </th>
-                <th
-                  className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs md:text-[10px] xl:text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:opacity-90 transition-opacity"
                   onClick={() => handleSort('address')}
                 >
                   <div className="flex items-center gap-2 md:gap-1">
@@ -336,13 +327,26 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           <div className="text-sm md:text-xs xl:text-sm font-medium text-gray-900">
                             <DetailTooltip
                               position={isLastRow ? 'top' : 'bottom'}
+                              minWidth="300px"
+                              maxWidth="450px"
                               content={
                                 <div className="space-y-1.5">
-                                  <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
+                                  <div className="font-bold text-base mb-2 pb-2 border-b border-gray-700 leading-relaxed">{operator.operator_name || 'Neznámý provozovatel'}</div>
                                   {operator.operator_ico && (
                                     <div className="flex items-start gap-2">
                                       <span className="font-semibold text-gray-300 min-w-[50px]">IČO:</span>
                                       <span className="text-white">{operator.operator_ico}</span>
+                                    </div>
+                                  )}
+                                  {operator.operator_dic && (
+                                    <div className="flex items-start gap-2">
+                                      <span className="font-semibold text-gray-300 min-w-[50px]">DIČ:</span>
+                                      <span className="text-white">{operator.operator_dic}</span>
+                                      {operator.vatVerification && (
+                                        <span className="text-green-400 ml-1">
+                                          {operator.vatVerification.valid ? '✓' : '✗'}
+                                        </span>
+                                      )}
                                     </div>
                                   )}
                                   {operator.operator_address && (
@@ -370,14 +374,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                 </div>
                               }
                             >
-                              <span className="cursor-help truncate block w-full" title={operator.operator_name || ''}>{operator.operator_name || '-'}</span>
+                              <span className="cursor-help truncate block w-full">{operator.operator_name || '-'}</span>
                             </DetailTooltip>
                           </div>
-                        </TooltipCell>
-                        <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600">
-                          <SimpleTooltip text={operator.operator_ico || '-'} isLastRow={isLastRow}>
-                            <span className="truncate block w-full">{operator.operator_ico || '-'}</span>
-                          </SimpleTooltip>
                         </TooltipCell>
                         <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600">
                           <SimpleTooltip text={operator.operator_address || '-'} isLastRow={isLastRow}>
@@ -781,7 +780,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                       <div className="flex-1 min-w-0">
                         <DetailTooltip
                           position="bottom"
-                          content={
+                              content={
                             <div className="space-y-1.5">
                               <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{operator.operator_name || 'Neznámý provozovatel'}</div>
                               {operator.operator_ico && (
@@ -818,11 +817,6 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           <h3 className="text-base font-bold text-gray-900 mb-1 cursor-help">{operator.operator_name}</h3>
                         </DetailTooltip>
                         <div className="space-y-1 text-sm text-gray-600">
-                          {operator.operator_ico && (
-                            <div className="flex items-center gap-2">
-                              <span>IČO: {operator.operator_ico}</span>
-                            </div>
-                          )}
                           {operator.operator_address && (
                             <div className="flex items-start gap-2">
                               <span className="line-clamp-2">{operator.operator_address}</span>

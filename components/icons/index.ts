@@ -24,3 +24,4 @@ export * from './TrashIcon';
 export * from './WarningIcon';
 export * from './XIcon';
 export * from './HomeIcon';
+export * from './RefreshIcon';

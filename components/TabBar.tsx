@@ -3,7 +3,6 @@ import { Tab } from '../types';
 import { XIcon, ChecklistIcon, ReportIcon, ChevronDownIcon } from './icons';
 import { ChevronLeftIcon, ChevronRightIcon } from './icons';
 import { TAB_THEMES } from '../constants/designSystem';
-import { DetailTooltip } from './ui/DetailTooltip';
 
 interface TabBarProps {
   tabs: Tab[];
@@ -101,92 +100,54 @@ export const TabBar: React.FC<TabBarProps> = ({
             const tabTheme = TAB_THEMES[tab.type] || TAB_THEMES.audit;
             
             return (
-              <DetailTooltip
+              <div
                 key={tab.id}
-                position="bottom"
-                useFixed={true}
-                content={
-                  <div className="space-y-1.5">
-                    <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">
-                      {tab.type === 'audit_list' 
-                        ? 'Seznam auditů'
-                        : tab.type === 'audit' 
-                          ? 'Audit'
-                          : 'Report'}
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="font-semibold text-gray-300 min-w-[80px]">Provozovatel:</span>
-                      <span className="text-white">{tab.operatorName}</span>
-                    </div>
-                    {tab.premiseName && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold text-gray-300 min-w-[80px]">Pracoviště:</span>
-                        <span className="text-white">{tab.premiseName}</span>
-                      </div>
-                    )}
-                    {tab.auditDate && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold text-gray-300 min-w-[80px]">Datum:</span>
-                        <span className="text-white">{tab.auditDate}</span>
-                      </div>
-                    )}
-                    {tab.status && (
-                      <div className="flex items-start gap-2">
-                        <span className="font-semibold text-gray-300 min-w-[80px]">Status:</span>
-                        <span className="text-white">{tab.status}</span>
-                      </div>
-                    )}
-                  </div>
-                }
+                data-tab-id={tab.id}
+                onClick={() => onTabClick(tab.id)}
+                className={`
+                  flex items-center gap-2 px-3 sm:px-4 py-2 rounded-t-lg cursor-pointer transition-all
+                  whitespace-nowrap flex-shrink-0
+                  ${isActive 
+                    ? 'text-white border-b-2 shadow-sm' 
+                    : `${tabTheme.colors.bgLight} text-gray-700 hover:bg-gray-100 border-b-2 border-transparent`
+                  }
+                `}
+                style={isActive ? {
+                  background: `linear-gradient(to right, ${tabTheme.colors.primary}, ${tabTheme.colors.light || tabTheme.colors.primary})`,
+                  borderBottomColor: tabTheme.colors.primary
+                } : undefined}
               >
-                <div
-                  data-tab-id={tab.id}
-                  onClick={() => onTabClick(tab.id)}
+                {/* Icon */}
+                {tab.type === 'audit' || tab.type === 'audit_list' ? (
+                  <ChecklistIcon className="w-4 h-4 flex-shrink-0" />
+                ) : (
+                  <ReportIcon className="w-4 h-4 flex-shrink-0" />
+                )}
+                
+                {/* Label */}
+                <span className="text-sm font-medium">
+                  {tab.type === 'audit_list' 
+                    ? `Audity ${tab.premiseName ? `(${tab.premiseName})` : ''}`
+                    : tab.type === 'audit' 
+                      ? `Audit (${tab.premiseName || tab.operatorName})`
+                      : `Report (${tab.premiseName || tab.operatorName})`}
+                </span>
+                
+                {/* Close button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTabClose(tab.id, e);
+                  }}
                   className={`
-                    flex items-center gap-2 px-3 sm:px-4 py-2 rounded-t-lg cursor-pointer transition-all
-                    whitespace-nowrap flex-shrink-0
-                    ${isActive 
-                      ? 'text-white border-b-2 shadow-sm' 
-                      : `${tabTheme.colors.bgLight} text-gray-700 hover:bg-gray-100 border-b-2 border-transparent`
-                    }
+                    ml-1 p-0.5 rounded hover:bg-opacity-20 transition-colors
+                    ${isActive ? 'hover:bg-white' : 'hover:bg-gray-300'}
                   `}
-                  style={isActive ? {
-                    background: `linear-gradient(to right, ${tabTheme.colors.primary}, ${tabTheme.colors.light || tabTheme.colors.primary})`,
-                    borderBottomColor: tabTheme.colors.primary
-                  } : undefined}
+                  title="Zavřít"
                 >
-                  {/* Icon */}
-                  {tab.type === 'audit' || tab.type === 'audit_list' ? (
-                    <ChecklistIcon className="w-4 h-4 flex-shrink-0" />
-                  ) : (
-                    <ReportIcon className="w-4 h-4 flex-shrink-0" />
-                  )}
-                  
-                  {/* Label */}
-                  <span className="text-sm font-medium">
-                    {tab.type === 'audit_list' 
-                      ? `Audity ${tab.premiseName ? `(${tab.premiseName})` : ''}`
-                      : tab.type === 'audit' 
-                        ? `Audit (${tab.premiseName || tab.operatorName})`
-                        : `Report (${tab.premiseName || tab.operatorName})`}
-                  </span>
-                  
-                  {/* Close button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTabClose(tab.id, e);
-                    }}
-                    className={`
-                      ml-1 p-0.5 rounded hover:bg-opacity-20 transition-colors
-                      ${isActive ? 'hover:bg-white' : 'hover:bg-gray-300'}
-                    `}
-                    title="Zavřít"
-                  >
-                    <XIcon className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </DetailTooltip>
+                  <XIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })}
         </div>

@@ -24,4 +24,6 @@ export { generatePdf } from './generatePdf';
 export { generateSmartReportPdf } from './generateSmartReportPdf';
 export { parseGeminiPricing } from './parseGeminiPricing';
 export { fetchPricingPage } from './fetchPricingPage';
+export { getCompanyByIco } from './getCompanyByIco';
+export { checkVat } from './checkVat';
 

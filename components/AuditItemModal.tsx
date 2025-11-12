@@ -5,7 +5,6 @@ import { PlusIcon, CheckmarkIcon, TrashIcon } from './icons';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Card, CardBody } from './ui/Card';
-import { DetailTooltip } from './ui/DetailTooltip';
 
 interface AuditItemModalProps {
   item: AuditItem | null;
@@ -185,41 +184,22 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                   const findingPreview = getFindingPreview(nc.finding);
                   
                   return (
-                    <DetailTooltip
+                    <button
                       key={index}
-                      position="bottom"
-                      content={
-                        <div className="space-y-1.5">
-                          <div className="font-bold text-sm mb-1 pb-1 border-b border-gray-700">
-                            Neshoda #{index + 1}
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <span className="font-semibold text-gray-300 min-w-[60px]">Místo:</span>
-                            <span className="text-white">{location}</span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <span className="font-semibold text-gray-300 min-w-[60px]">Popis:</span>
-                            <span className="text-white">{findingPreview}</span>
-                          </div>
-                        </div>
-                      }
+                      onClick={() => setActiveNonComplianceIndex(index)}
+                      className={`
+                        relative flex items-center justify-center min-w-[44px] md:min-w-[48px] h-10 md:h-11 px-3 md:px-4 rounded-lg font-semibold text-sm md:text-base transition-all
+                        ${isActive 
+                          ? 'bg-red-600 text-white shadow-md' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }
+                      `}
                     >
-                      <button
-                        onClick={() => setActiveNonComplianceIndex(index)}
-                        className={`
-                          relative flex items-center justify-center min-w-[44px] md:min-w-[48px] h-10 md:h-11 px-3 md:px-4 rounded-lg font-semibold text-sm md:text-base transition-all
-                          ${isActive 
-                            ? 'bg-red-600 text-white shadow-md' 
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }
-                        `}
-                      >
-                        {index + 1}
-                        {isActive && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
-                        )}
-                      </button>
-                    </DetailTooltip>
+                      {index + 1}
+                      {isActive && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
+                      )}
+                    </button>
                   );
                 })}
               </div>

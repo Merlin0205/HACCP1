@@ -556,51 +556,25 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
             <div className="flex items-center gap-2">
               {/* HTML Parsing tlačítko */}
               <div className="relative">
-                <DetailTooltip
-                  content={
-                    <div className="space-y-1.5">
-                      <div className="font-bold text-sm mb-2 pb-1 border-b border-gray-700">
-                        Aktualizace pomocí HTML parsingu
-                      </div>
-                      <div className="text-xs space-y-1">
-                        <div><strong>Krok 1:</strong> Načte oficiální stránku s cenami (ai.google.dev/gemini-api/docs/pricing)</div>
-                        <div><strong>Krok 2:</strong> Parsuje HTML a extrahuje ceny pro všechny modely</div>
-                        <div className="mt-2 pt-2 border-t border-gray-700">
-                          <div><strong>📋 Seznam modelů:</strong> Používá strukturovaný seznam z databáze (DEFAULT_GEMINI_MODELS) - <strong>všechny modely jsou vždy zahrnuty</strong></div>
-                          <div className="mt-1"><strong>💰 Ceny modelů:</strong> Aktualizuje ceny pro všechny modely z parsované stránky</div>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-700">
-                        💡 Používá Cloud Function pro parsing HTML - žádné LLM volání, rychlejší a spolehlivější
-                      </div>
-                      {lastFullUpdate && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          Poslední aktualizace: {new Date(lastFullUpdate).toLocaleString('cs-CZ')}
-                        </div>
-                      )}
-                    </div>
-                  }
+                <button
+                  onClick={handleUpdatePrices}
+                  disabled={updatingPrices}
+                  className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
+                    updatingPrices
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  }`}
                 >
-                  <button
-                    onClick={handleUpdatePrices}
-                    disabled={updatingPrices}
-                    className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
-                      updatingPrices
-                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                        : 'bg-purple-600 text-white hover:bg-purple-700'
-                    }`}
-                  >
-                    {updatingPrices ? (
-                      <>
-                        <span className="animate-spin">⏳</span> Aktualizuji...
-                      </>
-                    ) : (
-                      <>
-                        🔄 Aktualizovat (HTML)
-                      </>
-                    )}
-                  </button>
-                </DetailTooltip>
+                  {updatingPrices ? (
+                    <>
+                      <span className="animate-spin">⏳</span> Aktualizuji...
+                    </>
+                  ) : (
+                    <>
+                      🔄 Aktualizovat (HTML)
+                    </>
+                  )}
+                </button>
                 {updateProgress && (
                   <div className="absolute top-full left-0 mt-2 bg-gray-900 text-white p-3 rounded-lg shadow-lg z-50 min-w-[300px]">
                     <div className="font-semibold text-sm mb-1">{updateProgress.step}</div>
@@ -613,46 +587,25 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
               
               {/* LLM Parsing tlačítko */}
               <div className="relative">
-                <DetailTooltip
-                  content={
-                    <div className="space-y-1.5">
-                      <div className="font-bold text-sm mb-2 pb-1 border-b border-gray-700">
-                        Aktualizace pomocí LLM
-                      </div>
-                      <div className="text-xs space-y-1">
-                        <div><strong>Krok 1:</strong> Načte oficiální stránku s cenami (ai.google.dev/gemini-api/docs/pricing)</div>
-                        <div><strong>Krok 2:</strong> Použije LLM (Firebase AI Logic SDK) k extrakci cen z webové stránky</div>
-                        <div className="mt-2 pt-2 border-t border-gray-700">
-                          <div><strong>📋 Seznam modelů:</strong> Používá strukturovaný seznam z databáze (DEFAULT_GEMINI_MODELS) - <strong>všechny modely jsou vždy zahrnuty</strong></div>
-                          <div className="mt-1"><strong>💰 Ceny modelů:</strong> LLM extrahuje ceny z webové stránky</div>
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-700">
-                        💡 Používá Firebase AI Logic SDK - může být pomalejší, ale flexibilnější pro změny struktury stránky
-                      </div>
-                    </div>
-                  }
+                <button
+                  onClick={handleUpdatePricesWithLLM}
+                  disabled={updatingPrices}
+                  className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
+                    updatingPrices
+                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
                 >
-                  <button
-                    onClick={handleUpdatePricesWithLLM}
-                    disabled={updatingPrices}
-                    className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
-                      updatingPrices
-                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {updatingPrices ? (
-                      <>
-                        <span className="animate-spin">⏳</span> Aktualizuji...
-                      </>
-                    ) : (
-                      <>
-                        🤖 Aktualizovat (LLM)
-                      </>
-                    )}
-                  </button>
-                </DetailTooltip>
+                  {updatingPrices ? (
+                    <>
+                      <span className="animate-spin">⏳</span> Aktualizuji...
+                    </>
+                  ) : (
+                    <>
+                      🤖 Aktualizovat (LLM)
+                    </>
+                  )}
+                </button>
               </div>
               
               <button
@@ -729,33 +682,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                       {operationLabels[operation].icon} {operationLabels[operation].label}
                     </label>
                     {opStats && opStats.count > 0 && (
-                      <DetailTooltip
-                        content={
-                          <div className="space-y-1.5">
-                            <div className="font-bold text-sm mb-2 pb-1 border-b border-gray-700">
-                              💰 Náklady z použití
-                            </div>
-                            <div className="text-xs space-y-1">
-                              <div>Volání: <span className="font-bold">{opStats.count}</span></div>
-                              <div>Tokeny: <span className="font-bold">{opStats.totalTokens.toLocaleString()}</span></div>
-                              <div>USD: <span className="font-bold text-green-400">${opStats.totalCostUsd.toFixed(4)}</span></div>
-                              <div>Kč: <span className="font-bold text-green-400">{opStats.totalCostCzk.toFixed(2)} Kč</span></div>
-                            </div>
-                            {opStats.byModel && Object.keys(opStats.byModel).length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-gray-700">
-                                <div className="text-xs font-semibold mb-1">Rozpis podle modelů:</div>
-                                {Object.entries(opStats.byModel).map(([modelName, modelStats]: [string, any]) => (
-                                  <div key={modelName} className="text-xs">
-                                    {modelName}: {modelStats.count}×, {modelStats.totalTokens.toLocaleString()} tokenů, ${modelStats.totalCostUsd.toFixed(4)}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        }
-                      >
-                        <span className="text-green-600 cursor-help text-xs font-bold">💰</span>
-                      </DetailTooltip>
+                      <span className="text-green-600 text-xs font-bold">💰</span>
                     )}
                   </div>
                   <div className="relative">
