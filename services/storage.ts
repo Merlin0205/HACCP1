@@ -15,6 +15,68 @@ import { storage, auth } from '../firebaseConfig';
 import { generatePhotoFilename } from '../utils/photoIdGenerator';
 
 /**
+ * Nahraj logo dodavatele do Storage
+ * 
+ * @param supplierId ID dodavatele
+ * @param file Soubor s logem
+ * @returns URL loga
+ */
+export async function uploadSupplierLogo(
+  supplierId: string,
+  file: File
+): Promise<string> {
+  const userId = getCurrentUserId();
+  
+  // Získat příponu souboru
+  const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
+  
+  // Název souboru: logo.{ext}
+  const fileName = `logo.${fileExtension}`;
+  const storagePath = `users/${userId}/suppliers/${supplierId}/${fileName}`;
+  
+  const storageRef = ref(storage, storagePath);
+  
+  // Upload souboru
+  await uploadBytes(storageRef, file);
+  
+  // Získat download URL
+  const url = await getDownloadURL(storageRef);
+  
+  return url;
+}
+
+/**
+ * Nahraj razítko dodavatele do Storage
+ * 
+ * @param supplierId ID dodavatele
+ * @param file Soubor s razítkem
+ * @returns URL razítka
+ */
+export async function uploadSupplierStamp(
+  supplierId: string,
+  file: File
+): Promise<string> {
+  const userId = getCurrentUserId();
+  
+  // Získat příponu souboru
+  const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
+  
+  // Název souboru: stamp.{ext}
+  const fileName = `stamp.${fileExtension}`;
+  const storagePath = `users/${userId}/suppliers/${supplierId}/${fileName}`;
+  
+  const storageRef = ref(storage, storagePath);
+  
+  // Upload souboru
+  await uploadBytes(storageRef, file);
+  
+  // Získat download URL
+  const url = await getDownloadURL(storageRef);
+  
+  return url;
+}
+
+/**
  * Získá aktuálního uživatele
  */
 function getCurrentUserId(): string {

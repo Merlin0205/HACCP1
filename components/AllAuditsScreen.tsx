@@ -1,4 +1,4 @@
-import React, { useState, useMemo, Fragment } from 'react';
+import React, { useState, useMemo, Fragment, useEffect } from 'react';
 import { Audit, AuditStatus, Operator, Premise, Report, ReportStatus } from '../types';
 import { Card, CardHeader, CardBody, CardFooter } from './ui/Card';
 import { TextField } from './ui/Input';
@@ -27,6 +27,9 @@ interface AllAuditsScreenProps {
   onCancelReportGeneration?: (reportId: string) => void;
   onDeleteReportVersion?: (reportId: string, auditId: string) => void;
   onSetReportAsLatest?: (reportId: string, auditId: string) => void;
+  onCreateInvoiceFromAudit?: (auditId: string) => void;
+  onSelectInvoice?: (invoiceId: string) => void;
+  getInvoiceByAuditId?: (auditId: string) => Promise<{ id: string; invoiceNumber: string } | null> | { id: string; invoiceNumber: string } | null;
   title?: string;
   description?: string;
   onAddNewAudit?: () => void;
@@ -48,6 +51,9 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   onCancelReportGeneration,
   onDeleteReportVersion,
   onSetReportAsLatest,
+  onCreateInvoiceFromAudit,
+  onSelectInvoice,
+  getInvoiceByAuditId,
   title = 'Přehled všech auditů',
   description = 'Kompletní seznam všech auditů v systému',
   onAddNewAudit,
@@ -65,6 +71,55 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
   const [settingLatestReportId, setSettingLatestReportId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [invoices, setInvoices] = useState<Map<string, { id: string; invoiceNumber: string }>>(new Map());
+
+  // Helper functions
+  const isCompleted = (status: AuditStatus) => {
+    return status === AuditStatus.COMPLETED || status === AuditStatus.LOCKED;
+  };
+
+  const isEditable = (status: AuditStatus) => {
+    return status === AuditStatus.DRAFT ||
+           status === AuditStatus.NOT_STARTED ||
+           status === AuditStatus.IN_PROGRESS;
+  };
+
+  // Načíst faktury pro audity, které mají invoiceId
+  useEffect(() => {
+    if (!getInvoiceByAuditId) return;
+    
+    const loadInvoices = async () => {
+      const invoiceMap = new Map<string, { id: string; invoiceNumber: string }>();
+      
+      // Načíst faktury pro všechny audity, které mají invoiceId a jsou dokončené
+      const auditsWithInvoice = audits.filter(a => 
+        a.invoiceId && (a.status === AuditStatus.COMPLETED || a.status === AuditStatus.LOCKED)
+      );
+      
+      await Promise.all(
+        auditsWithInvoice.map(async (audit) => {
+          try {
+            const result = await getInvoiceByAuditId(audit.id);
+            if (result) {
+              invoiceMap.set(audit.id, result);
+            }
+          } catch (error) {
+            console.error(`[AllAuditsScreen] Error loading invoice for audit ${audit.id}:`, error);
+          }
+        })
+      );
+      
+      setInvoices(invoiceMap);
+    };
+    
+    loadInvoices();
+  }, [audits, getInvoiceByAuditId]);
+  
+  console.log('[AllAuditsScreen] Component rendered:', { 
+    onCreateInvoiceFromAudit: !!onCreateInvoiceFromAudit,
+    auditsCount: audits.length,
+    completedAudits: audits.filter(a => isCompleted(a.status)).length
+  });
 
   const formatDate = (dateString?: string): string => {
     if (!dateString) return '-';
@@ -248,17 +303,6 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
     );
   };
 
-  const isCompleted = (status: AuditStatus) => {
-    return status === AuditStatus.COMPLETED || status === AuditStatus.LOCKED;
-  };
-
-  const isEditable = (status: AuditStatus) => {
-    return status === AuditStatus.DRAFT || 
-           status === AuditStatus.IN_PROGRESS || 
-           status === AuditStatus.REVISED ||
-           status === AuditStatus.NOT_STARTED;
-  };
-
   return (
     <div className="w-full max-w-7xl mx-auto pb-6">
       <PageHeader
@@ -435,10 +479,12 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                   <span className="text-white">{operator.operator_ico}</span>
                                 </div>
                               )}
-                              {operator.operator_address && (
+                              {(operator.operator_street || operator.operator_city || operator.operator_zip) && (
                                 <div className="flex items-start gap-2">
                                   <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
-                                  <span className="text-white">{operator.operator_address}</span>
+                                  <span className="text-white">
+                                    {[operator.operator_street, operator.operator_zip, operator.operator_city].filter(Boolean).join(', ')}
+                                  </span>
                                 </div>
                               )}
                               {operator.operator_phone && (
@@ -576,29 +622,85 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                           )}
                           {/* Pokračovat v auditu nebo Zobrazit report */}
                           {isCompleted(audit.status) ? (
-                            <div className="relative group/button">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectAudit(audit.id);
-                                }}
-                                className="p-2 rounded-lg transition-colors"
-                                style={{
-                                  color: sectionTheme.colors.primary
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = `${sectionTheme.colors.light}33`;
-                                  e.currentTarget.style.color = sectionTheme.colors.darkest;
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor = '';
-                                  e.currentTarget.style.color = sectionTheme.colors.primary;
-                                }}
-                              >
-                                <ReportIcon className="h-5 w-5" />
-                              </button>
-                              <ActionIconTooltip text="Zobrazit report" isLastRow={isLastRow} />
-                            </div>
+                            <>
+                              <div className="relative group/button">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectAudit(audit.id);
+                                  }}
+                                  className="p-2 rounded-lg transition-colors"
+                                  style={{
+                                    color: sectionTheme.colors.primary
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = `${sectionTheme.colors.light}33`;
+                                    e.currentTarget.style.color = sectionTheme.colors.darkest;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = '';
+                                    e.currentTarget.style.color = sectionTheme.colors.primary;
+                                  }}
+                                >
+                                  <ReportIcon className="h-5 w-5" />
+                                </button>
+                                <ActionIconTooltip text="Zobrazit report" isLastRow={isLastRow} />
+                              </div>
+                              {/* Faktura */}
+                              {(() => {
+                                // Pouze pokud je audit dokončen, zobrazit fakturu nebo tlačítko pro vytvoření
+                                if (!isCompleted(audit.status)) {
+                                  return null;
+                                }
+                                
+                                // Získat fakturu z načtených faktur
+                                const invoice = invoices.get(audit.id) || null;
+                                
+                                // Pokud faktura existuje, zobrazit odkaz na fakturu
+                                if (invoice && onSelectInvoice) {
+                                  return (
+                                    <div className="relative group/button">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onSelectInvoice(invoice.id);
+                                        }}
+                                        className="px-2 py-1 text-xs font-medium text-teal-600 hover:text-teal-800 hover:bg-teal-50 rounded transition-colors"
+                                        title={`Faktura: ${invoice.invoiceNumber}`}
+                                      >
+                                        🧾 {invoice.invoiceNumber}
+                                      </button>
+                                      <ActionIconTooltip text={`Faktura: ${invoice.invoiceNumber}`} isLastRow={isLastRow} />
+                                    </div>
+                                  );
+                                }
+                                
+                                // Pokud faktura neexistuje, zobrazit tlačítko pro vytvoření
+                                if (onCreateInvoiceFromAudit) {
+                                  return (
+                                    <div className="relative group/button">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          onCreateInvoiceFromAudit(audit.id);
+                                        }}
+                                        className="p-2 rounded-lg hover:bg-teal-50 transition-colors text-teal-600 hover:text-teal-700"
+                                        title="Vytvořit fakturu"
+                                      >
+                                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                                        </svg>
+                                      </button>
+                                      <ActionIconTooltip text="Vytvořit fakturu" isLastRow={isLastRow} />
+                                    </div>
+                                  );
+                                }
+                                
+                                return null;
+                              })()}
+                            </>
                           ) : (
                             <div className="relative group/button">
                               <button
@@ -848,10 +950,12 @@ export const AllAuditsScreen: React.FC<AllAuditsScreenProps> = ({
                                   <span className="text-white">{operator.operator_ico}</span>
                                 </div>
                               )}
-                              {operator.operator_address && (
+                              {(operator.operator_street || operator.operator_city || operator.operator_zip) && (
                                 <div className="flex items-start gap-2">
                                   <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
-                                  <span className="text-white">{operator.operator_address}</span>
+                                  <span className="text-white">
+                                    {[operator.operator_street, operator.operator_zip, operator.operator_city].filter(Boolean).join(', ')}
+                                  </span>
                                 </div>
                               )}
                               {operator.operator_phone && (

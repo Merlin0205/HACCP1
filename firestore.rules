@@ -106,6 +106,34 @@ service cloud.firestore {
       allow delete: if canDelete();
     }
     
+    // Invoices - schválené uživatele vidí své, admini vidí všechna
+    match /invoices/{invoiceId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
+    // Billing Settings - vlastník může číst/zapisovat
+    match /billingSettings/{userId} {
+      allow read: if isAuthenticated() && (
+        isOwner(userId) || 
+        isAdmin()
+      );
+      allow write: if isAuthenticated() && (
+        isOwner(userId) || 
+        isAdmin()
+      );
+    }
+    
+    // Pricing - vlastník může číst/zapisovat
+    match /pricing/{priceItemId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+    
     // Settings - čtení pro schválené uživatele, zápis pouze pro adminy
     match /settings/{document=**} {
       allow read: if isApproved();
@@ -184,6 +212,14 @@ service cloud.firestore {
         isAdmin() || 
         resource.data.createdBy == request.auth.uid
       );
+    }
+    
+    // Suppliers - schválené uživatele vidí své, admini vidí všechna
+    match /suppliers/{supplierId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
   }
 }

@@ -100,6 +100,10 @@ export enum AppState {
   HEADER_FORM = 'header_form',
   AUDIT_IN_PROGRESS = 'audit_in_progress',
   REPORT_VIEW = 'report_view',
+  INVOICES = 'invoices',
+  INVOICE_DETAIL = 'invoice_detail',
+  INVOICE_CREATE = 'invoice_create',
+  INVOICE_EDIT = 'invoice_edit',
   SETTINGS = 'settings',
   AUDITOR_SETTINGS = 'auditor_settings',
   AI_REPORT_SETTINGS = 'ai_report_settings',
@@ -107,6 +111,9 @@ export enum AppState {
   AI_PRICING_CONFIG = 'ai_pricing_config',
   AI_PROMPTS = 'ai_prompts',
   SMART_TEMPLATE_SETTINGS = 'smart_template_settings',
+  PRICING = 'pricing',
+  BILLING_SETTINGS = 'billing_settings',
+  SUPPLIER_MANAGEMENT = 'supplier_management',
   ADMIN = 'admin',
   USER_MANAGEMENT = 'user_management'
 }
@@ -133,12 +140,49 @@ export interface ReportData {
 export interface Operator {
   id: string; 
   operator_name: string;
-  operator_address: string;
+  operator_address?: string; // DEPRECATED - použít operator_street, operator_city, operator_zip
+  operator_street: string;
+  operator_city: string;
+  operator_zip: string;
   operator_ico: string;
   operator_dic?: string;
   operator_statutory_body: string;
   operator_phone: string;
   operator_email: string;
+  vatVerification?: {
+    valid: boolean;
+    verifiedAt: string;
+    name?: string;
+    address?: string;
+    countryCode?: string;
+    vatNumber?: string;
+  };
+}
+
+export interface Supplier {
+  id: string;
+  userId: string; // vlastník dat
+  supplier_name: string; // název dodavatele
+  supplier_street: string;
+  supplier_city: string;
+  supplier_zip: string;
+  supplier_country: string; // defaultně "Česká republika"
+  supplier_ico: string; // IČO
+  supplier_dic?: string; // DIČ
+  supplier_statutory_body?: string; // statutární orgán
+  supplier_phone?: string;
+  supplier_email?: string;
+  supplier_website?: string;
+  supplier_iban?: string;
+  supplier_bankAccount?: string; // číslo účtu v lokálním formátu (deprecated - použij supplier_accountNumber a supplier_bankCode)
+  supplier_accountNumber?: string; // číslo účtu (bez kódu banky)
+  supplier_bankCode?: string; // kód banky (např. "0100", "0300")
+  supplier_swift?: string;
+  supplier_logoUrl?: string; // URL loga v PDF
+  supplier_stampUrl?: string; // URL razítka v PDF
+  isDefault?: boolean; // výchozí dodavatel pro uživatele
+  createdAt?: string;
+  updatedAt?: string;
   vatVerification?: {
     valid: boolean;
     verifiedAt: string;
@@ -185,6 +229,7 @@ export interface Audit {
     [itemId: string]: AuditAnswer;
   };
   auditTypeId?: string; // ID typu auditu (optional pro zpětnou kompatibilitu)
+  invoiceId?: string; // Reference na fakturu (pokud byla vystavena)
 }
 
 // Alias pro zpětnou kompatibilitu

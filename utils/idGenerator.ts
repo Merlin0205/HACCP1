@@ -5,19 +5,21 @@
  * Příklad: A20250811_0001, P20250811_0002, atd.
  */
 
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, Query } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
 /**
  * Generuje human-readable ID s formátem: {PREFIX}{YYYYMMDD}_{COUNTER}
  * 
- * @param prefix Prefix entity (A=audit, P=premise, O=operator, F=photo, R=report, C=customer)
+ * @param prefix Prefix entity (A=audit, P=premise, O=operator, F=photo, R=report, C=customer, S=supplier)
  * @param collectionName Název Firestore collection pro zjištění aktuálního counteru
+ * @param customQuery Volitelný custom query pro filtrování dokumentů (např. podle userId)
  * @returns Human-readable ID
  */
 export async function generateHumanReadableId(
   prefix: string,
-  collectionName: string
+  collectionName: string,
+  customQuery?: Query
 ): Promise<string> {
   const today = new Date();
   const year = today.getFullYear();
@@ -27,12 +29,24 @@ export async function generateHumanReadableId(
   const idPrefix = `${prefix}${dateStr}_`;
   
   try {
-    // Načíst všechny dokumenty s ID začínajícím na idPrefix
-    const q = query(
-      collection(db, collectionName),
-      where('id', '>=', idPrefix),
-      where('id', '<', idPrefix + '\uf8ff')
-    );
+    // Použít custom query pokud je poskytnut, jinak vytvořit standardní query
+    let q: Query;
+    if (customQuery) {
+      // Přidat filtry na ID k existujícímu query
+      q = query(
+        customQuery,
+        where('id', '>=', idPrefix),
+        where('id', '<', idPrefix + '\uf8ff')
+      );
+    } else {
+      // Standardní query bez dalších filtrů
+      q = query(
+        collection(db, collectionName),
+        where('id', '>=', idPrefix),
+        where('id', '<', idPrefix + '\uf8ff')
+      );
+    }
+    
     const snapshot = await getDocs(q);
     
     // Najít maximum counteru

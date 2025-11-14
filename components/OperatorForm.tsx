@@ -133,7 +133,9 @@ interface OperatorFormProps {
 export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave, onBack }) => {
   const defaultOperatorData: OperatorData = {
     operator_name: '',
-    operator_address: '',
+    operator_street: '',
+    operator_city: '',
+    operator_zip: '',
     operator_ico: '',
     operator_dic: '',
     operator_statutory_body: '',
@@ -184,7 +186,9 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
       setOperatorData(prev => ({
         ...prev,
         operator_name: companyData.operator_name || prev.operator_name,
-        operator_address: companyData.operator_address || prev.operator_address,
+        operator_street: companyData.operator_street || prev.operator_street,
+        operator_city: companyData.operator_city || prev.operator_city,
+        operator_zip: companyData.operator_zip || prev.operator_zip,
         operator_statutory_body: companyData.operator_statutory_body || prev.operator_statutory_body,
         operator_dic: companyData.operator_dic || prev.operator_dic,
         // IČO už je vyplněné uživatelem, ale můžeme ho přepsat pokud se liší
@@ -269,23 +273,10 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
     }
   };
 
-  const title = initialData ? 'Upravit provozovatele' : 'Nový provozovatel';
-
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          leftIcon={<BackIcon className="h-5 w-5" />}
-          className="mb-4"
-        >
-          Zpět
-        </Button>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{title}</h1>
-        <p className="text-gray-600">Vyplňte údaje o provozovateli</p>
-      </div>
+    <div className="w-full">
+      {/* Description */}
+      <p className="text-gray-600 mb-6">Vyplňte údaje o provozovateli</p>
 
       {/* Form */}
       <Card>
@@ -329,9 +320,23 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
                   </div>
                 </div>
                 <TextField
-                  label="Adresa sídla"
-                  name="operator_address"
-                  value={operatorData.operator_address || ''}
+                  label="Ulice"
+                  name="operator_street"
+                  value={operatorData.operator_street || ''}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  label="Město"
+                  name="operator_city"
+                  value={operatorData.operator_city || ''}
+                  onChange={handleChange}
+                  required
+                />
+                <TextField
+                  label="PSČ"
+                  name="operator_zip"
+                  value={operatorData.operator_zip || ''}
                   onChange={handleChange}
                   required
                 />

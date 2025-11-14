@@ -47,9 +47,40 @@ async function isCurrentUserAdmin(): Promise<boolean> {
 
 /**
  * Převede Firestore dokument na Operator objekt
+ * Migrace: pokud má starý formát operator_address, parsovat na nová pole
  */
 function docToOperator(docSnapshot: any): Operator {
   const data = docSnapshot.data();
+  
+  // Migrace: pokud má starý formát operator_address, parsovat na nová pole
+  if (data.operator_address && !data.operator_street) {
+    const addressParts = data.operator_address.split(',') || [];
+    const street = addressParts[0]?.trim() || '';
+    const cityZip = addressParts[1]?.trim() || '';
+    const zipMatch = cityZip?.match(/^(\d{5})\s*(.+)$/);
+    const zip = zipMatch ? zipMatch[1] : '';
+    const city = zipMatch ? zipMatch[2] : cityZip;
+    
+    return {
+      id: docSnapshot.id,
+      ...data,
+      operator_street: street,
+      operator_city: city || '',
+      operator_zip: zip || '',
+    } as Operator;
+  }
+  
+  // Pokud nemá žádná pole adresy, použít prázdné hodnoty
+  if (!data.operator_street && !data.operator_address) {
+    return {
+      id: docSnapshot.id,
+      ...data,
+      operator_street: '',
+      operator_city: '',
+      operator_zip: '',
+    } as Operator;
+  }
+  
   return {
     id: docSnapshot.id,
     ...data

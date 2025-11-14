@@ -41,7 +41,9 @@ const rawStructure: RawAuditStructure = {
       "title": "PROVOZOVATEL",
       "fields": [
         { "id": "operator_name", "label": "Název, obchodní firma", "type": "text" },
-        { "id": "operator_address", "label": "Adresa sídla", "type": "text" },
+        { "id": "operator_street", "label": "Ulice", "type": "text" },
+        { "id": "operator_city", "label": "Město", "type": "text" },
+        { "id": "operator_zip", "label": "PSČ", "type": "text" },
         { "id": "operator_ico", "label": "IČO", "type": "text" },
         { "id": "operator_statutory_body", "label": "Statutární orgán", "type": "text" },
         { "id": "operator_phone", "label": "Mobil", "type": "tel" },

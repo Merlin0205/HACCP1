@@ -76,7 +76,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         const operatorMatches = 
           operator.operator_name?.toLowerCase().includes(query) ||
           operator.operator_ico?.toLowerCase().includes(query) ||
-          operator.operator_address?.toLowerCase().includes(query);
+          `${operator.operator_street || ''} ${operator.operator_city || ''} ${operator.operator_zip || ''}`.toLowerCase().includes(query);
         
         const operatorPremises = premisesByOperator.get(operator.id) || [];
         const premiseMatches = operatorPremises.some(premise =>
@@ -103,8 +103,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           bValue = b.operator_ico || '';
           break;
         case 'address':
-          aValue = a.operator_address || '';
-          bValue = b.operator_address || '';
+          aValue = `${a.operator_street || ''} ${a.operator_city || ''} ${a.operator_zip || ''}`;
+          bValue = `${b.operator_street || ''} ${b.operator_city || ''} ${b.operator_zip || ''}`;
           break;
         case 'premises':
           aValue = (premisesByOperator.get(a.id) || []).length;
@@ -356,10 +356,12 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                       )}
                                     </div>
                                   )}
-                                  {operator.operator_address && (
+                                  {(operator.operator_street || operator.operator_city || operator.operator_zip) && (
                                     <div className="flex items-start gap-2">
                                       <span className="font-semibold text-gray-300 min-w-[50px]">Adresa:</span>
-                                      <span className="text-white">{operator.operator_address}</span>
+                                      <span className="text-white">
+                                        {[operator.operator_street, operator.operator_zip, operator.operator_city].filter(Boolean).join(', ')}
+                                      </span>
                                     </div>
                                   )}
                                   {operator.operator_phone && (
@@ -391,9 +393,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           </SimpleTooltip>
                         </TooltipCell>
                         <TooltipCell className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm md:text-xs xl:text-sm text-gray-600">
-                          <SimpleTooltip text={operator.operator_address || '-'} isLastRow={isLastRow}>
+                          <SimpleTooltip text={[operator.operator_street, operator.operator_zip, operator.operator_city].filter(Boolean).join(', ') || '-'} isLastRow={isLastRow}>
                             <div className="truncate w-full">
-                              {operator.operator_address || '-'}
+                              {[operator.operator_street, operator.operator_zip, operator.operator_city].filter(Boolean).join(', ') || '-'}
                             </div>
                           </SimpleTooltip>
                         </TooltipCell>
@@ -834,9 +836,11 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               <span>IČO: {operator.operator_ico}</span>
                             </div>
                           )}
-                          {operator.operator_address && (
+                          {(operator.operator_street || operator.operator_city || operator.operator_zip) && (
                             <div className="flex items-start gap-2">
-                              <span className="line-clamp-2">{operator.operator_address}</span>
+                              <span className="line-clamp-2">
+                                {[operator.operator_street, operator.operator_zip, operator.operator_city].filter(Boolean).join(', ')}
+                              </span>
                             </div>
                           )}
                           {(operator.operator_phone || operator.operator_email) && (

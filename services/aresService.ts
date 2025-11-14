@@ -12,7 +12,10 @@ import { functions } from '../firebaseConfig';
  */
 export interface CompanyData {
   operator_name: string;
-  operator_address: string;
+  operator_address?: string; // DEPRECATED - použít operator_street, operator_city, operator_zip
+  operator_street: string;
+  operator_city: string;
+  operator_zip: string;
   operator_statutory_body: string;
   operator_phone: string;
   operator_email: string;

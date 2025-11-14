@@ -43,7 +43,10 @@ interface AresResponse {
  */
 export interface CompanyData {
   operator_name: string;
-  operator_address: string;
+  operator_address?: string; // DEPRECATED - použít operator_street, operator_city, operator_zip
+  operator_street: string;
+  operator_city: string;
+  operator_zip: string;
   operator_statutory_body: string;
   operator_phone: string;
   operator_email: string;
@@ -101,10 +104,20 @@ export const getCompanyByIco = functions
       // Debug log pro kontrolu struktury
       console.log('[getCompanyByIco] ARES data:', JSON.stringify(aresData, null, 2));
 
+      // Parsovat adresu z ARES
+      const addressParts = parseAddress(aresData.sidlo);
+      
+      // Debug log pro kontrolu parsování
+      console.log('[getCompanyByIco] Raw sidlo:', JSON.stringify(aresData.sidlo, null, 2));
+      console.log('[getCompanyByIco] Parsed address:', addressParts);
+      
       // Normalizace dat pro formulář
       const companyData: CompanyData = {
         operator_name: aresData.obchodniJmeno || aresData.nazev || '',
-        operator_address: formatAddress(aresData.sidlo),
+        operator_street: addressParts.street || '',
+        operator_city: addressParts.city || '',
+        operator_zip: addressParts.zip || '',
+        operator_address: `${addressParts.street}, ${addressParts.zip} ${addressParts.city}`, // DEPRECATED - pro zpětnou kompatibilitu
         operator_statutory_body: formatStatutoryBody(aresData.statutarniOrgan),
         operator_phone: '', // ARES neobsahuje telefon
         operator_email: '', // ARES neobsahuje email
@@ -114,7 +127,13 @@ export const getCompanyByIco = functions
         rawAresData: aresData
       };
 
-      console.log('[getCompanyByIco] Formatted address:', companyData.operator_address);
+      console.log('[getCompanyByIco] Final companyData:', {
+        name: companyData.operator_name,
+        street: companyData.operator_street,
+        city: companyData.operator_city,
+        zip: companyData.operator_zip,
+        dic: companyData.operator_dic
+      });
 
       return companyData;
     } catch (error: any) {
@@ -134,85 +153,44 @@ export const getCompanyByIco = functions
   });
 
 /**
- * Formátuje adresu z ARES struktury do textového řetězce
- * Používá textovaAdresa pokud je k dispozici, jinak sestaví z částí
+ * Parsuje adresu z ARES struktury do objektu {street, city, zip}
  */
-function formatAddress(sidlo?: AresResponse['sidlo']): string {
+function parseAddress(sidlo?: AresResponse['sidlo']): { street: string; city: string; zip: string } {
   if (!sidlo) {
-    return '';
+    console.log('[parseAddress] No sidlo provided');
+    return { street: '', city: '', zip: '' };
   }
 
-  // Pokud máme hotovou textovou adresu, použijeme ji (ale upravíme formát PSČ a odstraníme část obce)
-  if (sidlo.textovaAdresa) {
-    // ARES vrací: "U Městského dvora 158/15, Nový Svět, 77900 Olomouc"
-    // Chceme: "U Městského dvora 158/15, 779 00 Olomouc" (bez části obce)
-    
-    // Najít ulici s číslem (první část před první čárkou)
-    const parts = sidlo.textovaAdresa.split(',');
-    const streetPart = parts[0]?.trim() || '';
-    
-    // Najít PSČ a město (poslední část)
-    const lastPart = parts[parts.length - 1]?.trim() || '';
-    
-    // Extrahovat PSČ a město z poslední části
-    const psc = sidlo.psc?.toString() || '';
-    let formattedPsc = psc;
-    if (psc.length === 5) {
-      formattedPsc = `${psc.substring(0, 3)} ${psc.substring(3)}`;
-    }
-    
-    // Město je v poslední části po PSČ
-    const city = sidlo.nazevObce || lastPart.replace(psc, '').trim();
-    
-    // Sestavit finální adresu: "Ulice číslo, PSČ Město"
-    if (streetPart && city) {
-      return `${streetPart}, ${formattedPsc} ${city}`;
-    }
-    
-    // Fallback: použít původní textovou adresu s upraveným PSČ
-    if (psc.length === 5) {
-      const formattedPscFallback = `${psc.substring(0, 3)} ${psc.substring(3)}`;
-      return sidlo.textovaAdresa.replace(psc, formattedPscFallback);
-    }
-    return sidlo.textovaAdresa;
-  }
+  let street = '';
+  let city = '';
+  let zip = '';
 
-  // Pokud nemáme textovou adresu, sestavíme z částí
-  const parts: string[] = [];
-
-  // Ulice s číslem
+  // Parsovat ulici s číslem
   if (sidlo.nazevUlice) {
-    let street = sidlo.nazevUlice;
-    if (sidlo.cisloDomovni) {
+    street = sidlo.nazevUlice.trim();
+    if (sidlo.cisloDomovni !== undefined && sidlo.cisloDomovni !== null) {
       street += ` ${sidlo.cisloDomovni}`;
     }
-    if (sidlo.cisloOrientacni) {
+    if (sidlo.cisloOrientacni !== undefined && sidlo.cisloOrientacni !== null) {
       street += `/${sidlo.cisloOrientacni}`;
     }
-    parts.push(street);
+  } else if (sidlo.textovaAdresa) {
+    // Pokud nemáme nazevUlice, použít první část textové adresy
+    const parts = sidlo.textovaAdresa.split(',');
+    street = parts[0]?.trim() || '';
   }
 
-  // PSČ a město (formát: "PSČ Město")
-  if (sidlo.nazevObce) {
-    let cityPart = '';
-    if (sidlo.psc) {
-      // PSČ formát: "779 00" (s mezerou po třetí číslici)
-      const psc = sidlo.psc.toString();
-      if (psc.length === 5) {
-        // Formátovat PSČ: "77900" -> "779 00"
-        cityPart = `${psc.substring(0, 3)} ${psc.substring(3)}`;
-      } else {
-        cityPart = psc;
-      }
-      cityPart += ` ${sidlo.nazevObce}`;
-    } else {
-      cityPart = sidlo.nazevObce;
-    }
-    parts.push(cityPart);
+  // Parsovat město
+  city = (sidlo.nazevObce || '').trim();
+
+  // Parsovat PSČ
+  if (sidlo.psc !== undefined && sidlo.psc !== null) {
+    zip = sidlo.psc.toString().trim();
   }
 
-  // Spojit části čárkou: "Ulice číslo, PSČ Město"
-  return parts.join(', ');
+  console.log('[parseAddress] Parsed:', { street, city, zip, rawSidlo: sidlo });
+
+  return { street, city, zip };
 }
 
 /**

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppState } from '../types';
-import { HomeIcon, SettingsIcon, ClockIcon, ChecklistIcon, InProgressIcon } from '../components/icons';
+import { HomeIcon, SettingsIcon, ClockIcon, ChecklistIcon, InProgressIcon, ReceiptIcon } from '../components/icons';
 
 // Section Theme Type
 export interface SectionTheme {
@@ -86,6 +86,22 @@ export const SECTION_THEMES: Record<string, SectionTheme> = {
     },
     icon: HomeIcon,
   },
+  [AppState.INVOICES]: {
+    name: 'Faktury',
+    colors: {
+      primary: '#14B8A6', // teal-500
+      light: '#2DD4BF', // teal-400
+      lighter: '#5EEAD4', // teal-300
+      darkest: '#0D9488', // teal-600
+      gradient: 'from-teal-500 to-teal-600',
+      gradientDark: 'from-teal-600 to-teal-700',
+      bgLight: 'bg-teal-50',
+      bgLighter: 'bg-teal-100',
+      text: 'text-teal-600',
+      textLight: 'text-teal-700',
+    },
+    icon: ReceiptIcon,
+  },
   [AppState.SETTINGS]: {
     name: 'Nastavení',
     colors: {
@@ -155,6 +171,14 @@ export const getSectionTheme = (appState: AppState): SectionTheme | null => {
     appState === AppState.EDIT_PREMISE
   ) {
     return SECTION_THEMES[AppState.OPERATOR_DASHBOARD];
+  }
+  if (
+    appState === AppState.INVOICES ||
+    appState === AppState.INVOICE_DETAIL ||
+    appState === AppState.INVOICE_CREATE ||
+    appState === AppState.INVOICE_EDIT
+  ) {
+    return SECTION_THEMES[AppState.INVOICES];
   }
   if (
     appState === AppState.SETTINGS ||

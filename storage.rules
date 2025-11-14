@@ -32,6 +32,18 @@ service firebase.storage {
       allow read: if isAuthenticated() && request.auth.uid == userId;
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
+    
+    // Logo a razítko dodavatelů - uložené pod userId/suppliers/
+    match /users/{userId}/suppliers/{supplierId}/{allPaths=**} {
+      // Čtení: pouze vlastní soubory
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Zápis: pouze vlastní soubory, musí to být obrázek do 10MB
+      allow write: if isAuthenticated() && 
+                      request.auth.uid == userId &&
+                      isImage() &&
+                      isUnder10MB();
+    }
   }
 }
 

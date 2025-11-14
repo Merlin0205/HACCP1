@@ -33,6 +33,9 @@ import AIUsageStatsScreen from './components/AIUsageStatsScreen';
 import AIPricingConfigScreen from './components/AIPricingConfigScreen';
 import AIPromptsScreen from './components/AIPromptsScreen';
 import SmartTemplateSettingsScreen from './components/SmartTemplateSettingsScreen';
+import { PricingScreen } from './components/PricingScreen';
+import { BillingSettingsScreen } from './components/BillingSettingsScreen';
+import { SupplierManagementScreen } from './components/SupplierManagementScreen';
 import { OperatorDashboard } from './components/OperatorDashboard';
 import { OperatorForm } from './components/OperatorForm';
 import { PremiseForm } from './components/PremiseForm';
@@ -40,8 +43,12 @@ import { AuditList } from './components/AuditList';
 import { AllAuditsScreen } from './components/AllAuditsScreen';
 import { HeaderForm } from './components/HeaderForm';
 import ReportView from './components/ReportView';
+import { InvoicesPage } from './components/invoices/InvoicesPage';
+import { InvoiceDetailPage } from './components/invoices/InvoiceDetailPage';
+import { InvoiceForm } from './components/invoices/InvoiceForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
+import { Modal } from './components/ui/Modal';
 import { toast } from './utils/toast';
 import { useAppData } from './hooks/useAppData';
 import { useReportGenerator } from './hooks/useReportGenerator';
@@ -112,6 +119,10 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<string[]>([]);
   const [loadingAuditStructure, setLoadingAuditStructure] = useState(true);
   const [activeReportId, setActiveReportId] = useState<string | null>(null);
+  const [activeInvoiceId, setActiveInvoiceId] = useState<string | null>(null);
+  const [invoiceCreateAuditId, setInvoiceCreateAuditId] = useState<string | undefined>(undefined);
+  const [invoiceCreateCustomerId, setInvoiceCreateCustomerId] = useState<string | undefined>(undefined);
+  const [invoiceRefreshTrigger, setInvoiceRefreshTrigger] = useState(0);
 
   // Načíst audit structure z Firestore při startu nebo podle typu auditu
   useEffect(() => {
@@ -495,7 +506,9 @@ const App: React.FC = () => {
         premise_phone: premise.premise_phone || '',
         premise_email: premise.premise_email || '',
         operator_name: operator.operator_name || '',
-        operator_address: operator.operator_address || '',
+        operator_street: operator.operator_street || '',
+        operator_city: operator.operator_city || '',
+        operator_zip: operator.operator_zip || '',
         operator_ico: operator.operator_ico || '',
         operator_statutory_body: operator.operator_statutory_body || '',
         operator_phone: operator.operator_phone || '',
@@ -588,7 +601,9 @@ const App: React.FC = () => {
         premise_phone: premise.premise_phone || '',
         premise_email: premise.premise_email || '',
         operator_name: operator.operator_name || '',
-        operator_address: operator.operator_address || '',
+        operator_street: operator.operator_street || '',
+        operator_city: operator.operator_city || '',
+        operator_zip: operator.operator_zip || '',
         operator_ico: operator.operator_ico || '',
         operator_statutory_body: operator.operator_statutory_body || '',
         operator_phone: operator.operator_phone || '',
@@ -1344,6 +1359,150 @@ const App: React.FC = () => {
     setAppState(AppState.SETTINGS);
   };
 
+  const handleNavigateToBillingSettings = () => {
+    setAppState(AppState.BILLING_SETTINGS);
+  };
+
+  const handleNavigateToSupplierManagement = () => {
+    setAppState(AppState.SUPPLIER_MANAGEMENT);
+  };
+
+  const handleNavigateToPricing = () => {
+    setAppState(AppState.PRICING);
+  };
+
+  const handleBackFromBillingSettings = () => {
+    setAppState(AppState.SETTINGS);
+  };
+
+  const handleBackFromSupplierManagement = () => {
+    setAppState(AppState.SETTINGS);
+  };
+
+  const handleBackFromPricing = () => {
+    setAppState(AppState.SETTINGS);
+  };
+
+  // Invoice handlers
+  const handleNavigateToInvoices = () => {
+    setAppState(AppState.INVOICES);
+    setActiveInvoiceId(null);
+  };
+
+  const handleSelectInvoice = (invoiceId: string) => {
+    console.log('[App] handleSelectInvoice called with invoiceId:', invoiceId);
+    setActiveInvoiceId(invoiceId);
+    setAppState(AppState.INVOICE_DETAIL);
+    console.log('[App] State updated - activeInvoiceId:', invoiceId, 'appState:', AppState.INVOICE_DETAIL);
+  };
+
+  const handleCreateInvoice = (auditId?: string, customerId?: string) => {
+    setInvoiceCreateAuditId(auditId);
+    setInvoiceCreateCustomerId(customerId);
+    setAppState(AppState.INVOICE_CREATE);
+  };
+
+  const handleEditInvoice = (invoiceId: string) => {
+    setActiveInvoiceId(invoiceId);
+    setAppState(AppState.INVOICE_EDIT);
+  };
+
+  const handleBackFromInvoice = () => {
+    setAppState(AppState.INVOICES);
+    setActiveInvoiceId(null);
+    setInvoiceCreateAuditId(undefined);
+    setInvoiceCreateCustomerId(undefined);
+  };
+
+  const handleCancelInvoice = async (invoiceId: string) => {
+    try {
+      const { markInvoiceAsCancelled } = await import('./services/firestore');
+      await markInvoiceAsCancelled(invoiceId);
+      toast.success('Faktura byla stornována');
+      // Pokud je faktura aktuálně zobrazena, vrátit se na seznam
+      if (activeInvoiceId === invoiceId) {
+        handleBackFromInvoice();
+      }
+      // Aktualizovat seznam faktur
+      setInvoiceRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      console.error('[App] Error cancelling invoice:', error);
+      toast.error('Chyba při stornování faktury: ' + error.message);
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string) => {
+    try {
+      const { deleteInvoice } = await import('./services/firestore');
+      await deleteInvoice(invoiceId);
+      toast.success('Faktura byla trvale smazána');
+      // Pokud je faktura aktuálně zobrazena, vrátit se na seznam
+      if (activeInvoiceId === invoiceId) {
+        handleBackFromInvoice();
+      }
+      // Aktualizovat seznam faktur
+      setInvoiceRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      console.error('[App] Error deleting invoice:', error);
+      toast.error('Chyba při mazání faktury: ' + error.message);
+    }
+  };
+
+  const handleMarkInvoiceAsPaid = async (invoiceId: string) => {
+    try {
+      const { markInvoiceAsPaid } = await import('./services/firestore');
+      await markInvoiceAsPaid(invoiceId);
+      toast.success('Faktura byla označena jako zaplacená');
+      // Pokud je faktura aktuálně zobrazena, aktualizovat ji
+      if (activeInvoiceId === invoiceId) {
+        // InvoiceDetailPage si to načte samo přes useEffect
+      }
+      // Aktualizovat seznam faktur
+      setInvoiceRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      console.error('[App] Error marking invoice as paid:', error);
+      toast.error('Chyba při označení faktury jako zaplacené: ' + error.message);
+    }
+  };
+
+  const handleRestoreInvoice = async (invoiceId: string) => {
+    try {
+      const { restoreInvoice } = await import('./services/firestore');
+      await restoreInvoice(invoiceId);
+      toast.success('Faktura byla obnovena');
+      // Pokud je faktura aktuálně zobrazena, aktualizovat ji
+      if (activeInvoiceId === invoiceId) {
+        // InvoiceDetailPage si to načte samo přes useEffect
+      }
+      // Aktualizovat seznam faktur
+      setInvoiceRefreshTrigger(prev => prev + 1);
+    } catch (error: any) {
+      console.error('[App] Error restoring invoice:', error);
+      toast.error('Chyba při obnovení faktury: ' + error.message);
+    }
+  };
+
+  const handleSaveInvoice = async (invoiceId: string) => {
+    // Pokud byla faktura vytvořena z auditu, aktualizovat audit.invoiceId
+    if (invoiceCreateAuditId) {
+      try {
+        await updateAudit(invoiceCreateAuditId, { invoiceId });
+        // Aktualizovat lokální state
+        setAudits(prev => prev.map(a => 
+          a.id === invoiceCreateAuditId ? { ...a, invoiceId } : a
+        ));
+      } catch (error: any) {
+        console.error('[App] Error updating audit invoiceId:', error);
+        toast.error('Chyba při aktualizaci auditu: ' + error.message);
+      }
+    }
+    
+    setActiveInvoiceId(invoiceId);
+    setAppState(AppState.INVOICE_DETAIL);
+    setInvoiceCreateAuditId(undefined);
+    setInvoiceCreateCustomerId(undefined);
+  };
+
   const handleNavigate = (newState: AppState) => {
     // Pokud jsou otevřené taby a navigujeme na jinou obrazovku, deaktivujeme taby
     if (tabs.length > 0 && activeTabId) {
@@ -1446,7 +1605,24 @@ const App: React.FC = () => {
         />;
       case AppState.ADD_OPERATOR:
       case AppState.EDIT_OPERATOR:
-        return <OperatorForm initialData={appState === AppState.EDIT_OPERATOR ? operatorToEdit || null : null} onSave={handleSaveOperator} onBack={handleBackToDashboard} />;
+        return (
+          <Modal
+            isOpen={true}
+            onClose={handleBackToDashboard}
+            title={appState === AppState.EDIT_OPERATOR ? 'Upravit provozovatele' : 'Nový provozovatel'}
+            size="xl"
+            closeOnBackdropClick={false}
+          >
+            <OperatorForm 
+              initialData={appState === AppState.EDIT_OPERATOR ? operatorToEdit || null : null} 
+              onSave={(data) => {
+                handleSaveOperator(data);
+                handleBackToDashboard();
+              }} 
+              onBack={handleBackToDashboard} 
+            />
+          </Modal>
+        );
       case AppState.ADD_PREMISE:
       case AppState.EDIT_PREMISE:
         return <PremiseForm 
@@ -1490,6 +1666,39 @@ const App: React.FC = () => {
           onCancelReportGeneration={handleCancelReportGeneration}
           onDeleteReportVersion={handleDeleteReportVersion}
           onSetReportAsLatest={handleSetReportAsLatest}
+          onCreateInvoiceFromAudit={(auditId) => {
+            const audit = audits.find(a => a.id === auditId);
+            const premise = audit ? premises.find(p => p.id === audit.premiseId) : null;
+            const customerId = premise ? premise.operatorId : undefined;
+            handleCreateInvoice(auditId, customerId);
+          }}
+          onSelectInvoice={handleSelectInvoice}
+          getInvoiceByAuditId={async (auditId) => {
+            const audit = audits.find(a => a.id === auditId);
+            if (audit?.invoiceId) {
+              try {
+                // Načíst fakturu a zkontrolovat, jestli skutečně existuje
+                const { getInvoice } = await import('./services/firestore/invoices');
+                const invoice = await getInvoice(audit.invoiceId);
+                if (invoice) {
+                  return { id: invoice.id, invoiceNumber: invoice.invoiceNumber };
+                }
+                // Pokud faktura neexistuje, odstranit invoiceId z auditu
+                const { updateAudit } = await import('./services/firestore');
+                await updateAudit(auditId, { invoiceId: undefined });
+                // Aktualizovat lokální state
+                setAudits(prev => prev.map(a => a.id === auditId ? { ...a, invoiceId: undefined } : a));
+              } catch (error) {
+                console.error('[getInvoiceByAuditId] Error loading invoice:', error);
+                // Pokud faktura neexistuje, odstranit invoiceId z auditu
+                const { updateAudit } = await import('./services/firestore');
+                await updateAudit(auditId, { invoiceId: undefined });
+                // Aktualizovat lokální state
+                setAudits(prev => prev.map(a => a.id === auditId ? { ...a, invoiceId: undefined } : a));
+              }
+            }
+            return null;
+          }}
         />;
       case AppState.INCOMPLETE_AUDITS:
         // Filtrovat pouze nezapočaté audity (DRAFT)
@@ -1596,7 +1805,7 @@ const App: React.FC = () => {
         );
       }
       case AppState.SETTINGS:
-        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToAIPrompts={handleNavigateToAIPrompts} onNavigateToSmartTemplateSettings={handleNavigateToSmartTemplateSettings} onBack={handleBackFromSettings} />;
+        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToAIPrompts={handleNavigateToAIPrompts} onNavigateToSmartTemplateSettings={handleNavigateToSmartTemplateSettings} onNavigateToBillingSettings={handleNavigateToBillingSettings} onNavigateToPricing={handleNavigateToPricing} onBack={handleBackFromSettings} />;
       case AppState.USER_MANAGEMENT:
         return <UserManagementScreen onBack={handleBackFromSettings} />;
       case AppState.AUDITOR_SETTINGS:
@@ -1611,6 +1820,66 @@ const App: React.FC = () => {
         return <AIPromptsScreen onBack={handleBackFromAIPrompts} />;
       case AppState.SMART_TEMPLATE_SETTINGS:
         return <SmartTemplateSettingsScreen onBack={handleBackFromSmartTemplateSettings} />;
+      case AppState.BILLING_SETTINGS:
+        return <BillingSettingsScreen onBack={handleBackFromBillingSettings} onNavigateToPricing={handleNavigateToPricing} />;
+      case AppState.SUPPLIER_MANAGEMENT:
+        return <SupplierManagementScreen onBack={handleBackFromSupplierManagement} />;
+      case AppState.PRICING:
+        return <PricingScreen onBack={handleBackFromPricing} />;
+      case AppState.INVOICES:
+        return <InvoicesPage
+          onSelectInvoice={handleSelectInvoice}
+          onCreateInvoice={() => handleCreateInvoice()}
+          onEditInvoice={handleEditInvoice}
+          onCancelInvoice={handleCancelInvoice}
+          onDeleteInvoice={handleDeleteInvoice}
+          onMarkAsPaid={handleMarkInvoiceAsPaid}
+          onRestoreInvoice={handleRestoreInvoice}
+          refreshTrigger={invoiceRefreshTrigger}
+        />;
+      case AppState.INVOICE_DETAIL:
+        console.log('[App] Rendering INVOICE_DETAIL, activeInvoiceId:', activeInvoiceId);
+        return activeInvoiceId ? (
+          <InvoiceDetailPage
+            invoiceId={activeInvoiceId}
+            onBack={handleBackFromInvoice}
+            onEdit={handleEditInvoice}
+            onSelectAudit={(auditId) => {
+              setActiveAuditId(auditId);
+              handleSelectAudit(auditId);
+            }}
+            onRestoreInvoice={handleRestoreInvoice}
+          />
+        ) : (
+          <InvoicesPage
+            onSelectInvoice={handleSelectInvoice}
+            onCreateInvoice={() => handleCreateInvoice()}
+          />
+        );
+      case AppState.INVOICE_CREATE:
+      case AppState.INVOICE_EDIT:
+        return (
+          <InvoiceForm
+            key={`invoice-form-${invoiceCreateAuditId || 'new'}-${invoiceCreateCustomerId || 'none'}`}
+            invoice={appState === AppState.INVOICE_EDIT && activeInvoiceId ? undefined : null}
+            invoiceId={appState === AppState.INVOICE_EDIT ? activeInvoiceId || undefined : undefined}
+            initialAuditId={invoiceCreateAuditId}
+            initialCustomerId={invoiceCreateCustomerId}
+            operators={operators}
+            premises={premises}
+            audits={audits}
+            onSave={handleSaveInvoice}
+            onBack={handleBackFromInvoice}
+            onNavigateToSettings={() => {
+              setPreviousAppState(appState);
+              setAppState(AppState.SETTINGS);
+            }}
+            onOperatorAdded={(operator) => {
+              // Aktualizovat seznam zákazníků
+              setOperators(prev => [...prev, operator]);
+            }}
+          />
+        );
       case AppState.ADMIN:
         return (
           <div>
@@ -1649,6 +1918,7 @@ const App: React.FC = () => {
     AppState.EDIT_OPERATOR,
     AppState.ADD_PREMISE,
     AppState.EDIT_PREMISE,
+    // INVOICE_CREATE a INVOICE_EDIT mají sidebar viditelný, aby uživatel viděl menu
   ].includes(appState);
 
   return (

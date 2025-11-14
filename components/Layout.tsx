@@ -3,7 +3,7 @@ import { AppState, Tab } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateAIUsageStats } from '../services/firestore';
 import { APP_VERSION, BUILD_DATE } from '../constants';
-import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon, InProgressIcon } from './icons/index';
+import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon, InProgressIcon, ReceiptIcon } from './icons/index';
 import { MobileMenu } from './MobileMenu';
 import { TabBar } from './TabBar';
 import { getSectionTheme, SECTION_THEMES } from '../constants/designSystem';
@@ -91,6 +91,16 @@ export const Layout: React.FC<LayoutProps> = ({
       theme: SECTION_THEMES[AppState.OPERATOR_DASHBOARD],
     },
     {
+      id: AppState.INVOICES,
+      label: 'Faktury',
+      icon: ReceiptIcon,
+      active: currentView === AppState.INVOICES ||
+              currentView === AppState.INVOICE_DETAIL ||
+              currentView === AppState.INVOICE_CREATE ||
+              currentView === AppState.INVOICE_EDIT,
+      theme: SECTION_THEMES[AppState.INVOICES],
+    },
+    {
       id: AppState.SETTINGS,
       label: 'Nastavení',
       icon: SettingsIcon,
@@ -126,7 +136,7 @@ export const Layout: React.FC<LayoutProps> = ({
       />
 
       {/* Mobile/Tablet Navigation - Horizontal bar */}
-      <nav className="flex xl:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 shadow-sm">
+      <nav className="flex lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 shadow-sm">
         <div className="flex items-center justify-between w-full px-2 md:px-4 py-3 md:py-2.5 h-16 md:h-14">
           {/* Logo */}
           <div className="flex items-center gap-2 md:gap-1.5">
@@ -184,7 +194,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
       {/* Desktop Sidebar - vlastní implementace s Flowbite styling */}
       <aside className={`
-        hidden xl:flex flex-col bg-white border-r border-gray-200 transition-all duration-300
+        hidden lg:flex flex-col bg-white border-r border-gray-200 transition-all duration-300
         ${isSidebarCollapsed ? 'w-16' : 'w-64'}
         h-screen sticky top-0
       `}>
@@ -295,14 +305,14 @@ export const Layout: React.FC<LayoutProps> = ({
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header Bar - vlastní implementace s Flowbite styling */}
-        <header className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 xl:px-6 sticky top-0 z-40 print:hidden pt-16 md:pt-14 xl:pt-0">
+        <header className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-40 print:hidden pt-16 md:pt-14 lg:pt-0">
           {/* Mobile/Tablet: Empty space (top bar handles navigation) */}
-          <div className="hidden xl:block flex-1" />
+          <div className="hidden lg:block flex-1" />
 
           {/* Right side: User (desktop only - mobile/tablet mají user v top bar) */}
-          <div className="hidden xl:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             {/* User Avatar - Desktop only */}
-            <div className="hidden xl:block relative">
+            <div className="hidden lg:block relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="w-9 h-9 bg-primary text-white rounded-full flex items-center justify-center font-semibold text-sm hover:opacity-90 transition-opacity"
@@ -332,7 +342,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
         {/* TabBar - pouze když existují taby (desktop only) */}
         {tabs.length > 0 && onTabClick && onTabClose && (
-          <div className="hidden xl:block">
+          <div className="hidden lg:block">
             <TabBar
               tabs={tabs}
               activeTabId={activeTabId || null}

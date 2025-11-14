@@ -153,7 +153,7 @@ export const SmartTemplateSettingsScreen: React.FC<SmartTemplateSettingsScreenPr
     return (
       <div className="w-full max-w-7xl mx-auto">
         <PageHeader
-          section={SECTION_THEMES[AppState.SMART_TEMPLATE_SETTINGS]}
+          section={SECTION_THEMES[AppState.SETTINGS]}
           title="Smart Template šablony"
           description="Správa šablon pro Smart Template systém"
         />
@@ -168,7 +168,7 @@ export const SmartTemplateSettingsScreen: React.FC<SmartTemplateSettingsScreenPr
   return (
     <div className="w-full max-w-7xl mx-auto">
       <PageHeader
-        section={SECTION_THEMES[AppState.SMART_TEMPLATE_SETTINGS]}
+        section={SECTION_THEMES[AppState.SETTINGS]}
         title="Smart Template šablony"
         description="Správa šablon pro Smart Template systém"
       />
