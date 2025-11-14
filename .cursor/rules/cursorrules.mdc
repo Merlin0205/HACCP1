@@ -2,7 +2,10 @@
 alwaysApply: true
 description: "Instrukce pro Cursor AI - HACCP Audit Assistant"
 ---
+**📅 Poslední aktualizace: 2025-01-27**
+
 Kdyz pracujes podle techto pravidel (napr. zmeny kodu, opravy, pouzivani Flowbite/Firebase), vzdy napis na zacatek odpovedi JEDU PODLE RULES a pak pokracuj v odpovedi.
+
 # Instrukce pro Cursor AI - HACCP Audit Assistant
 
 ## 🎯 ZÁKLADNÍ PRAVIDLA
@@ -18,20 +21,23 @@ Kdyz pracujes podle techto pravidel (napr. zmeny kodu, opravy, pouzivani Flowbit
   - Přidání nové technologie → aktualizuj `.cursorrules` sekci "Technologie projektu"
   - Změna struktury projektu → aktualizuj `.cursorrules` sekci "Struktura projektu"
   - Přidání nové Firebase služby → aktualizuj `.cursorrules` sekci "Firebase pravidla"
-  - Změna UI frameworku nebo pravidel → aktualizuj `.cursorrules` a `FLOWBITE_PRIRUCKA.md`
+  - Změna UI frameworku nebo pravidel → aktualizuj `.cursorrules`
   - Přidání nového důležitého souboru → aktualizuj `.cursorrules` sekci "Důležité soubory"
 - **Nepočítej s tím, že uživatel si to aktualizuje sám - vždy to udělej automaticky!**
 - **Aktualizace dokumentace je součástí změny, ne samostatný krok**
+- **Při aktualizaci dokumentace VŽDY aktualizuj datum na začátku souboru**
 
-### Technologie projektu
-- **Frontend**: React 19.2.0 + TypeScript + Vite
-- **UI Framework**: Flowbite React (vždy používej podle dokumentace!)
-- **CSS Framework**: Tailwind CSS v3.4.18 (integrovaný s Flowbite)
-- **Backend**: Firebase (Firestore, Storage, Functions, Authentication)
-- **Build**: Vite
+### Technologie projektu (aktuální verze k 2025-01-27)
+- **Frontend**: React 19.2.0 + TypeScript 5.8.2 + Vite 6.2.0
+- **UI Framework**: Flowbite React 0.12.10 (vždy používej podle dokumentace!)
+- **CSS Framework**: Tailwind CSS 3.4.18 (integrovaný s Flowbite)
+- **Backend**: Firebase 12.5.0 (Firestore, Storage, Functions, Authentication)
+- **Build**: Vite 6.2.0
 - **State Management**: React Hooks + Context API
-- **PDF Rendering**: @react-pdf/renderer (pro Smart Template systém)
-- **Drag & Drop**: @dnd-kit/core (pro Smart Template editor)
+- **PDF Rendering**: @react-pdf/renderer 4.2.0 (pro Smart Template systém)
+- **Drag & Drop**: @dnd-kit/core 6.1.0 (pro Smart Template editor)
+- **AI**: @firebase/ai 2.5.0, @google/generative-ai 0.24.1 (Gemini API)
+- **Icons**: lucide-react 0.553.0, react-icons 5.5.0
 
 ---
 
@@ -99,9 +105,6 @@ import { Button } from 'flowbite-react';
 - **Komponenty**: https://flowbite-react.com/docs/components/button
 - **Theme**: https://flowbite-react.com/docs/customize/theme
 
-### 📝 Průvodce Flowbite najdeš v:
-- `FLOWBITE_PRIRUCKA.md` - detailní příručka pro Flowbite v projektu
-
 ---
 
 ## 🔥 FIREBASE PRAVIDLA
@@ -139,6 +142,7 @@ import { Button } from 'flowbite-react';
    - `generateReport.ts` - Legacy AI generování reportů (beze změny)
    - `generateSmartReportPdf.ts` - Smart Template PDF generování (nová)
    - `transcribeAudio.ts`, `generatePdf.ts`, `analyzeImage.ts`
+   - Node.js 20 runtime
 
 ### ✅ Co VŽDY dělat při práci s Firebase:
 
@@ -176,10 +180,6 @@ await createAudit(data); // Co když selže?
 - **Functions**: https://firebase.google.com/docs/functions
 - **Auth**: https://firebase.google.com/docs/auth
 
-### 📝 Průvodce Firebase najdeš v:
-- `NAVOD.md` - kompletní návod k nastavení a deploy
-- `README.md` - struktura projektu a Firebase migrace
-
 ---
 
 ## 📁 STRUKTURA PROJEKTU
@@ -190,13 +190,13 @@ await createAudit(data); // Co když selže?
 HACCP1/
 ├── components/          # React komponenty
 │   ├── ui/              # Flowbite wrapper komponenty (Button, Card, Input, Modal)
-│   │   ├── Pagination.tsx       # Stránkování tabulek (NOVÁ)
-│   │   ├── DetailTooltip.tsx    # Detailní tooltip komponenta (NOVÁ)
-│   │   ├── TooltipCell.tsx      # Wrapper pro td s tooltipem (NOVÁ)
-│   │   ├── ActionIconTooltip.tsx # Tooltip pro ikony akcí (NOVÁ)
+│   │   ├── Pagination.tsx       # Stránkování tabulek
+│   │   ├── DetailTooltip.tsx    # Detailní tooltip komponenta
+│   │   ├── TooltipCell.tsx      # Wrapper pro td s tooltipem
+│   │   ├── ActionIconTooltip.tsx # Tooltip pro ikony akcí
 │   │   └── ...
 │   ├── icons/           # SVG ikony
-│   ├── report/          # Smart Template komponenty (NOVÁ)
+│   ├── report/          # Smart Template komponenty
 │   │   ├── SmartTemplateView.tsx
 │   │   ├── SmartTemplateSelector.tsx
 │   │   ├── SmartReportRenderer.tsx
@@ -204,15 +204,15 @@ HACCP1/
 │   └── [screens].tsx    # Obrazovky aplikace
 │
 ├── utils/               # Utility funkce
-│   ├── idGenerator.ts   # Human-readable ID generování (NOVÁ)
-│   ├── photoIdGenerator.ts  # Human-readable photo filename generování (NOVÁ)
+│   ├── idGenerator.ts   # Human-readable ID generování
+│   ├── photoIdGenerator.ts  # Human-readable photo filename generování
 │   └── toast.ts         # Toast notifikace
 │
 ├── services/            # Business logika a API
 │   ├── firestore/       # Firestore CRUD operace
-│   │   ├── reportTemplates.ts  # Smart Template šablony (NOVÁ)
-│   │   └── reports.ts           # UPRAVENO - přidána smart pole
-│   ├── smartTemplate/   # Smart Template služby (NOVÁ)
+│   │   ├── reportTemplates.ts  # Smart Template šablony
+│   │   └── reports.ts           # Reports s smart poli
+│   ├── smartTemplate/   # Smart Template služby
 │   │   ├── SmartTemplateEngine.ts
 │   │   ├── templateLoader.ts
 │   │   └── reportDocumentService.ts
@@ -225,17 +225,17 @@ HACCP1/
 │   ├── useAppData.ts    # Načítání dat z Firestore
 │   └── useUserRole.ts
 │
-├── types.ts             # TypeScript typy (UPRAVENO - přidány Smart typy)
+├── types.ts             # TypeScript typy
 ├── types/
-│   └── smartReport.ts   # Smart Template typy (NOVÁ)
+│   └── smartReport.ts   # Smart Template typy
 ├── constants/designSystem.ts  # Design systém (SECTION_THEMES)
 │
 ├── firebaseConfig.ts    # Firebase inicializace
-├── firestore.rules      # Firestore security rules (UPRAVENO - přidány reportTemplates)
-├── storage.rules        # Storage security rules (UPRAVENO - přidány smart cesty)
+├── firestore.rules      # Firestore security rules
+├── storage.rules        # Storage security rules
 │
 └── functions/src/       # Cloud Functions
-    └── generateSmartReportPdf.ts  # Smart Template PDF (NOVÁ)
+    └── generateSmartReportPdf.ts  # Smart Template PDF
 ```
 
 ### Důležité soubory:
@@ -244,14 +244,11 @@ HACCP1/
 - **`AppWithAuth.tsx`** - wrapper s autentifikací
 - **`firebaseConfig.ts`** - Firebase SDK inicializace
 - **`components/ui/Pagination.tsx`** - reusable pagination komponenta pro tabulky
-- **`components/ui/DetailTooltip.tsx`** - reusable detailní tooltip komponenta pro zobrazení komplexních informací
-- **`components/ui/TooltipCell.tsx`** - wrapper pro `<td>` element s tooltipem (automaticky řeší overflow)
-- **`components/ui/ActionIconTooltip.tsx`** - reusable tooltip komponenta pro ikony akcí v tabulkách
+- **`components/ui/DetailTooltip.tsx`** - reusable detailní tooltip komponenta
+- **`components/ui/TooltipCell.tsx`** - wrapper pro `<td>` element s tooltipem
+- **`components/ui/ActionIconTooltip.tsx`** - reusable tooltip komponenta pro ikony akcí
 - **`vite.config.ts`** - automatické verzování z package.json při buildu
-- **`components/ReportView.tsx`** - zobrazení reportů (UPRAVENO - přidány záložky Legacy/Smart)
-- **`SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`** - detailní plán Smart Template systému
-- **`FLOWBITE_PRIRUCKA.md`** - Flowbite příručka
-- **`NAVOD.md`** - návod k nastavení a deploy
+- **`components/ReportView.tsx`** - zobrazení reportů (záložky Legacy/Smart)
 
 ---
 
@@ -260,11 +257,10 @@ HACCP1/
 ### Při změně UI komponenty:
 
 1. **Zkontroluj Flowbite dokumentaci** - https://flowbite-react.com/
-2. **Podívej se do `FLOWBITE_PRIRUCKA.md`** - máš tam příklady
-3. **Použij Flowbite komponentu** podle dokumentace
-4. **Zachovej původní barvy** přes inline styles
-5. **Otestuj v light mode** - aplikace je vždy světlá
-6. **Pro tooltips použij reusable komponenty** - `DetailTooltip`, `TooltipCell` a `ActionIconTooltip` z `components/ui/`
+2. **Použij Flowbite komponentu** podle dokumentace
+3. **Zachovej původní barvy** přes inline styles
+4. **Otestuj v light mode** - aplikace je vždy světlá
+5. **Pro tooltips použij reusable komponenty** - `DetailTooltip`, `TooltipCell` a `ActionIconTooltip` z `components/ui/`
 
 ### Při práci s Firebase:
 
@@ -293,7 +289,7 @@ HACCP1/
 ### Obecné:
 - [ ] Kód je TypeScript validní?
 - [ ] Build prochází (`npm run build`)?
-- [ ] **Aktualizoval jsem `.cursorrules` nebo jinou dokumentaci pokud byla změna zásadní?**
+- [ ] **Aktualizoval jsem `.cursorrules` a datum aktualizace pokud byla změna zásadní?**
 
 ---
 
@@ -313,21 +309,13 @@ HACCP1/
 - **Flowbite React**: https://flowbite-react.com/
 - **Firebase**: https://firebase.google.com/docs
 
-### Projektové soubory:
-- **Flowbite příručka**: `FLOWBITE_PRIRUCKA.md`
-- **Firebase návod**: `NAVOD.md`
-- **README**: `README.md`
-- **Smart Template plán**: `SMART_TEMPLATE_IMPLEMENTATION_PLAN.md`
-- **Smart Template spec**: `HACCP_Smart_Template_Report_System.md`
-
 ---
 
 ## ⚠️ POKUD NĚCO NEVÍŠ
 
 1. **Zkontroluj dokumentaci** - Flowbite nebo Firebase
-2. **Podívej se do projektových souborů** - `FLOWBITE_PRIRUCKA.md`, `NAVOD.md`
-3. **Zkontroluj podobný kód** v projektu - jak se to dělá jinde
-4. **Pokud nedokážeš vyřešit** - napiš uživateli konkrétně kde to najde nebo jak na to
+2. **Zkontroluj podobný kód** v projektu - jak se to dělá jinde
+3. **Pokud nedokážeš vyřešit** - napiš uživateli konkrétně kde to najde nebo jak na to
 
 ---
 
@@ -434,10 +422,9 @@ Každý tab má `title` atribut s detaily:
 4. **Legacy systém beze změny** - žádné úpravy `ReportView.tsx` Legacy části
 
 ### Důležité soubory Smart Template:
-- `SMART_TEMPLATE_IMPLEMENTATION_PLAN.md` - detailní plán implementace
-- `HACCP_Smart_Template_Report_System.md` - původní specifikace
 - `services/smartTemplate/SmartTemplateEngine.ts` - engine pro aplikaci pravidel
 - `components/report/SmartTemplateView.tsx` - hlavní UI komponenta
+- `types/smartReport.ts` - typy pro Smart Template
 
 ### ⚠️ Při implementaci Smart Template:
 - Vždy ověř, že Legacy systém funguje beze změny
@@ -539,6 +526,43 @@ import { ActionIconTooltip } from './ui/ActionIconTooltip';
 - Minimální šířka pro `DetailTooltip`: `250px`, maximální: `350px` (lze změnit přes props)
 - `ActionIconTooltip` se zobrazuje okamžitě, bez zpoždění (`transition-opacity` je odstraněn)
 - NIKDY nepoužívej `title` atributy na tlačítkách s ikonami - způsobují duplicitní tooltips
+
+---
+
+## 🚀 DEPLOY A NASTAVENÍ
+
+### Lokální vývoj:
+```bash
+npm run dev          # Spustit dev server (http://localhost:3000)
+npm run build        # Build pro produkci
+npm run preview      # Preview buildu
+```
+
+### Firebase deploy:
+```bash
+firebase deploy                          # Deploy vše
+firebase deploy --only hosting          # Pouze frontend
+firebase deploy --only functions        # Pouze Cloud Functions
+firebase deploy --only firestore:rules  # Pouze Firestore rules
+firebase deploy --only storage          # Pouze Storage rules
+```
+
+### Firebase Emulátory:
+```bash
+npm run emulators              # Všechny emulátory
+npm run emulators:functions    # Pouze Functions
+npm run emulators:all          # Functions, Firestore, Auth, Storage
+```
+
+### API klíče a Secrets:
+- **Frontend**: `.env` soubor s `VITE_FIREBASE_*` proměnnými
+- **Cloud Functions**: `functions/.env` s `GEMINI_API_KEY`
+- **Produkce**: Firebase Secrets (`firebase functions:secrets:set GEMINI_API_KEY`)
+- **Synchronizace**: `.\synchronizuj-klice.ps1` (Windows PowerShell)
+
+### Live aplikace:
+- **URL**: https://haccp-2776d.web.app
+- Použij pro ověření změn v produkci
 
 ---
 
