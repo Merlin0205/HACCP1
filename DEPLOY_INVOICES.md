@@ -66,3 +66,4 @@ firebase deploy
 - Pokud se indexy ještě nevytvořily, dotazy mohou být pomalejší nebo mohou vyhodit chybu
 - Security rules se aplikují okamžitě po deployi
 
+

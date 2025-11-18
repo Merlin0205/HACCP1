@@ -13,3 +13,4 @@ export const BuildingIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => 
   </svg>
 );
 
+

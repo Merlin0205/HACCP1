@@ -221,5 +221,13 @@ service cloud.firestore {
       allow update: if canUpdate();
       allow delete: if canDelete();
     }
+    
+    // Invoice Numbering Types - schválené uživatele vidí své, admini vidí všechna
+    match /invoiceNumberingTypes/{typeId} {
+      allow read: if canRead();
+      allow create: if canReadCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
   }
 }

@@ -24,6 +24,7 @@ export interface InvoiceSupplier {
   website?: string;
   logoUrl?: string; // URL loga v PDF
   stampUrl?: string; // URL razítka v PDF
+  isVatPayer?: boolean; // plátce DPH (true = je plátce, false = není plátce)
 }
 
 export interface InvoiceCustomer {

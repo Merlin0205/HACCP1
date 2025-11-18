@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Timestamp } from 'firebase/firestore';
 import { Invoice, InvoiceItem, InvoiceStatus, InvoiceSupplier, BillingSettings } from '../../types/invoice';
 import { Operator, Premise, Audit } from '../../types';
-import { findPriceItemByName, fetchAudit } from '../../services/firestore';
+import { findPriceItemByName, fetchAudit, fetchPriceItems } from '../../services/firestore';
+import { PriceItem } from '../../types/pricing';
 import { Card, CardBody, CardHeader } from '../ui/Card';
 import { TextField, TextArea, Select } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -10,6 +11,7 @@ import { BackButton } from '../BackButton';
 import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, ReceiptIcon, UserIcon, BuildingIcon, ListIcon, CalculatorIcon } from '../icons';
 import { createInvoice, updateInvoice, createOperator } from '../../services/firestore';
 import { fetchBillingSettings, generateNextInvoiceNumber } from '../../services/firestore/billingSettings';
+import { generateNextInvoiceNumber as generateNextInvoiceNumberFromType, getInvoiceNumberPreview, incrementInvoiceNumberingCounter } from '../../services/firestore/invoiceNumberingTypes';
 import { toast } from '../../utils/toast';
 import { calculateItemTotals, calculateInvoiceTotals, formatCurrency, formatAmount } from '../../utils/invoiceCalculations';
 import { SECTION_THEMES } from '../../constants/designSystem';
@@ -102,6 +104,8 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [note, setNote] = useState('');
   const [footerNote, setFooterNote] = useState('');
+  const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
+  const [priceSelectKeys, setPriceSelectKeys] = useState<Record<string, number>>({});
   
   // Collapsible sections state
   const [isSupplierExpanded, setIsSupplierExpanded] = useState(false);
@@ -113,29 +117,85 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   useEffect(() => {
     loadBillingSettings();
     loadSuppliers();
+    loadPriceItems();
   }, []);
+
+  const loadPriceItems = async () => {
+    try {
+      const items = await fetchPriceItems();
+      // Filtrovat pouze aktivní položky
+      const activeItems = items.filter(item => item.active);
+      setPriceItems(activeItems);
+    } catch (error) {
+      console.error('[InvoiceForm] Chyba při načítání ceníku:', error);
+    }
+  };
 
   // Automaticky vybrat výchozího dodavatele když se načtou dodavatelé
   useEffect(() => {
     if (suppliers.length > 0 && !invoiceId && !invoice) {
-      // Pouze pokud není editace faktury
+      // Pouze pokud není editace faktury (nová faktura nebo faktura z auditu)
       const selectDefaultSupplier = async () => {
-        const defaultSupplier = await fetchDefaultSupplier();
+        // Najít výchozího dodavatele v načtených dodavatelích
+        const defaultSupplier = suppliers.find(s => s.isDefault);
         if (defaultSupplier) {
           // Vždy použít výchozího dodavatele pokud existuje
           // Zkontrolovat jestli aktuálně vybraný dodavatel není výchozí
           const currentSupplier = suppliers.find(s => s.id === selectedSupplierId);
           if (!currentSupplier || !currentSupplier.isDefault || currentSupplier.id !== defaultSupplier.id) {
+            console.log('[InvoiceForm] Automaticky vybírám výchozího dodavatele:', defaultSupplier.id);
             setSelectedSupplierId(defaultSupplier.id);
+            
+            // Zobrazit preview čísla faktury podle výchozího dodavatele
+            try {
+              if (defaultSupplier.invoiceNumberingTypeId) {
+                const previewNumber = await getInvoiceNumberPreview(defaultSupplier.invoiceNumberingTypeId);
+                console.log('[InvoiceForm] Zobrazuji preview čísla faktury podle výchozího dodavatele:', defaultSupplier.invoiceNumberingTypeId, previewNumber);
+                setInvoiceNumber(previewNumber);
+                const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+                setVariableSymbol(numericPart || previewNumber);
+              } else if (billingSettings) {
+                const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+                const previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+                console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému');
+                setInvoiceNumber(previewNumber);
+                const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+                setVariableSymbol(numericPart || previewNumber);
+              }
+            } catch (error: any) {
+              console.error('[InvoiceForm] Error getting invoice number preview for default supplier:', error);
+            }
           }
         } else if (suppliers.length > 0 && !selectedSupplierId) {
           // Pokud není výchozí a není vybrán žádný, použít prvního
+          console.log('[InvoiceForm] Není výchozí dodavatel, používám prvního:', suppliers[0].id);
           setSelectedSupplierId(suppliers[0].id);
+          
+          // Zobrazit preview čísla faktury podle prvního dodavatele
+          try {
+            const firstSupplier = suppliers[0];
+            if (firstSupplier.invoiceNumberingTypeId) {
+              const previewNumber = await getInvoiceNumberPreview(firstSupplier.invoiceNumberingTypeId);
+              console.log('[InvoiceForm] Zobrazuji preview čísla faktury podle prvního dodavatele:', firstSupplier.invoiceNumberingTypeId, previewNumber);
+              setInvoiceNumber(previewNumber);
+              const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+              setVariableSymbol(numericPart || previewNumber);
+            } else if (billingSettings) {
+              const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+              const previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+              console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému');
+              setInvoiceNumber(previewNumber);
+              const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+              setVariableSymbol(numericPart || previewNumber);
+            }
+          } catch (error: any) {
+            console.error('[InvoiceForm] Error getting invoice number preview for first supplier:', error);
+          }
         }
       };
       selectDefaultSupplier();
     }
-  }, [suppliers, invoiceId, invoice, selectedSupplierId]);
+  }, [suppliers, invoiceId, invoice, billingSettings]);
 
   // Načíst dodavatele
   const loadSuppliers = async () => {
@@ -250,6 +310,12 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         }
       }
       setItems(invoice.items);
+      // Inicializovat priceSelectKeys pro všechny položky faktury
+      const initialKeys: Record<string, number> = {};
+      invoice.items.forEach(item => {
+        initialKeys[item.id] = 0;
+      });
+      setPriceSelectKeys(initialKeys);
       setNote(invoice.note || '');
       setFooterNote(invoice.footerNote || '');
       
@@ -348,16 +414,40 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           setTaxableSupplyDate(today.toISOString().split('T')[0]);
         }
         
-        // Vygenerovat číslo faktury a variabilní symbol
-        if (!invoiceNumber && billingSettings) {
+        // Zobrazit preview čísla faktury (bez inkrementace čítače)
+        if (!invoiceNumber && !invoiceId && !invoice) {
           try {
-            const newInvoiceNumber = await generateNextInvoiceNumber();
-            setInvoiceNumber(newInvoiceNumber);
-            // Extrahovat číselnou část pro variabilní symbol
-            const numericPart = newInvoiceNumber.replace(/^[A-Za-z]+/, '');
-            setVariableSymbol(numericPart || newInvoiceNumber);
+            let previewNumber: string | null = null;
+            
+            // Zkusit použít typ číslování z vybraného dodavatele
+            if (selectedSupplierId) {
+              const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
+              if (selectedSupplier?.invoiceNumberingTypeId) {
+                // Použít preview z typu číslování dodavatele
+                previewNumber = await getInvoiceNumberPreview(selectedSupplier.invoiceNumberingTypeId);
+                console.log('[InvoiceForm] Zobrazuji preview čísla faktury:', selectedSupplier.invoiceNumberingTypeId, previewNumber);
+              } else if (billingSettings) {
+                // Fallback na starý systém z BillingSettings
+                const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+                previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+                console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému');
+              }
+            } else if (billingSettings) {
+              // Fallback na starý systém z BillingSettings
+              const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+              previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+              console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému (žádný dodavatel)');
+            }
+            
+            if (previewNumber) {
+              setInvoiceNumber(previewNumber);
+              // Extrahovat číselnou část pro variabilní symbol
+              const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+              setVariableSymbol(numericPart || previewNumber);
+            }
           } catch (error: any) {
-            console.error('[InvoiceForm] Error generating invoice number:', error);
+            console.error('[InvoiceForm] Error getting invoice number preview:', error);
+            // Nezobrazovat chybu uživateli, jen logovat
           }
         }
         
@@ -379,7 +469,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     };
     
     initializeBasicFields();
-  }, [billingSettings, invoiceId, invoice, initialAuditId, initialCustomerId, isLoadingSettings, invoiceNumber, variableSymbol, dueDate, createdAt, taxableSupplyDate]);
+  }, [billingSettings, invoiceId, invoice, initialAuditId, initialCustomerId, isLoadingSettings, invoiceNumber, variableSymbol, dueDate, createdAt, taxableSupplyDate, selectedSupplierId, suppliers]);
 
   const loadBillingSettings = async () => {
     try {
@@ -423,24 +513,43 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         setCurrency('CZK');
         setPaymentMethod('bank_transfer');
       } else {
-        // Vygenerovat číslo faktury (pouze pokud ještě není nastaveno)
-        if (!invoiceNumber) {
+        // Zobrazit preview čísla faktury (bez inkrementace čítače)
+        if (!invoiceNumber && !invoiceId && !invoice) {
           try {
-            const newInvoiceNumber = await generateNextInvoiceNumber();
-            setInvoiceNumber(newInvoiceNumber);
-            // Extrahovat číselnou část pro variabilní symbol (odstranit písmena na začátku)
-            const numericPart = newInvoiceNumber.replace(/^[A-Za-z]+/, '');
-            setVariableSymbol(numericPart || newInvoiceNumber);
+            let previewNumber: string | null = null;
+            
+            // Zkusit použít typ číslování z vybraného dodavatele
+            if (selectedSupplierId) {
+              const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
+              if (selectedSupplier?.invoiceNumberingTypeId) {
+                // Použít preview z typu číslování dodavatele
+                previewNumber = await getInvoiceNumberPreview(selectedSupplier.invoiceNumberingTypeId);
+                console.log('[InvoiceForm] Zobrazuji preview čísla faktury:', selectedSupplier.invoiceNumberingTypeId, previewNumber);
+              } else if (billingSettings) {
+                // Fallback na starý systém z BillingSettings
+                const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+                previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+                console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému');
+              }
+            } else if (billingSettings) {
+              // Fallback na starý systém z BillingSettings
+              const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+              previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+              console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému (žádný dodavatel)');
+            }
+            
+            if (previewNumber) {
+              setInvoiceNumber(previewNumber);
+              // Extrahovat číselnou část pro variabilní symbol
+              const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+              setVariableSymbol(numericPart || previewNumber);
+            }
           } catch (error: any) {
-            console.error('[InvoiceForm] Error generating invoice number:', error);
-            // Pokud selže generování čísla, použít placeholder
-            const placeholderNumber = 'NOVÁ-' + new Date().getTime();
-            setInvoiceNumber(placeholderNumber);
-            const numericPart = placeholderNumber.replace(/^[A-Za-z]+/, '');
-            setVariableSymbol(numericPart || placeholderNumber);
+            console.error('[InvoiceForm] Error getting invoice number preview:', error);
+            // Nezobrazovat chybu uživateli, jen logovat
           }
-        } else if (!variableSymbol) {
-          // Pokud už máme číslo faktury, ale nemáme variabilní symbol, extrahovat číselnou část
+        } else if (!variableSymbol && invoiceNumber) {
+          // Pokud už máme číslo faktury (editace), ale nemáme variabilní symbol, extrahovat číselnou část
           const numericPart = invoiceNumber.replace(/^[A-Za-z]+/, '');
           setVariableSymbol(numericPart || invoiceNumber);
         }
@@ -650,8 +759,9 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   }, [premises, selectedCustomerId]);
 
   const handleAddItem = () => {
+    const newItemId = Date.now().toString();
     const newItem: Omit<InvoiceItem, 'totalWithoutVat' | 'vatAmount' | 'totalWithVat'> = {
-      id: Date.now().toString(),
+      id: newItemId,
       name: '',
       description: '',
       quantity: 1,
@@ -661,6 +771,19 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     };
     const calculatedItem = calculateItemTotals(newItem);
     setItems([...items, calculatedItem]);
+    // Inicializovat select key pro novou položku
+    setPriceSelectKeys(prev => ({
+      ...prev,
+      [newItemId]: 0
+    }));
+    // Vymazat chybu když přidáme položku
+    if (validationErrors.items) {
+      setValidationErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.items;
+        return newErrors;
+      });
+    }
   };
 
   const handleItemChange = (itemId: string, field: keyof InvoiceItem, value: any) => {
@@ -674,6 +797,32 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
 
   const handleRemoveItem = (itemId: string) => {
     setItems(items.filter(item => item.id !== itemId));
+  };
+
+  const handleSelectPriceItem = (itemId: string, priceItemId: string) => {
+    const priceItem = priceItems.find(p => p.id === priceItemId);
+    if (!priceItem) return;
+
+    // Aktualizovat položku faktury s daty z ceníku
+    setItems(items.map(item => {
+      if (item.id !== itemId) return item;
+      
+      const updatedItem: InvoiceItem = {
+        ...item,
+        name: priceItem.name,
+        description: priceItem.description || '',
+        unit: priceItem.unit,
+        unitPrice: priceItem.unitPrice,
+        vatRate: priceItem.vatRate,
+      };
+      return calculateItemTotals(updatedItem);
+    }));
+
+    // Resetovat select pro tento řádek
+    setPriceSelectKeys(prev => ({
+      ...prev,
+      [itemId]: (prev[itemId] || 0) + 1
+    }));
   };
 
   const totals = useMemo(() => {
@@ -691,10 +840,8 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     
     const errors: Record<string, string> = {};
     
-    // Validace
-    if (!invoiceNumber.trim()) {
-      errors.invoiceNumber = 'Číslo faktury je povinné';
-    }
+    // Validace - číslo faktury se vygeneruje automaticky pokud není vyplněno
+    // Pokud už je vyplněno (editace), ponecháme ho
     if (!createdAt) {
       errors.createdAt = 'Datum vystavení je povinné';
     }
@@ -717,6 +864,10 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     // Pokud jsou chyby, zobrazit je a zastavit submit
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
+      // Rozbalit sekci položek pokud je tam chyba
+      if (errors.items) {
+        setIsItemsExpanded(true);
+      }
       // Scroll na první chybu
       const firstErrorField = Object.keys(errors)[0];
       const element = document.querySelector(`[data-field="${firstErrorField}"]`);
@@ -769,6 +920,67 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         dueDate: dueDateTimestamp.toDate().toISOString(),
       });
       
+      // Vygenerovat nebo použít číslo faktury a inkrementovat čítač (pouze pro nové faktury)
+      let finalInvoiceNumber = invoiceNumber;
+      let finalVariableSymbol = variableSymbol;
+      let numberingTypeIdToIncrement: string | null = null;
+      
+      if (!invoiceId && !invoice) {
+        // Nová faktura - musíme zajistit číslo faktury a inkrementovat čítač
+        try {
+          if (finalInvoiceNumber.trim()) {
+            // Už máme preview číslo - použijeme ho a inkrementujeme čítač
+            console.log('[InvoiceForm] Používám existující preview číslo faktury:', finalInvoiceNumber);
+            
+            // Najít typ číslování pro inkrementaci
+            if (selectedSupplierId) {
+              const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
+              if (selectedSupplier?.invoiceNumberingTypeId) {
+                numberingTypeIdToIncrement = selectedSupplier.invoiceNumberingTypeId;
+              }
+            }
+            
+            // Extrahovat číselnou část pro variabilní symbol pokud není
+            if (!finalVariableSymbol) {
+              finalVariableSymbol = finalInvoiceNumber.replace(/^[A-Za-z]+/, '') || finalInvoiceNumber;
+            }
+          } else {
+            // Nemáme číslo - vygenerujeme nové a inkrementujeme čítač
+            if (selectedSupplierId) {
+              const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
+              if (selectedSupplier?.invoiceNumberingTypeId) {
+                // Použít typ číslování z dodavatele (generuje a inkrementuje)
+                finalInvoiceNumber = await generateNextInvoiceNumberFromType(selectedSupplier.invoiceNumberingTypeId);
+                console.log('[InvoiceForm] Generuji číslo faktury podle typu číslování dodavatele:', selectedSupplier.invoiceNumberingTypeId, finalInvoiceNumber);
+              } else if (billingSettings) {
+                // Fallback na starý systém z BillingSettings
+                finalInvoiceNumber = await generateNextInvoiceNumber();
+                console.log('[InvoiceForm] Generuji číslo faktury podle starého systému z BillingSettings');
+              }
+            } else if (billingSettings) {
+              // Fallback na starý systém z BillingSettings
+              finalInvoiceNumber = await generateNextInvoiceNumber();
+              console.log('[InvoiceForm] Generuji číslo faktury podle starého systému z BillingSettings (žádný dodavatel)');
+            }
+            
+            if (finalInvoiceNumber) {
+              // Extrahovat číselnou část pro variabilní symbol
+              finalVariableSymbol = finalInvoiceNumber.replace(/^[A-Za-z]+/, '') || finalInvoiceNumber;
+            } else {
+              throw new Error('Nepodařilo se vygenerovat číslo faktury');
+            }
+          }
+        } catch (error: any) {
+          console.error('[InvoiceForm] Error generating invoice number on save:', error);
+          toast.error('Chyba při generování čísla faktury: ' + error.message);
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (!finalVariableSymbol && finalInvoiceNumber) {
+        // Pokud už máme číslo faktury (editace), ale nemáme variabilní symbol, extrahovat číselnou část
+        finalVariableSymbol = finalInvoiceNumber.replace(/^[A-Za-z]+/, '') || finalInvoiceNumber;
+      }
+      
       // Načíst data dodavatele
       let supplierData: InvoiceSupplier;
       if (selectedSupplierId) {
@@ -796,6 +1008,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           website: selectedSupplier.supplier_website,
           logoUrl: selectedSupplier.supplier_logoUrl,
           stampUrl: selectedSupplier.supplier_stampUrl,
+          isVatPayer: selectedSupplier.isVatPayer,
         };
       } else if (billingSettings) {
         // Fallback na billingSettings pokud není vybrán dodavatel
@@ -817,6 +1030,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           website: billingSettings.supplier.website,
           logoUrl: billingSettings.supplier.logoUrl,
           stampUrl: billingSettings.supplier.stampUrl,
+          isVatPayer: billingSettings.supplier.isVatPayer,
         };
       } else {
         toast.error('Vyberte dodavatele nebo nastavte fakturační nastavení');
@@ -828,8 +1042,8 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         userId: '', // Will be set by service
         customerId: selectedCustomerId || 'manual',
         auditId: initialAuditId || invoice?.auditId,
-        invoiceNumber,
-        variableSymbol: variableSymbol || invoiceNumber,
+        invoiceNumber: finalInvoiceNumber,
+        variableSymbol: finalVariableSymbol || finalInvoiceNumber,
         constantSymbol: constantSymbol || '308',
         createdAt: createdAtTimestamp,
         taxableSupplyDate: taxableSupplyDateTimestamp,
@@ -864,8 +1078,19 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         await updateInvoice(invoice.id, invoiceData);
         finalInvoiceId = invoice.id;
       } else {
-        // Create mode
+        // Create mode - vytvořit fakturu
         finalInvoiceId = await createInvoice(invoiceData);
+        
+        // Po úspěšném vytvoření faktury inkrementovat čítač (pokud máme typ číslování)
+        if (numberingTypeIdToIncrement) {
+          try {
+            await incrementInvoiceNumberingCounter(numberingTypeIdToIncrement);
+            console.log('[InvoiceForm] Čítač typu číslování byl inkrementován:', numberingTypeIdToIncrement);
+          } catch (error: any) {
+            console.error('[InvoiceForm] Error incrementing invoice numbering counter:', error);
+            // Nezobrazovat chybu uživateli - faktura už je uložena, jen logovat
+          }
+        }
       }
 
       toast.success((invoiceId || invoice) ? 'Faktura byla aktualizována' : 'Faktura byla vytvořena');
@@ -979,8 +1204,34 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     }
   };
 
-  const handleSupplierChange = (supplierId: string) => {
+  const handleSupplierChange = async (supplierId: string) => {
     setSelectedSupplierId(supplierId);
+    
+    // Aktualizovat preview čísla faktury podle nového dodavatele (pouze pro nové faktury)
+    if (!invoiceId && !invoice && supplierId) {
+      try {
+        const selectedSupplier = suppliers.find(sup => sup.id === supplierId);
+        if (selectedSupplier?.invoiceNumberingTypeId) {
+          // Zobrazit preview z typu číslování nového dodavatele
+          const previewNumber = await getInvoiceNumberPreview(selectedSupplier.invoiceNumberingTypeId);
+          console.log('[InvoiceForm] Aktualizuji preview čísla faktury podle nového dodavatele:', selectedSupplier.invoiceNumberingTypeId, previewNumber);
+          setInvoiceNumber(previewNumber);
+          const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+          setVariableSymbol(numericPart || previewNumber);
+        } else if (billingSettings) {
+          // Fallback na starý systém z BillingSettings
+          const { prefix, nextNumber, padding } = billingSettings.invoiceNumbering;
+          const previewNumber = prefix + String(nextNumber).padStart(padding, '0');
+          console.log('[InvoiceForm] Aktualizuji preview čísla faktury ze starého systému');
+          setInvoiceNumber(previewNumber);
+          const numericPart = previewNumber.replace(/^[A-Za-z]+/, '');
+          setVariableSymbol(numericPart || previewNumber);
+        }
+      } catch (error: any) {
+        console.error('[InvoiceForm] Error updating invoice number preview on supplier change:', error);
+        // Nezobrazovat chybu uživateli, jen logovat
+      }
+    }
   };
 
   return (
@@ -1413,8 +1664,12 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       </Card>
 
       {/* Items */}
-      <Card className="mb-6 border-l-4" style={{ borderLeftColor: sectionTheme.colors.accent || '#3b82f6' }}>
-        <CardHeader className="bg-gradient-to-r" style={{ 
+      <Card 
+        className={`mb-6 border-l-4 ${validationErrors.items ? 'border-red-500 border-2' : ''}`} 
+        style={{ borderLeftColor: validationErrors.items ? '#ef4444' : (sectionTheme.colors.accent || '#3b82f6') }}
+        data-field="items"
+      >
+        <CardHeader className={`bg-gradient-to-r ${validationErrors.items ? 'bg-red-50' : ''}`} style={validationErrors.items ? {} : { 
           background: `linear-gradient(to right, ${sectionTheme.colors.accent || '#3b82f6'}15, ${sectionTheme.colors.accent || '#3b82f6'}05)` 
         }}>
           <div className="flex justify-between items-center">
@@ -1423,8 +1678,11 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
               onClick={() => setIsItemsExpanded(!isItemsExpanded)}
               className="flex items-center gap-3"
             >
-              <ListIcon className="h-6 w-6" style={{ color: sectionTheme.colors.accent || '#3b82f6' }} />
-              <h2 className="text-lg font-semibold text-gray-900">Položky</h2>
+              <ListIcon className="h-6 w-6" style={{ color: validationErrors.items ? '#ef4444' : (sectionTheme.colors.accent || '#3b82f6') }} />
+              <h2 className={`text-lg font-semibold ${validationErrors.items ? 'text-red-700' : 'text-gray-900'}`}>Položky</h2>
+              {validationErrors.items && (
+                <span className="text-red-600 text-sm font-medium">({validationErrors.items})</span>
+              )}
             </button>
             <div className="flex items-center gap-2">
               <Button variant="primary" size="sm" onClick={handleAddItem} leftIcon={<PlusIcon className="h-4 w-4" />}>
@@ -1444,6 +1702,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Z ceníku</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Název</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Popis</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Množství</th>
@@ -1457,13 +1716,68 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
               <tbody className="divide-y divide-gray-200">
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
-                      Žádné položky. Klikněte na "Přidat položku" pro přidání.
+                    <td colSpan={9} className="px-6 py-8 text-center">
+                      <div className="space-y-2">
+                        <p className={`text-sm ${validationErrors.items ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                          {validationErrors.items ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                              </svg>
+                              {validationErrors.items}
+                            </span>
+                          ) : (
+                            'Žádné položky. Klikněte na "Přidat položku" pro přidání.'
+                          )}
+                        </p>
+                        {validationErrors.items && (
+                          <Button 
+                            variant="primary" 
+                            size="sm" 
+                            onClick={() => {
+                              handleAddItem();
+                              setIsItemsExpanded(true);
+                              // Vymazat chybu když přidáme položku
+                              setValidationErrors(prev => {
+                                const newErrors = { ...prev };
+                                delete newErrors.items;
+                                return newErrors;
+                              });
+                            }}
+                            leftIcon={<PlusIcon className="h-4 w-4" />}
+                          >
+                            Přidat první položku
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => (
                     <tr key={item.id}>
+                      <td className="px-6 py-4">
+                        {priceItems.length > 0 ? (
+                          <select
+                            key={`price-select-${item.id}-${priceSelectKeys[item.id] || 0}`}
+                            defaultValue=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleSelectPriceItem(item.id, e.target.value);
+                              }
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-500"
+                          >
+                            <option value="">Vybrat z ceníku...</option>
+                            {priceItems.map((priceItem) => (
+                              <option key={priceItem.id} value={priceItem.id}>
+                                {priceItem.name} ({formatCurrency(priceItem.unitPrice)})
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-gray-400">Žádný ceník</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <input
                           type="text"
@@ -1689,7 +2003,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         isOpen={showAddSupplierModal}
         onClose={() => setShowAddSupplierModal(false)}
         title="Nový dodavatel"
-        size="3xl"
+        size="4xl"
         closeOnBackdropClick={false}
       >
         <SupplierForm 

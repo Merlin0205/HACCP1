@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Supplier } from '../types';
-import { Card, CardBody } from './ui/Card';
-import { TextField } from './ui/Input';
+import { Supplier, InvoiceNumberingType } from '../types';
+import { Card, CardBody, CardHeader } from './ui/Card';
+import { TextField, Select } from './ui/Input';
 import { Button } from './ui/Button';
 import { Modal } from './ui/Modal';
 import { BackIcon, RefreshIcon, CheckmarkIcon, WarningIcon } from './icons';
@@ -12,6 +12,7 @@ import { checkVat } from '../services/viesService';
 import { toast } from '../utils/toast';
 import { uploadSupplierLogo, uploadSupplierStamp } from '../services/storage';
 import { fileToBase64 } from '../services/storage';
+import { fetchInvoiceNumberingTypes } from '../services/firestore/invoiceNumberingTypes';
 
 type SupplierData = Omit<Supplier, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
 
@@ -152,7 +153,8 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
     supplier_swift: '',
     supplier_logoUrl: '',
     supplier_stampUrl: '',
-    isDefault: false
+    isDefault: false,
+    isVatPayer: true // výchozí hodnota: je plátce DPH
   };
 
   const [supplierData, setSupplierData] = useState<SupplierData>(defaultSupplierData);
@@ -165,6 +167,11 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
   const [stampPreview, setStampPreview] = useState<string | null>(null);
   const [isUploadingStamp, setIsUploadingStamp] = useState(false);
   const [stampFile, setStampFile] = useState<File | null>(null);
+  const [invoiceNumberingTypes, setInvoiceNumberingTypes] = useState<InvoiceNumberingType[]>([]);
+
+  useEffect(() => {
+    loadInvoiceNumberingTypes();
+  }, []);
 
   useEffect(() => {
     if (initialData) {
@@ -198,6 +205,16 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
       setStampPreview(null);
     }
   }, [initialData]);
+
+  const loadInvoiceNumberingTypes = async () => {
+    try {
+      const types = await fetchInvoiceNumberingTypes();
+      setInvoiceNumberingTypes(types);
+    } catch (error: any) {
+      console.error('[SupplierForm] Error loading invoice numbering types:', error);
+      // Nezobrazovat chybu uživateli, jen logovat
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -431,265 +448,382 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
 
   return (
     <div className="w-full">
-      {/* Description */}
-      <p className="text-gray-600 mb-6">Vyplňte údaje o dodavateli</p>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Sekce: Základní údaje */}
+        <Card className="border-l-4" style={{ borderLeftColor: '#14b8a6' }}>
+          <CardHeader className="bg-gradient-to-r" style={{ 
+            background: 'linear-gradient(to right, #14b8a615, #14b8a605)' 
+          }}>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#14b8a6' }}></div>
+              Základní údaje
+            </h3>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TextField
+                label="Název, obchodní firma"
+                name="supplier_name"
+                value={supplierData.supplier_name || ''}
+                onChange={handleChange}
+                required
+              />
+              <div className="w-full">
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <TextField
+                      label="IČO"
+                      name="supplier_ico"
+                      value={supplierData.supplier_ico || ''}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                  <div style={{ marginTop: '28px' }}>
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      onClick={handleFetchFromAres}
+                      disabled={!isIcoValid || isLoadingAres}
+                      isLoading={isLoadingAres}
+                      className="px-3"
+                      style={{ backgroundColor: '#6366f1', borderColor: '#6366f1' }}
+                      title={isIcoValid ? 'Načíst údaje z ARES' : 'Zadejte platné IČO (8 číslic)'}
+                    >
+                      {!isLoadingAres && <RefreshIcon className="h-4 w-4 text-white" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="w-full">
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <TextField
+                      label="DIČ"
+                      name="supplier_dic"
+                      value={supplierData.supplier_dic || ''}
+                      onChange={handleChange}
+                    />
+                  </div>
+                  {/* Ikona výsledku ověření hned vedle pole */}
+                  {supplierData.vatVerification && !isCheckingVat && (
+                    <div className="flex items-center px-1" style={{ marginTop: '28px' }}>
+                      <VatVerificationIcon 
+                        verification={supplierData.vatVerification}
+                        dic={supplierData.supplier_dic || ''}
+                        formatDate={formatVerificationDate}
+                      />
+                    </div>
+                  )}
+                  <div style={{ marginTop: '28px' }}>
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      onClick={handleCheckVat}
+                      disabled={!isDicValid || isCheckingVat}
+                      isLoading={isCheckingVat}
+                      className="px-3"
+                      style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                      title={isDicValid ? 'Ověřit DIČ přes VIES' : 'Zadejte DIČ pro ověření'}
+                    >
+                      {!isCheckingVat && <RefreshIcon className="h-4 w-4 text-white" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <TextField
+                label="Statutární orgán"
+                name="supplier_statutory_body"
+                value={supplierData.supplier_statutory_body || ''}
+                onChange={handleChange}
+              />
+              {/* Toggle switch pro Plátce DPH */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex flex-col">
+                  <label htmlFor="isVatPayer" className="text-sm font-semibold text-gray-900 cursor-pointer">
+                    Plátce DPH
+                  </label>
+                  <span className="text-xs text-gray-500 mt-0.5">Označte pokud je dodavatel plátce DPH</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="isVatPayer"
+                    checked={supplierData.isVatPayer !== false}
+                    onChange={(e) => setSupplierData(prev => ({ ...prev, isVatPayer: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
+                </label>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
 
-      {/* Form */}
-      <Card>
-        <CardBody>
-          <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Sekce: Adresa */}
+        <Card className="border-l-4" style={{ borderLeftColor: '#3b82f6' }}>
+          <CardHeader className="bg-gradient-to-r" style={{ 
+            background: 'linear-gradient(to right, #3b82f615, #3b82f605)' 
+          }}>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#3b82f6' }}></div>
+              Adresa
+            </h3>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TextField
+                label="Ulice"
+                name="supplier_street"
+                value={supplierData.supplier_street || ''}
+                onChange={handleChange}
+                required
+              />
+              <TextField
+                label="Město"
+                name="supplier_city"
+                value={supplierData.supplier_city || ''}
+                onChange={handleChange}
+                required
+              />
+              <TextField
+                label="PSČ"
+                name="supplier_zip"
+                value={supplierData.supplier_zip || ''}
+                onChange={handleChange}
+                required
+              />
+              <TextField
+                label="Stát"
+                name="supplier_country"
+                value={supplierData.supplier_country || 'Česká republika'}
+                onChange={handleChange}
+                required
+              />
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Sekce: Kontakt */}
+        <Card className="border-l-4" style={{ borderLeftColor: '#8b5cf6' }}>
+          <CardHeader className="bg-gradient-to-r" style={{ 
+            background: 'linear-gradient(to right, #8b5cf615, #8b5cf605)' 
+          }}>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8b5cf6' }}></div>
+              Kontakt
+            </h3>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TextField
+                label="Telefon"
+                name="supplier_phone"
+                type="tel"
+                value={supplierData.supplier_phone || ''}
+                onChange={handleChange}
+              />
+              <TextField
+                label="E-mail"
+                name="supplier_email"
+                type="email"
+                value={supplierData.supplier_email || ''}
+                onChange={handleChange}
+              />
+              <TextField
+                label="Web"
+                name="supplier_website"
+                type="url"
+                value={supplierData.supplier_website || ''}
+                onChange={handleChange}
+              />
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Sekce: Bankovní údaje */}
+        <Card className="border-l-4" style={{ borderLeftColor: '#10b981' }}>
+          <CardHeader className="bg-gradient-to-r" style={{ 
+            background: 'linear-gradient(to right, #10b98115, #10b98105)' 
+          }}>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10b981' }}></div>
+              Bankovní údaje
+            </h3>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TextField
+                label="Číslo účtu"
+                name="supplier_accountNumber"
+                value={supplierData.supplier_accountNumber || ''}
+                onChange={handleChange}
+                placeholder="např. 1358989898"
+              />
+              <TextField
+                label="Kód banky"
+                name="supplier_bankCode"
+                value={supplierData.supplier_bankCode || ''}
+                onChange={handleChange}
+                placeholder="např. 0300"
+              />
+              <TextField
+                label="IBAN"
+                name="supplier_iban"
+                value={supplierData.supplier_iban || ''}
+                onChange={handleChange}
+              />
+              <TextField
+                label="SWIFT"
+                name="supplier_swift"
+                value={supplierData.supplier_swift || ''}
+                onChange={handleChange}
+              />
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Sekce: Dokumenty */}
+        <Card className="border-l-4" style={{ borderLeftColor: '#f59e0b' }}>
+          <CardHeader className="bg-gradient-to-r" style={{ 
+            background: 'linear-gradient(to right, #f59e0b15, #f59e0b05)' 
+          }}>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#f59e0b' }}></div>
+              Dokumenty
+            </h3>
+          </CardHeader>
+          <CardBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Logo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Logo dodavatele <span className="text-xs text-gray-500 font-normal">(Storage)</span>
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    disabled={isUploadingLogo}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 disabled:opacity-50"
+                  />
+                  {isUploadingLogo && (
+                    <p className="text-xs text-gray-500">Nahrávám logo...</p>
+                  )}
+                  {logoPreview && (
+                    <div className="w-full border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+                      <img
+                        src={logoPreview}
+                        alt="Logo preview"
+                        className="w-full h-auto max-h-32 object-contain"
+                      />
+                    </div>
+                  )}
+                  {supplierData.supplier_logoUrl && !logoPreview && (
+                    <p className="text-xs text-gray-500">Logo: {supplierData.supplier_logoUrl.substring(0, 40)}...</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Razítko */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Razítko <span className="text-xs text-gray-500 font-normal">(Storage)</span>
+                </label>
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleStampUpload}
+                    disabled={isUploadingStamp}
+                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 disabled:opacity-50"
+                  />
+                  {isUploadingStamp && (
+                    <p className="text-xs text-gray-500">Nahrávám razítko...</p>
+                  )}
+                  {stampPreview && (
+                    <div className="w-full border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+                      <img
+                        src={stampPreview}
+                        alt="Razítko preview"
+                        className="w-full h-auto max-h-32 object-contain"
+                      />
+                    </div>
+                  )}
+                  {supplierData.supplier_stampUrl && !stampPreview && (
+                    <p className="text-xs text-gray-500">Razítko: {supplierData.supplier_stampUrl.substring(0, 40)}...</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Sekce: Nastavení */}
+        <Card className="border-l-4" style={{ borderLeftColor: '#ec4899' }}>
+          <CardHeader className="bg-gradient-to-r" style={{ 
+            background: 'linear-gradient(to right, #ec489915, #ec489905)' 
+          }}>
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ec4899' }}></div>
+              Nastavení
+            </h3>
+          </CardHeader>
+          <CardBody>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Dodavatel</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <TextField
-                  label="Název, obchodní firma"
-                  name="supplier_name"
-                  value={supplierData.supplier_name || ''}
-                  onChange={handleChange}
-                  required
-                />
-                <div className="w-full">
-                  <div className="flex gap-2 items-center">
-                    <div className="flex-1">
-                      <TextField
-                        label="IČO"
-                        name="supplier_ico"
-                        value={supplierData.supplier_ico || ''}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-                    <div style={{ marginTop: '28px' }}>
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        onClick={handleFetchFromAres}
-                        disabled={!isIcoValid || isLoadingAres}
-                        isLoading={isLoadingAres}
-                        className="px-3"
-                        style={{ backgroundColor: '#6366f1', borderColor: '#6366f1' }}
-                        title={isIcoValid ? 'Načíst údaje z ARES' : 'Zadejte platné IČO (8 číslic)'}
-                      >
-                        {!isLoadingAres && <RefreshIcon className="h-4 w-4 text-white" />}
-                      </Button>
-                    </div>
-                  </div>
+              <Select
+                label="Typ číslování faktur"
+                name="invoiceNumberingTypeId"
+                value={supplierData.invoiceNumberingTypeId || ''}
+                onChange={(e) => setSupplierData(prev => ({ ...prev, invoiceNumberingTypeId: e.target.value || undefined }))}
+                options={[
+                  { value: '', label: '-- Vyberte typ číslování --' },
+                  ...invoiceNumberingTypes.map(type => ({
+                    value: type.id,
+                    label: `${type.name} (${type.prefix}${String(type.nextNumber).padStart(type.padding, '0')})`
+                  }))
+                ]}
+              />
+              {/* Toggle switch pro Výchozí dodavatel */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex flex-col">
+                  <label htmlFor="isDefault" className="text-sm font-semibold text-gray-900 cursor-pointer">
+                    Nastavit jako výchozího dodavatele
+                  </label>
+                  <span className="text-xs text-gray-500 mt-0.5">Tento dodavatel bude automaticky vybrán při vytváření nové faktury</span>
                 </div>
-                <TextField
-                  label="Ulice"
-                  name="supplier_street"
-                  value={supplierData.supplier_street || ''}
-                  onChange={handleChange}
-                  required
-                />
-                <TextField
-                  label="Město"
-                  name="supplier_city"
-                  value={supplierData.supplier_city || ''}
-                  onChange={handleChange}
-                  required
-                />
-                <TextField
-                  label="PSČ"
-                  name="supplier_zip"
-                  value={supplierData.supplier_zip || ''}
-                  onChange={handleChange}
-                  required
-                />
-                <TextField
-                  label="Stát"
-                  name="supplier_country"
-                  value={supplierData.supplier_country || 'Česká republika'}
-                  onChange={handleChange}
-                  required
-                />
-                <div className="w-full">
-                  <div className="flex gap-2 items-center">
-                    <div className="flex-1">
-                      <TextField
-                        label="DIČ"
-                        name="supplier_dic"
-                        value={supplierData.supplier_dic || ''}
-                        onChange={handleChange}
-                      />
-                    </div>
-                    {/* Ikona výsledku ověření hned vedle pole */}
-                    {supplierData.vatVerification && !isCheckingVat && (
-                      <div className="flex items-center px-1" style={{ marginTop: '28px' }}>
-                        <VatVerificationIcon 
-                          verification={supplierData.vatVerification}
-                          dic={supplierData.supplier_dic || ''}
-                          formatDate={formatVerificationDate}
-                        />
-                      </div>
-                    )}
-                    <div style={{ marginTop: '28px' }}>
-                      <Button
-                        variant="secondary"
-                        size="md"
-                        onClick={handleCheckVat}
-                        disabled={!isDicValid || isCheckingVat}
-                        isLoading={isCheckingVat}
-                        className="px-3"
-                        style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
-                        title={isDicValid ? 'Ověřit DIČ přes VIES' : 'Zadejte DIČ pro ověření'}
-                      >
-                        {!isCheckingVat && <RefreshIcon className="h-4 w-4 text-white" />}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                <TextField
-                  label="Statutární orgán"
-                  name="supplier_statutory_body"
-                  value={supplierData.supplier_statutory_body || ''}
-                  onChange={handleChange}
-                />
-                <TextField
-                  label="Telefon"
-                  name="supplier_phone"
-                  type="tel"
-                  value={supplierData.supplier_phone || ''}
-                  onChange={handleChange}
-                />
-                <TextField
-                  label="E-mail"
-                  name="supplier_email"
-                  type="email"
-                  value={supplierData.supplier_email || ''}
-                  onChange={handleChange}
-                />
-                <TextField
-                  label="Web"
-                  name="supplier_website"
-                  type="url"
-                  value={supplierData.supplier_website || ''}
-                  onChange={handleChange}
-                />
-                <TextField
-                  label="Číslo účtu"
-                  name="supplier_accountNumber"
-                  value={supplierData.supplier_accountNumber || ''}
-                  onChange={handleChange}
-                  placeholder="např. 1358989898"
-                />
-                <TextField
-                  label="Kód banky"
-                  name="supplier_bankCode"
-                  value={supplierData.supplier_bankCode || ''}
-                  onChange={handleChange}
-                  placeholder="např. 0300"
-                />
-                <TextField
-                  label="IBAN"
-                  name="supplier_iban"
-                  value={supplierData.supplier_iban || ''}
-                  onChange={handleChange}
-                />
-                <TextField
-                  label="SWIFT"
-                  name="supplier_swift"
-                  value={supplierData.supplier_swift || ''}
-                  onChange={handleChange}
-                />
-                {/* Logo a Razítko - vedle sebe */}
-                <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Logo */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Logo dodavatele <span className="text-xs text-gray-500 font-normal">(Storage)</span>
-                    </label>
-                    <div className="space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleLogoUpload}
-                        disabled={isUploadingLogo}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 disabled:opacity-50"
-                      />
-                      {isUploadingLogo && (
-                        <p className="text-xs text-gray-500">Nahrávám logo...</p>
-                      )}
-                      {logoPreview && (
-                        <div className="w-full border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
-                          <img
-                            src={logoPreview}
-                            alt="Logo preview"
-                            className="w-full h-auto max-h-32 object-contain"
-                          />
-                        </div>
-                      )}
-                      {supplierData.supplier_logoUrl && !logoPreview && (
-                        <p className="text-xs text-gray-500">Logo: {supplierData.supplier_logoUrl.substring(0, 40)}...</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Razítko */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Razítko <span className="text-xs text-gray-500 font-normal">(Storage)</span>
-                    </label>
-                    <div className="space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleStampUpload}
-                        disabled={isUploadingStamp}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 disabled:opacity-50"
-                      />
-                      {isUploadingStamp && (
-                        <p className="text-xs text-gray-500">Nahrávám razítko...</p>
-                      )}
-                      {stampPreview && (
-                        <div className="w-full border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
-                          <img
-                            src={stampPreview}
-                            alt="Razítko preview"
-                            className="w-full h-auto max-h-32 object-contain"
-                          />
-                        </div>
-                      )}
-                      {supplierData.supplier_stampUrl && !stampPreview && (
-                        <p className="text-xs text-gray-500">Razítko: {supplierData.supplier_stampUrl.substring(0, 40)}...</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
+                <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
                     id="isDefault"
                     name="isDefault"
                     checked={supplierData.isDefault || false}
                     onChange={handleChange}
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                    className="sr-only peer"
                   />
-                  <label htmlFor="isDefault" className="text-sm text-gray-700">
-                    Nastavit jako výchozího dodavatele
-                  </label>
-                </div>
+                  <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
+                </label>
               </div>
             </div>
+          </CardBody>
+        </Card>
 
-            {/* Footer Actions */}
-            <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-              <Button variant="ghost" onClick={onBack} disabled={isSubmitting}>
-                Zrušit
-              </Button>
-              <Button
-                variant="primary"
-                type="submit"
-                isLoading={isSubmitting}
-                disabled={isSubmitting}
-              >
-                Uložit
-              </Button>
-            </div>
-          </form>
-        </CardBody>
-      </Card>
-
+        {/* Footer Actions */}
+        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+          <Button variant="ghost" onClick={onBack} disabled={isSubmitting}>
+            Zrušit
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            isLoading={isSubmitting}
+            disabled={isSubmitting}
+          >
+            Uložit
+          </Button>
+        </div>
+      </form>
     </div>
   );
 };

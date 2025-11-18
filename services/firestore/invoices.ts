@@ -350,12 +350,15 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, invoiceId);
   
   try {
-    // Nejdřív zkontrolovat, jestli dokument existuje
+    // Nejdřív zkontrolovat, jestli dokument existuje a získat data faktury
     const docSnapBefore = await getDoc(docRef);
     if (!docSnapBefore.exists()) {
       return; // Už neexistuje, považujeme za úspěch
     }
     
+    const invoice = docToInvoice(docSnapBefore);
+    
+    // Smazat fakturu
     await deleteDoc(docRef);
     
     // Ověřit, že se skutečně smazal
@@ -363,6 +366,14 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
     const docSnapAfter = await getDoc(docRef);
     if (docSnapAfter.exists()) {
       throw new Error('Fakturu se nepodařilo smazat z Firestore');
+    }
+    
+    // Zkontrolovat, jestli je potřeba snížit counter v číslování faktur
+    try {
+      await checkAndDecrementInvoiceCounter(invoice);
+    } catch (error) {
+      // Logovat chybu, ale nepřerušit mazání faktury
+      console.error('[deleteInvoice] Chyba při kontrole counteru číslování:', error);
     }
   } catch (error: any) {
     // Pokud dokument neexistuje, ignorovat chybu (může být už smazán)
@@ -376,6 +387,92 @@ export async function deleteInvoice(invoiceId: string): Promise<void> {
     }
     console.error('[deleteInvoice] Chyba při mazání:', error);
     throw error;
+  }
+}
+
+/**
+ * Pomocná funkce: Zkontroluje, jestli je smazaná faktura poslední v řadě a pokud ano, sníží counter
+ */
+async function checkAndDecrementInvoiceCounter(invoice: Invoice): Promise<void> {
+  // Najít dodavatele podle IČO z faktury
+  const { fetchSuppliers } = await import('./suppliers');
+  const suppliers = await fetchSuppliers();
+  const supplier = suppliers.find(s => s.supplier_ico === invoice.supplier.companyId);
+  
+  if (!supplier || !supplier.invoiceNumberingTypeId) {
+    // Faktura nemá přiřazený typ číslování, není co dělat
+    return;
+  }
+  
+  const numberingTypeId = supplier.invoiceNumberingTypeId;
+  
+  // Načíst typ číslování
+  const { fetchInvoiceNumberingType } = await import('./invoiceNumberingTypes');
+  const numberingType = await fetchInvoiceNumberingType(numberingTypeId);
+  
+  if (!numberingType) {
+    return;
+  }
+  
+  // Najít všechny faktury s tímto prefixem (stejný typ číslování)
+  const userId = getCurrentUserId();
+  const isAdmin = await isCurrentUserAdmin();
+  
+  let invoicesQuery;
+  if (isAdmin) {
+    invoicesQuery = query(
+      collection(db, COLLECTION_NAME),
+      where('invoiceNumber', '>=', numberingType.prefix),
+      where('invoiceNumber', '<', numberingType.prefix + '\uf8ff'), // Unicode trick pro prefix search
+      orderBy('invoiceNumber', 'desc')
+    );
+  } else {
+    invoicesQuery = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId),
+      where('invoiceNumber', '>=', numberingType.prefix),
+      where('invoiceNumber', '<', numberingType.prefix + '\uf8ff'),
+      orderBy('invoiceNumber', 'desc')
+    );
+  }
+  
+  const invoicesSnapshot = await getDocs(invoicesQuery);
+  const invoices = invoicesSnapshot.docs.map(docToInvoice);
+  
+  // Filtrovat faktury, které skutečně patří k tomuto typu číslování (stejný prefix)
+  const matchingInvoices = invoices.filter(inv => 
+    inv.invoiceNumber.startsWith(numberingType.prefix)
+  );
+  
+  if (matchingInvoices.length === 0) {
+    // Nejsou žádné další faktury s tímto prefixem, můžeme snížit counter
+    const { decrementInvoiceNumberingCounter } = await import('./invoiceNumberingTypes');
+    await decrementInvoiceNumberingCounter(numberingTypeId);
+    console.log('[deleteInvoice] Snížen counter číslování faktur:', numberingTypeId);
+    return;
+  }
+  
+  // Najít nejvyšší číslo faktury
+  const invoiceNumbers = matchingInvoices.map(inv => {
+    // Odstranit prefix a získat číselnou část
+    const numberPart = inv.invoiceNumber.replace(numberingType.prefix, '');
+    const number = parseInt(numberPart, 10);
+    return { invoice: inv, number };
+  });
+  
+  const maxInvoice = invoiceNumbers.reduce((max, current) => 
+    current.number > max.number ? current : max
+  , invoiceNumbers[0]);
+  
+  // Zjistit číslo smazané faktury
+  const deletedInvoiceNumberPart = invoice.invoiceNumber.replace(numberingType.prefix, '');
+  const deletedInvoiceNumber = parseInt(deletedInvoiceNumberPart, 10);
+  
+  // Pokud je smazaná faktura poslední (má nejvyšší číslo), snížit counter
+  if (deletedInvoiceNumber >= maxInvoice.number) {
+    const { decrementInvoiceNumberingCounter } = await import('./invoiceNumberingTypes');
+    await decrementInvoiceNumberingCounter(numberingTypeId);
+    console.log('[deleteInvoice] Snížen counter číslování faktur (byla smazána poslední faktura):', numberingTypeId);
   }
 }
 

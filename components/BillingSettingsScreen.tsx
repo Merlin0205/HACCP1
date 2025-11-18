@@ -15,11 +15,18 @@ import { BillingSettings } from '../types/invoice';
 import { toast } from '../utils/toast';
 import { fetchPriceItems } from '../services/firestore';
 import { PriceItem } from '../types/pricing';
-import { Supplier } from '../types';
+import { Supplier, InvoiceNumberingType } from '../types';
 import { fetchSuppliers, setDefaultSupplier } from '../services/firestore/suppliers';
+import { 
+  fetchInvoiceNumberingTypes, 
+  createInvoiceNumberingType, 
+  updateInvoiceNumberingType, 
+  deleteInvoiceNumberingType 
+} from '../services/firestore/invoiceNumberingTypes';
 import { Modal } from './ui/Modal';
 import { SupplierForm } from './SupplierForm';
-import { PlusIcon } from './icons';
+import { InvoiceNumberingTypeForm } from './InvoiceNumberingTypeForm';
+import { PlusIcon, EditIcon, TrashIcon } from './icons';
 import { DetailTooltip } from './ui/DetailTooltip';
 import { TooltipCell } from './ui/TooltipCell';
 import { ActionIconTooltip } from './ui/ActionIconTooltip';
@@ -36,17 +43,18 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   // Suppliers management
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   
-  // Invoice numbering
-  const [invoicePrefix, setInvoicePrefix] = useState('');
-  const [invoiceNextNumber, setInvoiceNextNumber] = useState(1);
-  const [invoicePadding, setInvoicePadding] = useState(5);
+  // Invoice numbering types management
+  const [invoiceNumberingTypes, setInvoiceNumberingTypes] = useState<InvoiceNumberingType[]>([]);
+  const [showAddNumberingTypeModal, setShowAddNumberingTypeModal] = useState(false);
+  const [editingNumberingType, setEditingNumberingType] = useState<InvoiceNumberingType | null>(null);
+  const [showDeleteNumberingTypeModal, setShowDeleteNumberingTypeModal] = useState(false);
+  const [numberingTypeToDelete, setNumberingTypeToDelete] = useState<InvoiceNumberingType | null>(null);
   
   // Defaults
   const [defaultDueDays, setDefaultDueDays] = useState(14);
@@ -59,6 +67,7 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
     loadSettings();
     loadPriceItems();
     loadSuppliers();
+    loadInvoiceNumberingTypes();
   }, []);
 
   const loadSettings = async () => {
@@ -66,10 +75,6 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
     try {
       const settings = await fetchBillingSettings();
       if (settings) {
-        setInvoicePrefix(settings.invoiceNumbering.prefix || '');
-        setInvoiceNextNumber(settings.invoiceNumbering.nextNumber || 1);
-        setInvoicePadding(settings.invoiceNumbering.padding || 5);
-        
         setDefaultDueDays(settings.supplier.defaultDueDays || 14);
         setDefaultCurrency(settings.supplier.defaultCurrency || 'CZK');
         setDefaultPaymentMethod(settings.supplier.defaultPaymentMethod || 'bank_transfer');
@@ -79,6 +84,16 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
       toast.error('Chyba při načítání nastavení: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadInvoiceNumberingTypes = async () => {
+    try {
+      const types = await fetchInvoiceNumberingTypes();
+      setInvoiceNumberingTypes(types);
+    } catch (error: any) {
+      console.error('[BillingSettingsScreen] Error loading invoice numbering types:', error);
+      toast.error('Chyba při načítání typů číslování: ' + error.message);
     }
   };
 
@@ -106,36 +121,6 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
   };
 
   const handleSave = async () => {
-    console.log('[BillingSettingsScreen] handleSave called');
-    
-    // Reset validation errors
-    setValidationErrors({});
-    
-    const errors: Record<string, string> = {};
-    
-    // Validace povinných polí
-    if (!invoicePrefix.trim()) {
-      errors.invoicePrefix = 'Prefix čísla faktury je povinný';
-    }
-    if (invoiceNextNumber < 1) {
-      errors.invoiceNextNumber = 'Další číslo faktury musí být alespoň 1';
-    }
-    if (invoicePadding < 1) {
-      errors.invoicePadding = 'Délka čísla faktury musí být alespoň 1';
-    }
-    
-    // Pokud jsou chyby, zobrazit je a zastavit submit
-    if (Object.keys(errors).length > 0) {
-      setValidationErrors(errors);
-      const firstErrorField = Object.keys(errors)[0];
-      const element = document.querySelector(`[data-field="${firstErrorField}"]`);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      toast.error('Prosím opravte chyby ve formuláři');
-      return;
-    }
-
     setIsSaving(true);
     try {
       // Načíst výchozího dodavatele pro defaultní hodnoty
@@ -154,6 +139,8 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
           vatId: defaultSupplier?.supplier_dic || undefined,
           iban: defaultSupplier?.supplier_iban || undefined,
           bankAccount: defaultSupplier?.supplier_bankAccount || undefined,
+          accountNumber: defaultSupplier?.supplier_accountNumber || undefined,
+          bankCode: defaultSupplier?.supplier_bankCode || undefined,
           swift: defaultSupplier?.supplier_swift || undefined,
           email: defaultSupplier?.supplier_email || undefined,
           phone: defaultSupplier?.supplier_phone || undefined,
@@ -164,9 +151,9 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
           defaultCurrency,
         },
         invoiceNumbering: {
-          prefix: invoicePrefix.trim(),
-          nextNumber: invoiceNextNumber,
-          padding: invoicePadding,
+          prefix: '', // Deprecated - používáme typy číslování
+          nextNumber: 1,
+          padding: 3,
         },
       };
 
@@ -217,10 +204,65 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
     try {
       await setDefaultSupplier(supplierId);
       toast.success('Výchozí dodavatel byl nastaven');
-      await loadSuppliers();
+      // Aktualizovat lokální stav - odznačit všechny ostatní jako výchozí
+      setSuppliers(prev => prev.map(s => ({
+        ...s,
+        isDefault: s.id === supplierId
+      })));
     } catch (error: any) {
       console.error('[BillingSettingsScreen] Error setting default supplier:', error);
       toast.error('Chyba při nastavování výchozího dodavatele: ' + error.message);
+      // Načíst znovu dodavatele pro obnovení správného stavu
+      await loadSuppliers();
+    }
+  };
+
+  const handleAddNumberingType = () => {
+    setEditingNumberingType(null);
+    setShowAddNumberingTypeModal(true);
+  };
+
+  const handleEditNumberingType = (type: InvoiceNumberingType) => {
+    setEditingNumberingType(type);
+    setShowAddNumberingTypeModal(true);
+  };
+
+  const handleDeleteNumberingType = (type: InvoiceNumberingType) => {
+    setNumberingTypeToDelete(type);
+    setShowDeleteNumberingTypeModal(true);
+  };
+
+  const handleConfirmDeleteNumberingType = async () => {
+    if (!numberingTypeToDelete) return;
+
+    try {
+      await deleteInvoiceNumberingType(numberingTypeToDelete.id);
+      toast.success('Typ číslování byl smazán');
+      setInvoiceNumberingTypes(prev => prev.filter(t => t.id !== numberingTypeToDelete.id));
+      setShowDeleteNumberingTypeModal(false);
+      setNumberingTypeToDelete(null);
+    } catch (error: any) {
+      console.error('[BillingSettingsScreen] Error deleting numbering type:', error);
+      toast.error('Chyba při mazání typu číslování: ' + error.message);
+    }
+  };
+
+  const handleSaveNumberingType = async (typeData: Omit<InvoiceNumberingType, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      if (editingNumberingType) {
+        await updateInvoiceNumberingType(editingNumberingType.id, typeData);
+        toast.success('Typ číslování byl aktualizován');
+      } else {
+        await createInvoiceNumberingType(typeData);
+        toast.success('Typ číslování byl přidán');
+      }
+      
+      await loadInvoiceNumberingTypes();
+      setShowAddNumberingTypeModal(false);
+      setEditingNumberingType(null);
+    } catch (error: any) {
+      console.error('[BillingSettingsScreen] Error saving numbering type:', error);
+      toast.error('Chyba při ukládání typu číslování: ' + error.message);
     }
   };
 
@@ -385,76 +427,85 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
       {/* Číslování faktur */}
       <Card className="mb-6">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-gray-900">Číslování faktur</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-gray-900">Číslování faktur</h2>
+            <Button
+              variant="primary"
+              onClick={handleAddNumberingType}
+              leftIcon={<PlusIcon className="h-4 w-4" />}
+            >
+              Nový typ číslování
+            </Button>
+          </div>
         </CardHeader>
         <CardBody>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div data-field="invoicePrefix">
-              <TextField
-                label="Prefix"
-                value={invoicePrefix}
-                onChange={(e) => {
-                  setInvoicePrefix(e.target.value);
-                  if (validationErrors.invoicePrefix) {
-                    setValidationErrors(prev => {
-                      const newErrors = { ...prev };
-                      delete newErrors.invoicePrefix;
-                      return newErrors;
-                    });
-                  }
-                }}
-                placeholder="např. F nebo 2025-"
-                required
-                error={validationErrors.invoicePrefix}
-              />
+          {invoiceNumberingTypes.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Žádné typy číslování. Klikněte na "Nový typ číslování" pro přidání.
             </div>
-            <div data-field="invoiceNextNumber">
-              <TextField
-                label="Další číslo"
-                type="number"
-                value={invoiceNextNumber}
-                onChange={(e) => {
-                  setInvoiceNextNumber(parseInt(e.target.value) || 1);
-                  if (validationErrors.invoiceNextNumber) {
-                    setValidationErrors(prev => {
-                      const newErrors = { ...prev };
-                      delete newErrors.invoiceNextNumber;
-                      return newErrors;
-                    });
-                  }
-                }}
-                min={1}
-                required
-                error={validationErrors.invoiceNextNumber}
-              />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] xl:min-w-0">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs font-medium text-gray-700 uppercase">Název</th>
+                    <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs font-medium text-gray-700 uppercase">Prefix</th>
+                    <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs font-medium text-gray-700 uppercase">Další číslo</th>
+                    <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs font-medium text-gray-700 uppercase">Počet číslic</th>
+                    <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-left text-xs font-medium text-gray-700 uppercase">Příklad</th>
+                    <th className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-center text-xs font-medium text-gray-700 uppercase">Akce</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {invoiceNumberingTypes.map((type, index) => {
+                    const isLastRow = index === invoiceNumberingTypes.length - 1;
+                    const exampleNumber = `${type.prefix}${String(type.nextNumber).padStart(type.padding, '0')}`;
+                    return (
+                      <tr key={type.id} className="hover:bg-gray-50">
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm text-gray-900">
+                          {type.name}
+                        </td>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm text-gray-900">
+                          {type.prefix}
+                        </td>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm text-gray-900">
+                          {type.nextNumber}
+                        </td>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm text-gray-900">
+                          {type.padding}
+                        </td>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm text-gray-900 font-mono">
+                          {exampleNumber}
+                        </td>
+                        <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-center">
+                          <div className="flex justify-center gap-2">
+                            <div className="relative group/button">
+                              <button
+                                onClick={() => handleEditNumberingType(type)}
+                                className="p-1 md:p-2 xl:p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                              >
+                                <EditIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
+                              </button>
+                              <ActionIconTooltip text="Upravit" isLastRow={isLastRow} />
+                            </div>
+                            <div className="relative group/button">
+                              <button
+                                onClick={() => handleDeleteNumberingType(type)}
+                                className="p-1 md:p-2 xl:p-1 text-red-600 hover:text-red-800 transition-colors"
+                              >
+                                <TrashIcon className="h-4 w-4 md:h-5 md:w-5 xl:h-4 xl:w-4" />
+                              </button>
+                              <ActionIconTooltip text="Smazat" isLastRow={isLastRow} />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div data-field="invoicePadding">
-              <TextField
-                label="Počet číslic (padding)"
-                type="number"
-                value={invoicePadding}
-                onChange={(e) => {
-                  setInvoicePadding(parseInt(e.target.value) || 5);
-                  if (validationErrors.invoicePadding) {
-                    setValidationErrors(prev => {
-                      const newErrors = { ...prev };
-                      delete newErrors.invoicePadding;
-                      return newErrors;
-                    });
-                  }
-                }}
-                min={1}
-                max={10}
-                required
-                error={validationErrors.invoicePadding}
-              />
-            </div>
-          </div>
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600">
-              Příklad: {invoicePrefix}{String(invoiceNextNumber).padStart(invoicePadding, '0')}
-            </p>
-          </div>
+          )}
         </CardBody>
       </Card>
 
@@ -568,7 +619,7 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
           setEditingSupplier(null);
         }}
         title={editingSupplier ? 'Upravit dodavatele' : 'Nový dodavatel'}
-        size="3xl"
+        size="4xl"
         closeOnBackdropClick={false}
       >
         <SupplierForm
@@ -579,6 +630,57 @@ export const BillingSettingsScreen: React.FC<BillingSettingsScreenProps> = ({
             setEditingSupplier(null);
           }}
         />
+      </Modal>
+
+      {/* Modal pro přidání/úpravu typu číslování */}
+      <Modal
+        isOpen={showAddNumberingTypeModal}
+        onClose={() => {
+          setShowAddNumberingTypeModal(false);
+          setEditingNumberingType(null);
+        }}
+        title={editingNumberingType ? 'Upravit typ číslování' : 'Nový typ číslování'}
+        size="lg"
+        closeOnBackdropClick={false}
+      >
+        <InvoiceNumberingTypeForm
+          initialData={editingNumberingType}
+          onSave={handleSaveNumberingType}
+          onBack={() => {
+            setShowAddNumberingTypeModal(false);
+            setEditingNumberingType(null);
+          }}
+        />
+      </Modal>
+
+      {/* Modal pro smazání typu číslování */}
+      <Modal
+        isOpen={showDeleteNumberingTypeModal}
+        onClose={() => {
+          setShowDeleteNumberingTypeModal(false);
+          setNumberingTypeToDelete(null);
+        }}
+        title="Smazat typ číslování"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700">
+            Opravdu chcete smazat typ číslování <strong>{numberingTypeToDelete?.name}</strong>?
+          </p>
+          <p className="text-sm text-gray-500">
+            Tato akce je nevratná. Typ číslování bude odstraněn ze všech dodavatelů, které ho používají.
+          </p>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="ghost" onClick={() => {
+              setShowDeleteNumberingTypeModal(false);
+              setNumberingTypeToDelete(null);
+            }}>
+              Zrušit
+            </Button>
+            <Button variant="primary" onClick={handleConfirmDeleteNumberingType}>
+              Smazat
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

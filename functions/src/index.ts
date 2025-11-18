@@ -26,4 +26,5 @@ export { parseGeminiPricing } from './parseGeminiPricing';
 export { fetchPricingPage } from './fetchPricingPage';
 export { getCompanyByIco } from './getCompanyByIco';
 export { checkVat } from './checkVat';
+export { proxyImage } from './proxyImage';
 

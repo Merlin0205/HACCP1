@@ -17,3 +17,4 @@ export const ReceiptIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
+

@@ -385,7 +385,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
           setEditingSupplier(null);
         }}
         title={editingSupplier ? 'Upravit dodavatele' : 'Nový dodavatel'}
-        size="3xl"
+        size="4xl"
         closeOnBackdropClick={false}
       >
         <SupplierForm

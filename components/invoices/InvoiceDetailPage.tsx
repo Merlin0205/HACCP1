@@ -14,6 +14,12 @@ import { EditIcon, XIcon, RefreshIcon } from '../icons';
 import { Modal } from '../ui/Modal';
 import { InvoiceQrCode } from './InvoiceQrCode';
 import { fetchSuppliers } from '../../services/firestore/suppliers';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { InvoicePDF } from './InvoicePDF';
+import { generateSpaydPayload } from '../../utils/qrUtils';
+import QRCode from 'qrcode';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../firebaseConfig';
 
 interface InvoiceDetailPageProps {
   invoiceId: string;
@@ -34,6 +40,10 @@ export const InvoiceDetailPage: React.FC<InvoiceDetailPageProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [stampDataUrl, setStampDataUrl] = useState<string | null>(null);
+  const [imagesLoading, setImagesLoading] = useState(true);
 
   useEffect(() => {
     console.log('[InvoiceDetailPage] useEffect triggered, invoiceId:', invoiceId);
@@ -89,6 +99,129 @@ export const InvoiceDetailPage: React.FC<InvoiceDetailPageProps> = ({
       }
       
       setInvoice(data);
+
+      // Pomocná funkce pro konverzi obrázku na base64 pomocí Canvas nebo Proxy
+      const convertImageToBase64 = async (url: string): Promise<string | null> => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'Anonymous';
+          
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(null);
+              return;
+            }
+            ctx.drawImage(img, 0, 0);
+            try {
+              const dataURL = canvas.toDataURL('image/png');
+              resolve(dataURL);
+            } catch (error) {
+              console.error('[InvoiceDetailPage] Error converting image to dataURL:', error);
+              resolve(null);
+            }
+          };
+          
+          img.onerror = async (err) => {
+            console.warn('[InvoiceDetailPage] Direct image load failed (likely CORS), trying Cloud Function proxy...', url);
+            try {
+              // Fallback: Použít Cloud Function proxy
+              const proxyImage = httpsCallable(functions, 'proxyImage');
+              const result = await proxyImage({ url });
+              const data = result.data as { dataUrl: string };
+              if (data && data.dataUrl) {
+                console.log('[InvoiceDetailPage] Image loaded via proxy successfully');
+                resolve(data.dataUrl);
+              } else {
+                console.error('[InvoiceDetailPage] Proxy returned invalid data');
+                resolve(null);
+              }
+            } catch (proxyErr) {
+              console.error('[InvoiceDetailPage] Proxy failed:', proxyErr);
+              resolve(null);
+            }
+          };
+          
+          img.src = url;
+        });
+      };
+      
+      // Načíst logo a razítko jako base64 pro PDF (řeší CORS a spolehlivost v PDF)
+      const imagePromises: Promise<void>[] = [];
+      
+      if (data.supplier.logoUrl) {
+        imagePromises.push(
+          convertImageToBase64(data.supplier.logoUrl)
+            .then((url) => {
+              console.log('[InvoiceDetailPage] Logo loaded:', url ? 'success' : 'failed');
+              setLogoDataUrl(url);
+            })
+            .catch((err) => {
+              console.error('[InvoiceDetailPage] Error loading logo:', err);
+              setLogoDataUrl(null);
+            })
+            .then(() => {})
+        );
+      } else {
+        setLogoDataUrl(null);
+      }
+      
+      if (data.supplier.stampUrl) {
+        console.log('[InvoiceDetailPage] Loading stamp from:', data.supplier.stampUrl);
+        imagePromises.push(
+          convertImageToBase64(data.supplier.stampUrl)
+            .then((url) => {
+              console.log('[InvoiceDetailPage] Stamp loaded:', url ? 'success' : 'failed', url ? 'length: ' + url.length : '');
+              setStampDataUrl(url);
+            })
+            .catch((err) => {
+              console.error('[InvoiceDetailPage] Error loading stamp:', err);
+              setStampDataUrl(null);
+            })
+            .then(() => {})
+        );
+      } else {
+        console.warn('[InvoiceDetailPage] No stampUrl found in invoice supplier');
+        setStampDataUrl(null);
+      }
+      
+      // Počkat na načtení všech obrázků před renderováním PDF
+      if (imagePromises.length > 0) {
+        Promise.all(imagePromises).then(() => {
+          console.log('[InvoiceDetailPage] All images loaded, ready for PDF');
+          setImagesLoading(false);
+        }).catch((err) => {
+          console.error('[InvoiceDetailPage] Error loading images:', err);
+          setImagesLoading(false);
+        });
+      } else {
+        // Pokud nejsou žádné obrázky k načtení, nastavit loading na false
+        setImagesLoading(false);
+      }
+      
+      // Generovat QR kód pro PDF
+      const payload = generateSpaydPayload(data);
+      if (payload) {
+        try {
+          const qrDataUrl = await QRCode.toDataURL(payload, {
+            width: 320,
+            margin: 1,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF',
+            },
+          });
+          setQrCodeDataUrl(qrDataUrl);
+        } catch (error) {
+          console.error('[InvoiceDetailPage] Error generating QR code:', error);
+          setQrCodeDataUrl(null);
+        }
+      } else {
+        setQrCodeDataUrl(null);
+      }
     } catch (error: any) {
       console.error('[InvoiceDetailPage] Error loading invoice:', error);
       toast.error('Chyba při načítání faktury: ' + error.message);
@@ -231,6 +364,36 @@ export const InvoiceDetailPage: React.FC<InvoiceDetailPageProps> = ({
         <Button variant="primary" onClick={handlePrint} className="print:hidden">
           Tisknout / PDF
         </Button>
+        {invoice && !imagesLoading && (
+          <PDFDownloadLink
+            document={
+              <InvoicePDF 
+                invoice={invoice} 
+                qrCodeDataUrl={qrCodeDataUrl}
+                logoDataUrl={logoDataUrl}
+                stampDataUrl={stampDataUrl}
+              />
+            }
+            fileName={`faktura_${invoice.invoiceNumber}.pdf`}
+            className="print:hidden"
+          >
+            {({ blob, url, loading, error }) =>
+              loading ? (
+                <Button variant="primary" disabled className="print:hidden">
+                  Generuji PDF...
+                </Button>
+              ) : error ? (
+                <Button variant="primary" disabled className="print:hidden">
+                  Chyba při generování
+                </Button>
+              ) : (
+                <Button variant="primary" className="print:hidden">
+                  Stáhnout PDF
+                </Button>
+              )
+            }
+          </PDFDownloadLink>
+        )}
         {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
           <Button variant="success" onClick={handleMarkAsPaid} disabled={isMarkingAsPaid} className="print:hidden">
             {isMarkingAsPaid ? 'Označuji...' : 'Označit jako zaplacenou'}

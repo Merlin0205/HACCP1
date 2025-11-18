@@ -159,6 +159,17 @@ export interface Operator {
   };
 }
 
+export interface InvoiceNumberingType {
+  id: string;
+  userId: string; // vlastník dat
+  name: string; // název typu číslování (např. "Standardní faktury", "Zálohy", "Dobropisy")
+  prefix: string; // prefix čísla faktury (např. "FA", "2025-", "ZAL")
+  nextNumber: number; // další číslo faktury
+  padding: number; // počet číslic (padding), např. 3 → 001, 5 → 00001
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Supplier {
   id: string;
   userId: string; // vlastník dat
@@ -181,6 +192,8 @@ export interface Supplier {
   supplier_logoUrl?: string; // URL loga v PDF
   supplier_stampUrl?: string; // URL razítka v PDF
   isDefault?: boolean; // výchozí dodavatel pro uživatele
+  isVatPayer?: boolean; // plátce DPH (true = je plátce, false = není plátce)
+  invoiceNumberingTypeId?: string; // ID typu číslování faktur přiřazeného k dodavateli
   createdAt?: string;
   updatedAt?: string;
   vatVerification?: {
