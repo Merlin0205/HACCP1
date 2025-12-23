@@ -291,6 +291,7 @@ const StampOverlay: React.FC<{
     }>) => void;
 }> = ({ stamp, readOnly, pageNumber, totalPages, updateAuditorStamp }) => {
     const layerRef = React.useRef<HTMLDivElement>(null);
+    const floatingRef = React.useRef<HTMLDivElement>(null);
     const [dragging, setDragging] = React.useState(false);
 
     const pos = stamp.overlayPosition || { x: 80, y: 120 };
@@ -315,11 +316,16 @@ const StampOverlay: React.FC<{
             const layer = layerRef.current;
             const maxW = layer?.clientWidth ?? 800;
             const maxH = layer?.clientHeight ?? 1100;
-            const ratio = stamp.stampWidthRatio || 0.333;
-            const stampW = maxW * ratio;
+            // Pozn.: výška/šířka razítka se mění podle poměru šířky a reálného obrázku,
+            // proto clamp děláme podle skutečného rozměru elementu (ne jen podle ratio).
+            const measured = floatingRef.current?.getBoundingClientRect();
+            const stampW = measured?.width ?? maxW * (stamp.stampWidthRatio || 0.333);
+            const stampH = measured?.height ?? 200;
 
             const nextX = Math.max(0, Math.min(maxW - stampW, startPos.x + dx));
-            const nextY = Math.max(0, Math.min(maxH - 50, startPos.y + dy));
+            // Důležité: razítko smí zasahovat do patičky, ale nesmí přetéct mimo stránku,
+            // jinak Chrome/Puppeteer vytiskne další (prázdnou) stránku.
+            const nextY = Math.max(0, Math.min(maxH - stampH, startPos.y + dy));
 
             updateAuditorStamp({ overlayPosition: { x: nextX, y: nextY } });
         };
@@ -338,6 +344,7 @@ const StampOverlay: React.FC<{
         // Vrstva přes celou stránku – stabilní šířka, aby se razítko \"nezmenšovalo\" u okraje
         <div ref={layerRef} className="absolute inset-0 z-50 print:z-50 pointer-events-none">
           <div
+              ref={floatingRef}
               className="absolute pointer-events-auto"
               style={{
                   left: pos.x,
@@ -445,7 +452,7 @@ const StampOverlay: React.FC<{
 const PageSheet: React.FC<{ children: React.ReactNode; className?: string; id?: string; pageNumber?: number; totalPages?: number }> = ({ children, className, id, pageNumber, totalPages }) => (
     <div
         id={id}
-        className={`bg-white shadow-lg mx-auto mb-8 relative ${className || ''}`}
+        className={`page-sheet bg-white shadow-lg mx-auto mb-8 relative ${className || ''}`}
         style={{
             width: '210mm',
             height: '297mm', // Fixed height for exact A4
@@ -1355,7 +1362,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
             {summaryPages.map((pageBlocks, idx) => (
                 <PageSheet
                     key={`summary-page-${idx}`}
-                    className="print:shadow-none print:m-0 print:p-0 print:w-full print:min-h-0 print:mb-0 break-before-page"
+                    className={`print:shadow-none print:m-0 print:p-0 print:w-full print:min-h-0 print:mb-0 break-before-page ${currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + idx) ? 'has-overlay-stamp' : ''}`}
                     pageNumber={1 + idx}
                     totalPages={totalPages}
                 >
@@ -1376,7 +1383,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
             {tablePages.map((pageSections, idx) => (
                 <PageSheet
                     key={`table-page-${idx}`}
-                    className="print:shadow-none print:m-0 print:p-0 print:w-full print:min-h-0 print:mb-0 break-before-page"
+                    className={`print:shadow-none print:m-0 print:p-0 print:w-full print:min-h-0 print:mb-0 break-before-page ${currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + idx) ? 'has-overlay-stamp' : ''}`}
                     pageNumber={1 + summaryPages.length + idx}
                     totalPages={totalPages}
                 >
@@ -1401,7 +1408,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                     {nonCompliancePages.map((pageItems, pageIdx) => (
                         <PageSheet
                             key={`nc-page-${pageIdx}`}
-                            className="print:shadow-none print:m-0 print:p-0 print:w-full print:min-h-0 print:mb-0 break-before-page"
+                            className={`print:shadow-none print:m-0 print:p-0 print:w-full print:min-h-0 print:mb-0 break-before-page ${currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + tablePages.length + pageIdx) ? 'has-overlay-stamp' : ''}`}
                             pageNumber={1 + summaryPages.length + tablePages.length + pageIdx}
                             totalPages={totalPages}
                         >
@@ -1472,7 +1479,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                             return (
                             <PageSheet
                                 key={`nc-page-edit-${pageIdx}`}
-                                className={hasPageBreak ? 'break-before-page' : (pageIdx > 0 ? 'break-before-page' : '')}
+                                className={`${hasPageBreak ? 'break-before-page' : (pageIdx > 0 ? 'break-before-page' : '')} ${currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + tablePages.length + pageIdx) ? 'has-overlay-stamp' : ''}`}
                                 pageNumber={1 + summaryPages.length + tablePages.length + pageIdx}
                                 totalPages={totalPages}
                             >

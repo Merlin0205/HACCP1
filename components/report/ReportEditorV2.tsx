@@ -384,6 +384,28 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                         .print\\:break-inside-avoid {
                             page-break-inside: avoid !important;
                         }
+
+                        /* PDF/print: zabránit "mezistránkovým" marginům, které v Chromu často vytvoří poslední prázdnou stránku */
+                        @media print {
+                            .page-sheet {
+                                margin: 0 !important;          /* zrušit mx-auto/mb-8 pro tisk */
+                                box-shadow: none !important;   /* vizuální – ať je PDF čisté */
+                            }
+                            /* Výjimka pro overlay razítko: přetečení nesmí vytvořit další stránku */
+                            .page-sheet.has-overlay-stamp {
+                                overflow: hidden !important;
+                            }
+                            /* Zalamovat až od druhé stránky (první nesmí vygenerovat prázdnou stránku) */
+                            .page-sheet + .page-sheet {
+                                break-before: page;
+                                page-break-before: always;
+                            }
+                            /* Bez vynucení zalomení před první stránkou i kdyby tam byla třída break-before-page */
+                            .break-before-page:first-child {
+                                break-before: auto !important;
+                                page-break-before: auto !important;
+                            }
+                        }
                     </style>
                 </head>
                 <body class="bg-white m-0 p-0">
