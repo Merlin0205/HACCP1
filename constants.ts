@@ -33,7 +33,7 @@ const rawStructure: RawAuditStructure = {
         { "id": "premise_name", "label": "Provozovna", "type": "text" },
         { "id": "premise_address", "label": "Adresa", "type": "text" },
         { "id": "premise_responsible_person", "label": "Odpovědná osoba", "type": "text" },
-        { "id": "premise_phone", "label": "Mobil", "type": "tel" },
+        { "id": "premise_phone", "label": "Telefon", "type": "tel" },
         { "id": "premise_email", "label": "E-mail", "type": "email" }
       ]
     },
@@ -41,12 +41,13 @@ const rawStructure: RawAuditStructure = {
       "title": "PROVOZOVATEL",
       "fields": [
         { "id": "operator_name", "label": "Název, obchodní firma", "type": "text" },
+        { "id": "operator_address", "label": "Adresa sídla", "type": "text" },
         { "id": "operator_street", "label": "Ulice", "type": "text" },
         { "id": "operator_city", "label": "Město", "type": "text" },
         { "id": "operator_zip", "label": "PSČ", "type": "text" },
         { "id": "operator_ico", "label": "IČO", "type": "text" },
         { "id": "operator_statutory_body", "label": "Statutární orgán", "type": "text" },
-        { "id": "operator_phone", "label": "Mobil", "type": "tel" },
+        { "id": "operator_phone", "label": "Telefon", "type": "tel" },
         { "id": "operator_email", "label": "E-mail", "type": "email" }
       ]
     },
@@ -54,7 +55,7 @@ const rawStructure: RawAuditStructure = {
       "title": "ZPRACOVATEL AUDITU",
       "fields": [
         { "id": "auditor_name", "label": "Auditor", "type": "text" },
-        { "id": "auditor_phone", "label": "Mobil", "type": "tel" },
+        { "id": "auditor_phone", "label": "Telefon", "type": "tel" },
         { "id": "auditor_email", "label": "E-mail", "type": "email" },
         { "id": "auditor_web", "label": "Web", "type": "text" }
       ]

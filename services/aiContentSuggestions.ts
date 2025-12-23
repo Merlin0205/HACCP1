@@ -94,7 +94,7 @@ VRAŤ POUZE ČISTÝ JSON BEZ MARKDOWN FORMATOVÁNÍ.`;
     const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
     
     await addAIUsageLog(
-      modelName,
+      response.modelUsed || modelName,
       'text-generation',
       response.usageMetadata.promptTokenCount,
       response.usageMetadata.candidatesTokenCount,

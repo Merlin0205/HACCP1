@@ -50,28 +50,14 @@ export function useAppData() {
         fetchAudits(),
         fetchReports()
       ]);
-      
-      // Filtrovat reporty, které odkazují na neexistující audity (orphaned reports)
-      const auditIds = new Set(auditsData.map(a => a.id));
-      const validReports = reportsData.filter(r => auditIds.has(r.auditId));
-      
-      // Pokud jsou orphaned reports, smazat je z databáze
-      const orphanedReports = reportsData.filter(r => !auditIds.has(r.auditId));
-      if (orphanedReports.length > 0) {
-        const { deleteReport } = await import('../services/firestore');
-        await Promise.all(orphanedReports.map(r => deleteReport(r.id).catch(err => {
-          console.error(`[useAppData] Chyba při mazání orphaned report ${r.id}:`, err);
-        })));
-      }
-      
+
       setOperators(operatorsData);
       setPremises(premisesData);
       setAudits(auditsData);
-      setReports(validReports);
+      setReports(reportsData);
     } catch (err) {
       const errorInfo = handleError(err);
       setError(errorInfo.message);
-      console.error('[useAppData] Chyba při načítání:', err);
       toast.error(errorInfo.message);
     } finally {
       setIsLoading(false);

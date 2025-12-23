@@ -30,11 +30,11 @@ function getCurrentUserId(): string {
 export async function fetchAuditStructure(): Promise<AuditStructure | null> {
   const docRef = doc(db, COLLECTION_NAME, 'auditStructure');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     return null;
   }
-  
+
   return docSnap.data() as AuditStructure;
 }
 
@@ -50,41 +50,106 @@ export async function saveAuditStructure(structure: AuditStructure): Promise<voi
 }
 
 /**
- * Načte informace o auditorovi (user-specific)
+ * Načte informace o auditorovi (user-specific kontaktní údaje + globální razítko)
  */
 export async function fetchAuditorInfo(): Promise<AuditorInfo> {
   const userId = getCurrentUserId();
   const docRef = doc(db, 'users', userId);
   const docSnap = await getDoc(docRef);
+
+  // Načíst user-specific kontaktní údaje
+  let userAuditorInfo: Partial<AuditorInfo> = {};
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    userAuditorInfo = data.auditorInfo || {};
+  }
+
+  // Načíst globální razítko z settings/auditorStamp
+  const stampDocRef = doc(db, COLLECTION_NAME, 'auditorStamp');
+  const stampDocSnap = await getDoc(stampDocRef);
   
-  if (!docSnap.exists()) {
-    // Vrátit výchozí hodnoty
-    return {
-      name: 'Bc. Sylva Polzer, hygienický konzultant',
-      phone: '603 398 774',
-      email: 'sylvapolzer@avlyspol.cz',
-      web: 'www.avlyspol.cz'
+  let globalStamp: Partial<AuditorInfo> = {};
+  if (stampDocSnap.exists()) {
+    const stampData = stampDocSnap.data();
+    globalStamp = {
+      stampUrl: stampData.stampUrl,
+      stampAlignment: stampData.stampAlignment || 'left',
+      stampWidthRatio: stampData.stampWidthRatio !== undefined ? stampData.stampWidthRatio : 0.333
     };
   }
-  
-  const data = docSnap.data();
-  return data.auditorInfo || {
-    name: 'Bc. Sylva Polzer, hygienický konzultant',
-    phone: '603 398 774',
-    email: 'sylvapolzer@avlyspol.cz',
-    web: 'www.avlyspol.cz'
+
+  // Sloučit: user-specific kontaktní údaje + globální razítko
+  return {
+    name: userAuditorInfo.name || 'Bc. Sylva Polzer, hygienický konzultant',
+    phone: userAuditorInfo.phone || '603 398 774',
+    email: userAuditorInfo.email || 'sylvapolzer@avlyspol.cz',
+    web: userAuditorInfo.web || 'www.avlyspol.cz',
+    stampUrl: globalStamp.stampUrl,
+    stampAlignment: globalStamp.stampAlignment || 'left',
+    stampWidthRatio: globalStamp.stampWidthRatio || 0.333
   };
 }
 
 /**
  * Uloží informace o auditorovi
+ * Kontaktní údaje se ukládají user-specific, razítko se ukládá globálně
  */
 export async function saveAuditorInfo(auditorInfo: AuditorInfo): Promise<void> {
   const userId = getCurrentUserId();
   const docRef = doc(db, 'users', userId);
-  
+
+  // Rozdělit na kontaktní údaje (user-specific) a razítko (globální)
+  const { stampUrl, stampAlignment, stampWidthRatio, ...contactInfo } = auditorInfo;
+
+  // Uložit kontaktní údaje user-specific
   await setDoc(docRef, {
-    auditorInfo,
+    auditorInfo: contactInfo,
+    updatedAt: Timestamp.now()
+  }, { merge: true });
+
+  // Uložit razítko globálně do settings/auditorStamp
+  if (stampUrl !== undefined || stampAlignment !== undefined || stampWidthRatio !== undefined) {
+    const stampDocRef = doc(db, COLLECTION_NAME, 'auditorStamp');
+    await setDoc(stampDocRef, {
+      stampUrl: stampUrl || null,
+      stampAlignment: stampAlignment || 'left',
+      stampWidthRatio: stampWidthRatio !== undefined ? stampWidthRatio : 0.333,
+      updatedAt: Timestamp.now()
+    }, { merge: true });
+  }
+}
+
+/**
+ * Načte globální razítko auditora
+ */
+export async function fetchAuditorStamp(): Promise<{ stampUrl?: string; stampAlignment?: 'left' | 'center' | 'right'; stampWidthRatio?: number }> {
+  const stampDocRef = doc(db, COLLECTION_NAME, 'auditorStamp');
+  const stampDocSnap = await getDoc(stampDocRef);
+
+  if (!stampDocSnap.exists()) {
+    return {
+      stampAlignment: 'left',
+      stampWidthRatio: 0.333
+    };
+  }
+
+  const data = stampDocSnap.data();
+  return {
+    stampUrl: data.stampUrl,
+    stampAlignment: data.stampAlignment || 'left',
+    stampWidthRatio: data.stampWidthRatio !== undefined ? data.stampWidthRatio : 0.333
+  };
+}
+
+/**
+ * Uloží globální razítko auditora
+ */
+export async function saveAuditorStamp(stampUrl?: string, stampAlignment: 'left' | 'center' | 'right' = 'left', stampWidthRatio: number = 0.333): Promise<void> {
+  const stampDocRef = doc(db, COLLECTION_NAME, 'auditorStamp');
+  await setDoc(stampDocRef, {
+    stampUrl: stampUrl || null,
+    stampAlignment,
+    stampWidthRatio,
     updatedAt: Timestamp.now()
   }, { merge: true });
 }
@@ -95,7 +160,7 @@ export async function saveAuditorInfo(auditorInfo: AuditorInfo): Promise<void> {
 export async function fetchAIReportConfig(): Promise<any> {
   const docRef = doc(db, COLLECTION_NAME, 'aiReportConfig');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     // Výchozí konfigurace
     return {
@@ -108,7 +173,7 @@ export async function fetchAIReportConfig(): Promise<any> {
       useAI: true
     };
   }
-  
+
   return docSnap.data();
 }
 
@@ -160,9 +225,9 @@ export function calculateModelCategory(inputPrice: number, outputPrice: number):
   if (inputPrice === 0 && outputPrice === 0) {
     return 'zdarma';
   }
-  
+
   const avgPrice = (inputPrice + outputPrice) / 2;
-  
+
   if (avgPrice < 0.5) {
     return 'levný';
   } else if (avgPrice <= 2) {
@@ -264,6 +329,24 @@ export const DEFAULT_GEMINI_MODELS: Record<string, GeminiModelInfo> = {
     description: 'Nejvýkonnější model',
     lastPriceUpdate: new Date().toISOString().split('T')[0]
   },
+  'imagen-3.0-generate-001': {
+    name: 'imagen-3.0-generate-001',
+    category: 'střední',
+    inputPrice: 0, // Cena započítána v outputu (fixní per image)
+    outputPrice: 31.00, // ~0.04 USD/image (1290 tokens @ $31/1M)
+    description: 'Generování obrázků (Imagen 3)',
+    useCase: 'Tvorba ikon a ilustrací',
+    lastPriceUpdate: new Date().toISOString().split('T')[0]
+  },
+  'gemini-2.5-flash-image': {
+    name: 'gemini-2.5-flash-image',
+    category: 'střední',
+    inputPrice: 0.30,
+    outputPrice: 30.00, // ~0.039 USD/image (1290 tokens @ $30/1M)
+    description: 'Rychlý model pro generování obrázků',
+    useCase: 'Ikony, jednoduché ilustrace',
+    lastPriceUpdate: new Date().toISOString().split('T')[0]
+  },
 };
 
 /**
@@ -272,14 +355,14 @@ export const DEFAULT_GEMINI_MODELS: Record<string, GeminiModelInfo> = {
 export async function fetchAIPricingConfig(): Promise<any> {
   const docRef = doc(db, COLLECTION_NAME, 'aiPricingConfig');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     // Pokud neexistuje, inicializovat s výchozími cenami ze seznamu modelů
     const defaultPricing: any = {
       usdToCzk: 25,
       models: {}
     };
-    
+
     // Přidat výchozí ceny pro všechny modely
     Object.entries(DEFAULT_GEMINI_MODELS).forEach(([name, modelInfo]) => {
       defaultPricing.models[name] = {
@@ -291,12 +374,12 @@ export async function fetchAIPricingConfig(): Promise<any> {
         lastPriceUpdate: modelInfo.lastPriceUpdate
       };
     });
-    
+
     // Uložit do databáze
     await saveAIPricingConfig(defaultPricing);
     return defaultPricing;
   }
-  
+
   return docSnap.data();
 }
 
@@ -317,7 +400,7 @@ export async function saveAIPricingConfig(config: any): Promise<void> {
 export async function fetchAIModelsConfig(): Promise<any> {
   const docRef = doc(db, COLLECTION_NAME, 'aiModelsConfig');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     // Pokud neexistuje, inicializovat s výchozími hodnotami
     const defaultConfig = {
@@ -325,21 +408,22 @@ export async function fetchAIModelsConfig(): Promise<any> {
         'report-generation': 'gemini-2.0-flash-exp',
         'image-analysis': 'gemini-2.5-flash',
         'audio-transcription': 'gemini-2.5-flash',
-        'text-generation': 'gemini-2.5-flash'
+        'text-generation': 'gemini-2.5-flash',
+        'icon-generation': 'imagen-3.0-generate-001'
       }
     };
-    
+
     // Uložit do databáze
     await saveAIModelsConfig(defaultConfig);
     return defaultConfig;
   }
-  
+
   const data = docSnap.data();
-  
+
   // Automatická migrace zastaralých modelů
   let needsMigration = false;
   const migratedModels: any = { ...data.models };
-  
+
   Object.entries(migratedModels).forEach(([operation, modelName]: [string, any]) => {
     if (DEPRECATED_MODELS[modelName]) {
       console.warn(`[fetchAIModelsConfig] Migrating deprecated model "${modelName}" to "${DEPRECATED_MODELS[modelName]}" for operation "${operation}"`);
@@ -347,13 +431,13 @@ export async function fetchAIModelsConfig(): Promise<any> {
       needsMigration = true;
     }
   });
-  
+
   // Pokud byla provedena migrace, uložit změny
   if (needsMigration) {
     await saveAIModelsConfig({ models: migratedModels });
     return { models: migratedModels };
   }
-  
+
   return data;
 }
 
@@ -374,7 +458,7 @@ export async function saveAIModelsConfig(config: any): Promise<void> {
 export async function fetchAllGeminiModels(): Promise<AllGeminiModels> {
   const docRef = doc(db, COLLECTION_NAME, 'aiModelsList');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     // Při prvním načtení inicializovat databázi s výchozími modely
     const defaultModels: AllGeminiModels = {
@@ -384,9 +468,9 @@ export async function fetchAllGeminiModels(): Promise<AllGeminiModels> {
     await saveAllGeminiModels(defaultModels);
     return defaultModels;
   }
-  
+
   const data = docSnap.data() as AllGeminiModels;
-  
+
   // Zajistit, že všechny výchozí modely jsou v seznamu
   const mergedModels = { ...DEFAULT_GEMINI_MODELS };
   if (data.models) {
@@ -398,7 +482,7 @@ export async function fetchAllGeminiModels(): Promise<AllGeminiModels> {
       };
     });
   }
-  
+
   return {
     models: mergedModels,
     lastFullUpdate: data.lastFullUpdate
@@ -413,7 +497,7 @@ export async function initializeAIModelsDatabase(): Promise<void> {
     // Inicializovat seznam všech modelů
     const allModelsDoc = doc(db, COLLECTION_NAME, 'aiModelsList');
     const allModelsSnap = await getDoc(allModelsDoc);
-    
+
     if (!allModelsSnap.exists()) {
       await saveAllGeminiModels({
         models: DEFAULT_GEMINI_MODELS,
@@ -421,17 +505,17 @@ export async function initializeAIModelsDatabase(): Promise<void> {
       });
       console.log('[INIT] Inicializován seznam všech Gemini modelů');
     }
-    
+
     // Inicializovat pricing config s výchozími cenami
     const pricingDoc = doc(db, COLLECTION_NAME, 'aiPricingConfig');
     const pricingSnap = await getDoc(pricingDoc);
-    
+
     if (!pricingSnap.exists()) {
       const defaultPricing: any = {
         usdToCzk: 25,
         models: {}
       };
-      
+
       // Přidat výchozí ceny pro všechny modely
       Object.entries(DEFAULT_GEMINI_MODELS).forEach(([name, modelInfo]) => {
         defaultPricing.models[name] = {
@@ -441,29 +525,30 @@ export async function initializeAIModelsDatabase(): Promise<void> {
           lastPriceUpdate: modelInfo.lastPriceUpdate
         };
       });
-      
+
       await saveAIPricingConfig(defaultPricing);
       console.log('[INIT] Inicializován pricing config');
     }
-    
+
     // Inicializovat models config (výběr modelů pro operace)
     const modelsConfigDoc = doc(db, COLLECTION_NAME, 'aiModelsConfig');
     const modelsConfigSnap = await getDoc(modelsConfigDoc);
-    
+
     if (!modelsConfigSnap.exists()) {
       const defaultModelsConfig = {
         models: {
           'report-generation': 'gemini-2.0-flash-exp',
           'image-analysis': 'gemini-2.5-flash',
           'audio-transcription': 'gemini-2.5-flash',
-          'text-generation': 'gemini-2.5-flash'
+          'text-generation': 'gemini-2.5-flash',
+          'icon-generation': 'imagen-3.0-generate-001'
         }
       };
-      
+
       await saveAIModelsConfig(defaultModelsConfig);
       console.log('[INIT] Inicializován models config');
     }
-    
+
     console.log('[INIT] Inicializace databáze dokončena');
   } catch (error) {
     console.error('[INIT] Chyba při inicializaci databáze:', error);
@@ -476,7 +561,7 @@ export async function initializeAIModelsDatabase(): Promise<void> {
  */
 export async function saveAllGeminiModels(modelsList: AllGeminiModels): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, 'aiModelsList');
-  
+
   // Aktualizovat kategorie před uložením
   const updatedModels: Record<string, GeminiModelInfo> = {};
   Object.entries(modelsList.models || {}).forEach(([name, modelInfo]) => {
@@ -485,7 +570,7 @@ export async function saveAllGeminiModels(modelsList: AllGeminiModels): Promise<
       category: calculateModelCategory(modelInfo.inputPrice, modelInfo.outputPrice)
     };
   });
-  
+
   await setDoc(docRef, {
     models: updatedModels,
     lastFullUpdate: modelsList.lastFullUpdate || new Date().toISOString(),
@@ -540,15 +625,15 @@ const DEFAULT_AI_PROMPTS: AIPromptsConfig = {
 export async function fetchAIPromptsConfig(): Promise<AIPromptsConfig> {
   const docRef = doc(db, COLLECTION_NAME, 'aiPromptsConfig');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     // Pokud neexistuje, inicializovat s výchozími hodnotami
     await initializeAIPromptsConfig();
     return DEFAULT_AI_PROMPTS;
   }
-  
+
   const data = docSnap.data() as AIPromptsConfig;
-  
+
   // Zajistit, že všechny výchozí prompty existují
   const mergedPrompts: AIPromptsConfig = {
     prompts: {
@@ -557,7 +642,7 @@ export async function fetchAIPromptsConfig(): Promise<AIPromptsConfig> {
     },
     updatedAt: data.updatedAt
   };
-  
+
   return mergedPrompts;
 }
 
@@ -578,7 +663,7 @@ export async function saveAIPromptsConfig(config: AIPromptsConfig): Promise<void
 export async function initializeAIPromptsConfig(): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, 'aiPromptsConfig');
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     await saveAIPromptsConfig(DEFAULT_AI_PROMPTS);
     console.log('[INIT] Inicializován AI prompty config');

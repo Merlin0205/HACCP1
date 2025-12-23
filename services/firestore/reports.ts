@@ -36,19 +36,6 @@ function getCurrentUserId(): string {
 }
 
 /**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Převede Firestore dokument na Report objekt
  */
 function docToReport(docSnapshot: any): Report {
@@ -63,28 +50,14 @@ function docToReport(docSnapshot: any): Report {
 }
 
 /**
- * Načte všechny reporty (všechny pro admina, jen své pro běžného uživatele)
+ * Načte všechny reporty (sdílený režim)
  */
 export async function fetchReports(): Promise<Report[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechny reporty
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('createdAt', 'desc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-  }
-  
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('createdAt', 'desc')
+  );
+
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToReport);
 }
@@ -103,29 +76,14 @@ export async function fetchReportByAudit(auditId: string): Promise<Report | null
  * Fallback: pokud index není hotový, použije jednodušší dotaz bez řazení podle versionNumber
  */
 export async function fetchReportsByAudit(auditId: string): Promise<Report[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
   try {
     // Zkusit dotaz s řazením podle versionNumber (vyžaduje index)
-    let q;
-    if (isAdmin) {
-      // Admin vidí všechny reporty
-      q = query(
-        collection(db, COLLECTION_NAME),
-        where('auditId', '==', auditId),
-        orderBy('versionNumber', 'desc')
-      );
-    } else {
-      // Běžný uživatel vidí jen své
-      q = query(
-        collection(db, COLLECTION_NAME),
-        where('userId', '==', userId),
-        where('auditId', '==', auditId),
-        orderBy('versionNumber', 'desc')
-      );
-    }
-    
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('auditId', '==', auditId),
+      orderBy('versionNumber', 'desc')
+    );
+
     const snapshot = await getDocs(q);
     const reports = snapshot.docs.map(docToReport);
     // Manuálně seřadit podle versionNumber jako fallback
@@ -134,21 +92,12 @@ export async function fetchReportsByAudit(auditId: string): Promise<Report[]> {
     // Pokud dotaz selže kvůli chybějícímu indexu, použít jednodušší dotaz
     if (error?.code === 'failed-precondition' || error?.message?.includes('index')) {
       console.warn('[fetchReportsByAudit] Index není hotový, používám fallback dotaz bez řazení');
-      
-      let qFallback;
-      if (isAdmin) {
-        qFallback = query(
-          collection(db, COLLECTION_NAME),
-          where('auditId', '==', auditId)
-        );
-      } else {
-        qFallback = query(
-          collection(db, COLLECTION_NAME),
-          where('userId', '==', userId),
-          where('auditId', '==', auditId)
-        );
-      }
-      
+
+      const qFallback = query(
+        collection(db, COLLECTION_NAME),
+        where('auditId', '==', auditId)
+      );
+
       const snapshotFallback = await getDocs(qFallback);
       const reports = snapshotFallback.docs.map(docToReport);
       // Seřadit klienta podle versionNumber (nebo createdAt jako fallback)
@@ -172,11 +121,11 @@ export async function fetchReportsByAudit(auditId: string): Promise<Report[]> {
 export async function fetchReport(reportId: string): Promise<Report | null> {
   const docRef = doc(db, COLLECTION_NAME, reportId);
   const docSnap = await getDoc(docRef);
-  
+
   if (!docSnap.exists()) {
     return null;
   }
-  
+
   return docToReport(docSnap);
 }
 
@@ -185,16 +134,16 @@ export async function fetchReport(reportId: string): Promise<Report | null> {
  */
 export async function createReport(reportData: Omit<Report, 'id'>): Promise<string> {
   const userId = getCurrentUserId();
-  
+
   // Načíst všechny existující verze pro tento audit
   const existingReports = await fetchReportsByAudit(reportData.auditId);
-  
+
   // Určit číslo verze (max + 1, nebo 1 pokud neexistují žádné verze)
-  const maxVersion = existingReports.length > 0 
+  const maxVersion = existingReports.length > 0
     ? Math.max(...existingReports.map(r => r.versionNumber || 0))
     : 0;
   const versionNumber = maxVersion + 1;
-  
+
   // Načíst displayName uživatele
   let createdByName = 'Neznámý';
   try {
@@ -204,7 +153,7 @@ export async function createReport(reportData: Omit<Report, 'id'>): Promise<stri
     console.warn('[createReport] Chyba při načítání displayName:', error);
     createdByName = auth.currentUser?.displayName || 'Neznámý';
   }
-  
+
   // Označit všechny staré verze jako isLatest: false
   if (existingReports.length > 0) {
     const batch = writeBatch(db);
@@ -214,14 +163,15 @@ export async function createReport(reportData: Omit<Report, 'id'>): Promise<stri
     });
     await batch.commit();
   }
-  
+
   // Generovat human-readable ID (formát: R{YYYYMMDD}_{COUNTER})
   const reportId = await generateHumanReadableId('R', COLLECTION_NAME);
   const docRef = doc(db, COLLECTION_NAME, reportId);
-  
-  // Použít setDoc s explicitním ID místo addDoc
-  await setDoc(docRef, {
-    ...reportData,
+
+  // Pokud reportData obsahuje editorState, uložit ho do smart.editorState
+  const { editorState, ...dataWithoutEditorState } = reportData as any;
+  const finalData: any = {
+    ...dataWithoutEditorState,
     id: reportId, // Explicitně uložit ID do dokumentu
     userId,
     versionNumber,
@@ -230,8 +180,19 @@ export async function createReport(reportData: Omit<Report, 'id'>): Promise<stri
     isLatest: true,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
-  });
-  
+  };
+
+  // Pokud je editorState v reportData, uložit ho do smart.editorState
+  if (editorState !== undefined) {
+    finalData.smart = {
+      ...(reportData as any).smart,
+      editorState
+    };
+  }
+
+  // Použít setDoc s explicitním ID místo addDoc
+  await setDoc(docRef, finalData);
+
   return reportId;
 }
 
@@ -240,18 +201,33 @@ export async function createReport(reportData: Omit<Report, 'id'>): Promise<stri
  */
 export async function updateReport(reportId: string, reportData: Partial<Report>): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, reportId);
-  
+
   // Odstranit id z dat
-  const { id, userId, ...dataToUpdate } = reportData as any;
-  
-  // Použít userId z reportData, nebo aktuálního uživatele
-  const finalUserId = userId || getCurrentUserId();
-  
-  await updateDoc(docRef, {
+  const { id, userId, editorState, ...dataToUpdate } = reportData as any;
+
+  // Pokud je editorState v reportData, uložit ho do smart.editorState
+  const updateData: any = {
     ...dataToUpdate,
-    userId: finalUserId, // Explicitně zachovat userId (security rules vyžadují)
     updatedAt: Timestamp.now()
-  });
+  };
+  
+  if (editorState !== undefined) {
+    // Načíst aktuální report pro sloučení smart dat
+    const currentReport = await fetchReport(reportId);
+    if (currentReport) {
+      updateData.smart = {
+        ...currentReport.smart,
+        editorState
+      };
+    } else {
+      // Pokud report neexistuje, vytvořit nový smart objekt
+      updateData.smart = {
+        editorState
+      };
+    }
+  }
+
+  await updateDoc(docRef, updateData);
 }
 
 /**
@@ -276,30 +252,18 @@ export async function deleteReportByAudit(auditId: string): Promise<void> {
  * Smaže všechny reporty pro dané audity
  */
 export async function deleteReportsByAuditIds(auditIds: string[]): Promise<void> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
   // Firestore má limit 10 pro 'in' operátor, takže rozdělíme na batchy
   const batches: string[][] = [];
   for (let i = 0; i < auditIds.length; i += 10) {
     batches.push(auditIds.slice(i, i + 10));
   }
-  
+
   for (const batch of batches) {
-    let q;
-    if (isAdmin) {
-      q = query(
-        collection(db, COLLECTION_NAME),
-        where('auditId', 'in', batch)
-      );
-    } else {
-      q = query(
-        collection(db, COLLECTION_NAME),
-        where('userId', '==', userId),
-        where('auditId', 'in', batch)
-      );
-    }
-    
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where('auditId', 'in', batch)
+    );
+
     const snapshot = await getDocs(q);
     const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
@@ -318,19 +282,19 @@ export async function updateReportSmartMetadata(
   }
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, reportId);
-  
+
   // Načíst aktuální report
   const currentReport = await fetchReport(reportId);
   if (!currentReport) {
     throw new Error('Report not found');
   }
-  
+
   // Sloučit stávající smart data s novými
   const updatedSmart = {
     ...currentReport.smart,
     ...smartMetadata
   };
-  
+
   await updateDoc(docRef, {
     smart: updatedSmart,
     updatedAt: Timestamp.now()
@@ -352,13 +316,13 @@ export async function addSmartFinalVersion(
   }
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, reportId);
-  
+
   // Načíst aktuální report
   const currentReport = await fetchReport(reportId);
   if (!currentReport) {
     throw new Error('Report not found');
   }
-  
+
   // Přidat novou verzi do pole finalVersions
   const updatedSmart = {
     ...currentReport.smart,
@@ -367,9 +331,52 @@ export async function addSmartFinalVersion(
       versionData
     ]
   };
+
+  await updateDoc(docRef, {
+    smart: updatedSmart,
+    updatedAt: Timestamp.now()
+  });
+}
+
+/**
+ * Aktualizuje stav editoru reportu
+ */
+export async function updateReportEditorState(
+  reportId: string,
+  editorState: any
+): Promise<void> {
+  const docRef = doc(db, COLLECTION_NAME, reportId);
+  
+  // Načíst aktuální report
+  const currentReport = await fetchReport(reportId);
+  if (!currentReport) {
+    throw new Error('Report not found');
+  }
+  
+  // Sloučit stávající smart data s novým editorState
+  const updatedSmart = {
+    ...currentReport.smart,
+    editorState
+  };
   
   await updateDoc(docRef, {
     smart: updatedSmart,
+    updatedAt: Timestamp.now()
+  });
+}
+
+/**
+ * Aktualizuje stav V3 editoru (Syncfusion SFDT)
+ */
+export async function updateReportV3State(
+  reportId: string,
+  editorStateV3: string
+): Promise<void> {
+  const docRef = doc(db, COLLECTION_NAME, reportId);
+  // Ukládáme do smart.editorStateV3
+  // Musíme použít dot notation pro update vnořeného pole, aby se nepřepsal celý objekt smart
+  await updateDoc(docRef, {
+    'smart.editorStateV3': editorStateV3,
     updatedAt: Timestamp.now()
   });
 }

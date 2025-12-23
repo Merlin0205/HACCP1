@@ -43,7 +43,26 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
     }
   }, [nonComplianceData.length, activeNonComplianceIndex]);
 
-  const handleSetCompliant = () => {
+  const handleSetCompliant = async () => {
+    // Smazat všechny fotky ze všech neshod
+    if (answer && answer.nonComplianceData) {
+      const { deleteAuditPhoto } = await import('../services/storage');
+
+      for (const nc of answer.nonComplianceData) {
+        if (nc.photos && nc.photos.length > 0) {
+          for (const photo of nc.photos) {
+            if (photo.storagePath) {
+              try {
+                await deleteAuditPhoto(photo.storagePath);
+              } catch (error) {
+                console.error('[AuditItemModal] Error deleting photo:', error);
+              }
+            }
+          }
+        }
+      }
+    }
+
     onAnswerUpdate(item.id, { compliant: true, nonComplianceData: [] });
     setActiveNonComplianceIndex(0);
   };
@@ -66,12 +85,27 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
     }
   };
 
-  const handleRemoveNonCompliance = (index: number) => {
+  const handleRemoveNonCompliance = async (index: number) => {
     if (answer && answer.nonComplianceData) {
+      // Smazat fotky pro tuto neshodu
+      const ncToRemove = answer.nonComplianceData[index];
+      if (ncToRemove && ncToRemove.photos && ncToRemove.photos.length > 0) {
+        const { deleteAuditPhoto } = await import('../services/storage');
+        for (const photo of ncToRemove.photos) {
+          if (photo.storagePath) {
+            try {
+              await deleteAuditPhoto(photo.storagePath);
+            } catch (error) {
+              console.error('[AuditItemModal] Error deleting photo:', error);
+            }
+          }
+        }
+      }
+
       const updatedNonComplianceData = answer.nonComplianceData.filter((_, i) => i !== index);
       const isNowCompliant = updatedNonComplianceData.length === 0;
       onAnswerUpdate(item.id, { compliant: isNowCompliant, nonComplianceData: updatedNonComplianceData });
-      
+
       // Upravit aktivní index po smazání
       if (updatedNonComplianceData.length === 0) {
         setActiveNonComplianceIndex(0);
@@ -84,31 +118,47 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
   };
 
   const handleClose = async () => {
+    // Zkontrolovat, zda se nenahrávají fotky
+    if (answer && answer.nonComplianceData) {
+      const isUploading = answer.nonComplianceData.some(nc => nc.photos.some(p => p.isUploading));
+      if (isUploading) {
+        // Importovat toast dynamicky nebo použít props, pokud je dostupný. 
+        // Zde předpokládáme, že toast je globálně dostupný nebo importovaný.
+        // V tomto souboru není importován toast, musíme ho přidat nebo použít alert.
+        // Pro konzistenci přidáme import toastu na začátek souboru (v dalším kroku nebo zde pokud to jde).
+        // Ale replace_file_content nemůže měnit importy a tělo funkce najednou, pokud jsou daleko.
+        // Použijeme window.alert jako fallback nebo console.warn, ale uživatel to musí vidět.
+        // Lepší je upravit importy zvlášť. Pro teď použijeme alert, který je blokující a bezpečný.
+        alert('Prosím počkejte na dokončení nahrávání fotek.');
+        return;
+      }
+    }
+
     // Před zavřením uložit všechna nová místa z nonComplianceData
     // ALE pouze pokud nejsou v blacklistu
     if (answer && answer.nonComplianceData) {
       const { getNonComplianceLocations, addNonComplianceLocation, getBlacklist } = await import('../services/firestore/nonComplianceLocations');
-      
+
       // Načíst blacklist
       const blacklist = await getBlacklist();
       const blacklistSet = new Set(blacklist.map(loc => loc.toLowerCase()));
-      
+
       for (const nc of answer.nonComplianceData) {
         if (nc.location && nc.location.trim()) {
           // Formátovat místo (první písmeno velké, zbytek malé, odstranit tečku)
           let formatted = nc.location.trim().replace(/\.+$/, '');
           if (!formatted) continue;
           formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1).toLowerCase();
-          
+
           // Pokud je místo v blacklistu, přeskočit (neukládat)
           if (blacklistSet.has(formatted.toLowerCase())) {
             continue;
           }
-          
+
           // Zkontrolovat, jestli už existuje
           const { available } = await getNonComplianceLocations();
           const exists = available.some(loc => loc.toLowerCase() === formatted.toLowerCase());
-          
+
           if (!exists) {
             try {
               await addNonComplianceLocation(formatted);
@@ -119,7 +169,7 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
         }
       }
     }
-    
+
     onClose();
   };
 
@@ -182,15 +232,15 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                   const isActive = index === activeNonComplianceIndex;
                   const location = nc.location || 'Bez místa';
                   const findingPreview = getFindingPreview(nc.finding);
-                  
+
                   return (
                     <button
                       key={index}
                       onClick={() => setActiveNonComplianceIndex(index)}
                       className={`
                         relative flex items-center justify-center min-w-[44px] md:min-w-[48px] h-10 md:h-11 px-3 md:px-4 rounded-lg font-semibold text-sm md:text-base transition-all
-                        ${isActive 
-                          ? 'bg-red-600 text-white shadow-md' 
+                        ${isActive
+                          ? 'bg-red-600 text-white shadow-md'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }
                       `}
@@ -214,8 +264,8 @@ export const AuditItemModal: React.FC<AuditItemModalProps> = ({ item, answer, on
                       Detail neshody #{activeNonComplianceIndex + 1}
                     </h4>
                     {nonComplianceData.length > 1 && (
-                      <button 
-                        onClick={() => handleRemoveNonCompliance(activeNonComplianceIndex)} 
+                      <button
+                        onClick={() => handleRemoveNonCompliance(activeNonComplianceIndex)}
                         className="p-2 text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-full transition-colors border border-red-200"
                         aria-label="Smazat neshodu"
                         title="Smazat neshodu"

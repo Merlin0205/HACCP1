@@ -31,57 +31,24 @@ export async function generatePhotoFilename(
   auditId: string,
   fileExtension: string = 'jpg'
 ): Promise<string> {
-  const userId = getCurrentUserId();
   const today = new Date();
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
   const day = String(today.getDate()).padStart(2, '0');
+  const hours = String(today.getHours()).padStart(2, '0');
+  const minutes = String(today.getMinutes()).padStart(2, '0');
+  const seconds = String(today.getSeconds()).padStart(2, '0');
+  const milliseconds = String(today.getMilliseconds()).padStart(3, '0');
+
+  // Generovat náhodný řetězec pro zajištění unikátnosti při paralelním nahrávání
+  const randomStr = Math.random().toString(36).substring(2, 7);
+
+  // Formát: F{YYYYMMDD}_{HHMMSS}_{MS}_{RANDOM}.{ext}
+  // Tím zajistíme unikátnost i při rychlém paralelním nahrávání bez nutnosti číst Storage
   const dateStr = `${year}${month}${day}`;
-  const filenamePrefix = `F${dateStr}_`;
-  
-  try {
-    // Načíst všechny soubory ze Storage pro daný audit
-    const folderPath = `users/${userId}/audits/${auditId}`;
-    const folderRef = ref(storage, folderPath);
-    
-    let maxCounter = 0;
-    
-    try {
-      const listResult = await listAll(folderRef);
-      
-      // Najít maximum counteru pro dnešní den
-      listResult.items.forEach(item => {
-        const fileName = item.name;
-        if (fileName.startsWith(filenamePrefix)) {
-          // Formát: F{YYYYMMDD}_{COUNTER}.{ext}
-          const parts = fileName.split('_');
-          if (parts.length >= 2) {
-            const counterWithExt = parts[1];
-            const counterStr = counterWithExt.split('.')[0];
-            const counter = parseInt(counterStr, 10);
-            if (!isNaN(counter) && counter > maxCounter) {
-              maxCounter = counter;
-            }
-          }
-        }
-      });
-    } catch (error: any) {
-      // Pokud složka neexistuje, začneme od 1
-      if (error.code !== 'storage/object-not-found') {
-        console.warn('[generatePhotoFilename] Chyba při načítání fotek:', error);
-      }
-    }
-    
-    // Vrátit nový název s counterem + 1
-    const newCounter = maxCounter + 1;
-    const ext = fileExtension.toLowerCase().replace(/^\./, ''); // Odstranit tečku pokud je
-    return `${filenamePrefix}${String(newCounter).padStart(4, '0')}.${ext}`;
-  } catch (error) {
-    console.error('[generatePhotoFilename] Chyba při generování názvu fotky:', error);
-    // Fallback na timestamp pokud selže
-    const timestamp = Date.now();
-    const ext = fileExtension.toLowerCase().replace(/^\./, '');
-    return `${filenamePrefix}${String(1).padStart(4, '0')}.${ext}`;
-  }
+  const timeStr = `${hours}${minutes}${seconds}`;
+
+  const ext = fileExtension.toLowerCase().replace(/^\./, '');
+  return `F${dateStr}_${timeStr}_${milliseconds}_${randomStr}.${ext}`;
 }
 

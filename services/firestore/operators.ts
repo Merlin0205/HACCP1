@@ -11,12 +11,10 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where,
   orderBy
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { Operator } from '../../types';
-import { fetchUserMetadata } from './users';
 import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'operators';
@@ -30,19 +28,6 @@ function getCurrentUserId(): string {
     throw new Error('User not authenticated');
   }
   return user.uid;
-}
-
-/**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -88,27 +73,13 @@ function docToOperator(docSnapshot: any): Operator {
 }
 
 /**
- * Načte všechny provozovatele (všechna pro admina, jen své pro běžného uživatele)
+ * Načte všechny provozovatele (sdílený režim)
  */
 export async function fetchOperators(): Promise<Operator[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechny provozovatele
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('operator_name', 'asc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('operator_name', 'asc')
-    );
-  }
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('operator_name', 'asc')
+  );
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToOperator);
@@ -158,12 +129,9 @@ export async function updateOperator(operatorId: string, operatorData: Partial<O
   
   // Odstranit id z dat
   const { id, userId, ...dataToUpdate } = operatorData as any;
-  
-  const finalUserId = userId || getCurrentUserId();
-  
+
   await updateDoc(docRef, {
     ...dataToUpdate,
-    userId: finalUserId,
     updatedAt: new Date().toISOString()
   });
 }

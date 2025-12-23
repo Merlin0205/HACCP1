@@ -149,11 +149,10 @@ export const PrintableReport: React.FC<PrintableReportProps> = ({
 
       {/* Non-compliances */}
       {nonCompliances.map((item, index) => (
-        <div 
-          key={item.id} 
-          className={`non-compliance-item avoid-break ${
-            item.pageBreakBefore ? 'page-break' : ''
-          }`}
+        <div
+          key={item.id}
+          className={`non-compliance-item avoid-break ${item.pageBreakBefore ? 'page-break' : ''
+            }`}
         >
           <div className="item-title">
             {index + 1}. {item.itemTitle}
@@ -206,19 +205,19 @@ export const PrintableReport: React.FC<PrintableReportProps> = ({
   );
 };
 
+import { AuditorInfo } from '../types';
+
 /**
  * Utility funkce pro generování HTML stringu pro Puppeteer
  */
 export const generatePrintableHTML = (
   title: string,
   date: string,
-  auditor: string, // Zachováno pro kompatibilitu, ale použije se getAuditorInfo()
+  auditorInfo: AuditorInfo,
   nonCompliances: EditableNonCompliance[]
 ): string => {
-  // Získat aktuální údaje auditora
-  const auditorInfo = getAuditorInfo();
   console.log('[PrintableReport] Používám údaje auditora:', auditorInfo);
-  
+
   const escapeHtml = (text: string) => {
     return text
       .replace(/&/g, '&amp;')
@@ -229,8 +228,7 @@ export const generatePrintableHTML = (
   };
 
   const itemsHTML = nonCompliances.map((item, index) => `
-    <div class="non-compliance-item avoid-break ${
-      item.pageBreakBefore ? 'page-break' : ''
+    <div class="non-compliance-item avoid-break ${item.pageBreakBefore ? 'page-break' : ''
     }">
       <div class="item-title">${index + 1}. ${escapeHtml(item.itemTitle)}</div>
       
@@ -397,7 +395,7 @@ export const generatePrintableHTML = (
         <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
           <tr>
             <th style="text-align: left; padding: 2px; font-weight: bold;">Auditor</th>
-            <th style="text-align: left; padding: 2px; font-weight: bold;">Mobil</th>
+            <th style="text-align: left; padding: 2px; font-weight: bold;">Telefon</th>
             <th style="text-align: left; padding: 2px; font-weight: bold;">E-mail</th>
             <th style="text-align: left; padding: 2px; font-weight: bold;">Web</th>
           </tr>

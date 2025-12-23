@@ -31,39 +31,22 @@ service cloud.firestore {
              getUserDoc().data.approved == true;
     }
     
-    // Helper funkce pro čtení (vlastník nebo admin)
-    // POZNÁMKA: Pro queries (getDocs) se resource kontroluje pro každý dokument
-    // Admin může číst všechny dokumenty, běžný uživatel jen své
+    // Sdílený režim: všichni schválení uživatelé mohou číst a zapisovat business data.
+    // userId zůstává v dokumentech kvůli kompatibilitě, ale už neurčuje přístup.
     function canRead() {
-      return isApproved() && (
-        isAdmin() || 
-        (resource != null && resource.data.userId == request.auth.uid)
-      );
+      return isApproved();
     }
     
-    // Helper funkce pro čtení při vytváření (vlastník nebo admin)
     function canReadCreate() {
-      return isApproved() && (
-        isAdmin() || 
-        request.resource.data.userId == request.auth.uid
-      );
+      return isApproved();
     }
     
-    // Helper funkce pro update (vlastník nebo admin)
     function canUpdate() {
-      return isApproved() && (
-        isAdmin() ||
-        (resource.data.userId == request.auth.uid &&
-         request.resource.data.userId == resource.data.userId)
-      );
+      return isApproved();
     }
     
-    // Helper funkce pro delete (vlastník nebo admin)
     function canDelete() {
-      return isApproved() && (
-        isAdmin() ||
-        (resource != null && resource.data.userId == request.auth.uid)
-      );
+      return isApproved();
     }
     
     // Operators - schválené uživatele vidí své, admini vidí všechna
@@ -170,10 +153,9 @@ service cloud.firestore {
       );
     }
     
-    // AI Usage Logs - pouze pro schválené uživatele, vidí jen své
+    // AI Usage Logs - čtení pro všechny schválené uživatele (globální statistiky), zápis/mazání jen vlastní
     match /aiUsageLogs/{logId} {
-      allow read: if isApproved() && 
-                     (resource == null || resource.data.userId == request.auth.uid);
+      allow read: if isApproved();
       allow create: if isApproved() && 
                       request.resource.data.userId == request.auth.uid;
       allow delete: if isApproved() && 
@@ -229,5 +211,12 @@ service cloud.firestore {
       allow update: if canUpdate();
       allow delete: if canDelete();
     }
+    // Custom Icons - Removed
+    // match /customIcons/{iconId} {
+    //   allow read: if isApproved();
+    //   allow create: if isApproved() && request.resource.data.createdBy == request.auth.uid;
+    //   allow update: if isApproved() && (isAdmin() || resource.data.createdBy == request.auth.uid);
+    //   allow delete: if isApproved() && (isAdmin() || resource.data.createdBy == request.auth.uid);
+    // }
   }
 }

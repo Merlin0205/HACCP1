@@ -9,7 +9,6 @@ import {
   addDoc,
   setDoc,
   query,
-  where,
   orderBy,
   Timestamp,
   deleteDoc
@@ -44,7 +43,7 @@ function formatLocationName(name: string): string {
 }
 
 /**
- * Načte všechna místa neshod pro aktuálního uživatele
+ * Načte všechna místa neshod (všechna pro admina, jen své pro běžného uživatele)
  * - z kolekce nonComplianceLocations
  * - ze všech existujících auditů (z nonComplianceData.location) - REAL-TIME
  * - filtruje místa v blacklistu
@@ -52,7 +51,6 @@ function formatLocationName(name: string): string {
  */
 export async function getNonComplianceLocations(): Promise<{ available: string[], usedInAudits: string[], onlyInCollection: string[] }> {
   try {
-    const userId = getCurrentUserId();
     const locationsSet = new Set<string>();
     const usedInAuditsSet = new Set<string>();
     const collectionOnlySet = new Set<string>();
@@ -65,14 +63,14 @@ export async function getNonComplianceLocations(): Promise<{ available: string[]
     try {
       const q = query(
         collection(db, COLLECTION_NAME),
-        where('userId', '==', userId),
         orderBy('name', 'asc')
       );
       const querySnapshot = await getDocs(q);
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.name && data.name.trim()) {
-          const formatted = formatLocationName(data.name);
+        const data = doc.data() as { name?: unknown };
+        const rawName = typeof data.name === 'string' ? data.name : '';
+        if (rawName.trim()) {
+          const formatted = formatLocationName(rawName);
           // Přeskočit místa v blacklistu
           if (!blacklistSet.has(formatted.toLowerCase())) {
             locationsSet.add(formatted);
@@ -86,7 +84,7 @@ export async function getNonComplianceLocations(): Promise<{ available: string[]
     }
     
     // 2. Načíst místa ze všech existujících auditů (REAL-TIME procházení)
-    // VŠECHNY audity - dokončené i nedokončené
+    // fetchAudits() už má admin logiku, takže admin automaticky uvidí všechna místa ze všech auditů
     try {
       const audits = await fetchAudits();
       audits.forEach(audit => {
@@ -174,7 +172,7 @@ export async function addNonComplianceLocation(locationName: string): Promise<vo
 }
 
 /**
- * Načte blacklist míst neshod pro aktuálního uživatele
+ * Načte blacklist míst neshod (všechny pro admina, jen svůj pro běžného uživatele)
  */
 export async function getBlacklist(): Promise<string[]> {
   try {
@@ -182,15 +180,14 @@ export async function getBlacklist(): Promise<string[]> {
     const blacklistSet = new Set<string>();
     
     try {
-      const q = query(
-        collection(db, BLACKLIST_COLLECTION_NAME),
-        where('userId', '==', userId)
-      );
+      // Blacklist je globální (všichni approved mohou číst)
+      const q = query(collection(db, BLACKLIST_COLLECTION_NAME));
       const querySnapshot = await getDocs(q);
       querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.locationName && data.locationName.trim()) {
-          const formatted = formatLocationName(data.locationName);
+        const data = doc.data() as { locationName?: unknown };
+        const rawLocationName = typeof data.locationName === 'string' ? data.locationName : '';
+        if (rawLocationName.trim()) {
+          const formatted = formatLocationName(rawLocationName);
           if (formatted) {
             blacklistSet.add(formatted);
           }
@@ -276,10 +273,10 @@ export function findBestMatchLocation(transcribedText: string, existingLocations
 /**
  * Smaže místo neshody z kolekce nonComplianceLocations
  * Pokud je místo použito v auditech, přidá ho do blacklistu místo smazání
+ * Admin může smazat místo od jakéhokoliv uživatele
  */
 export async function deleteNonComplianceLocation(locationName: string): Promise<void> {
   try {
-    const userId = getCurrentUserId();
     const formattedName = formatLocationName(locationName);
     
     if (!formattedName) {
@@ -296,18 +293,23 @@ export async function deleteNonComplianceLocation(locationName: string): Promise
       return;
     }
 
-    // Místo není použito v auditech - smazat z kolekce
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      where('name', '==', formattedName)
-    );
+    // Místo není použito v auditech - smazat z kolekce.
+    // Pozor: v DB mohou být historicky uložené "špinavé" hodnoty (mezery/tečky/case).
+    // UI ale zobrazuje normalizovaný název (formatLocationName), proto mažeme podle normalizované shody.
+    const q = query(collection(db, COLLECTION_NAME));
+
     const querySnapshot = await getDocs(q);
-    
-    const deletePromises = querySnapshot.docs.map(docSnapshot => 
+    const toDelete = querySnapshot.docs.filter((docSnapshot) => {
+      const data = docSnapshot.data() as { name?: unknown };
+      const rawName = typeof data.name === 'string' ? data.name : '';
+      const normalized = formatLocationName(rawName);
+      return normalized.toLowerCase() === formattedName.toLowerCase();
+    });
+
+    const deletePromises = toDelete.map((docSnapshot) =>
       deleteDoc(doc(db, COLLECTION_NAME, docSnapshot.id))
     );
-    
+
     await Promise.all(deletePromises);
   } catch (error) {
     console.error('[deleteNonComplianceLocation] Error:', error);

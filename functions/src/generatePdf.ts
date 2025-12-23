@@ -29,7 +29,7 @@ export const generatePdf = functions
 
     try {
       console.log('[generatePdf] Starting Puppeteer...');
-      
+
       const browser = await puppeteer.launch({
         headless: true,
         args: [
@@ -41,7 +41,7 @@ export const generatePdf = functions
       });
 
       const page = await browser.newPage();
-      
+
       console.log('[generatePdf] Loading HTML content...');
       await page.setContent(html, {
         waitUntil: 'networkidle0'
@@ -51,10 +51,10 @@ export const generatePdf = functions
       const pdfBuffer = await page.pdf({
         format: 'A4',
         margin: {
-          top: '10mm',
-          right: '6mm',
-          bottom: '10mm',
-          left: '6mm'
+          top: '0',
+          right: '0',
+          bottom: '0',
+          left: '0'
         },
         printBackground: true,
         preferCSSPageSize: false,

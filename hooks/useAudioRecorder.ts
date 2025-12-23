@@ -55,6 +55,9 @@ export const useAudioRecorder = (
 
         try {
             logMessage("INFO: Žádám o přístup k mikrofonu...");
+            if (!navigator?.mediaDevices?.getUserMedia) {
+                throw new Error('Tento prohlížeč nepodporuje nahrávání zvuku.');
+            }
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaStreamRef.current = stream;
             logMessage("ÚSPĚCH: Přístup k mikrofonu udělen.");
@@ -88,7 +91,9 @@ export const useAudioRecorder = (
                 } catch (e) {
                     const errorMsg = e instanceof Error ? e.message : String(e);
                     logMessage(`CHYBA: Přepis selhal - ${errorMsg}`);
-                    setError("Přepis selhal.");
+                    // Zobrazit uživateli konkrétní důvod (např. 429 přetížení z AI SDK),
+                    // jinak fallback na obecnou hlášku
+                    setError(errorMsg || "Přepis selhal.");
                 } finally {
                     setIsTranscribing(false);
                     cleanup();
@@ -100,9 +105,20 @@ export const useAudioRecorder = (
             logMessage("STAV: Nahrávání běží.");
 
         } catch (e) {
+            const errAny = e as any;
             const errorMsg = e instanceof Error ? e.message : String(e);
             logMessage(`CHYBA: Start nahrávání selhal - ${errorMsg}`);
-            setError("Nepodařilo se spustit nahrávání.");
+
+            // Přátelštější hlášky pro běžné případy
+            if (errAny?.name === 'NotAllowedError' || errAny?.name === 'PermissionDeniedError') {
+                setError('Přístup k mikrofonu byl zamítnut. Povolte mikrofon v nastavení prohlížeče.');
+            } else if (errAny?.name === 'NotFoundError' || errAny?.name === 'DevicesNotFoundError') {
+                setError('Nebyl nalezen žádný mikrofon.');
+            } else if (errAny?.name === 'NotReadableError') {
+                setError('Mikrofon je právě používán jinou aplikací.');
+            } else {
+                setError(errorMsg || "Nepodařilo se spustit nahrávání.");
+            }
             cleanup();
         }
     }, [logMessage, onTranscriptionComplete, cleanup]);

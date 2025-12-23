@@ -1,4 +1,4 @@
----
+![1765193196888](image/cursorrules/1765193196888.png)---
 alwaysApply: true
 description: "Instrukce pro Cursor AI - HACCP Audit Assistant"
 ---
@@ -27,7 +27,7 @@ Kdyz pracujes podle techto pravidel (napr. zmeny kodu, opravy, pouzivani Flowbit
 - **Aktualizace dokumentace je součástí změny, ne samostatný krok**
 - **Při aktualizaci dokumentace VŽDY aktualizuj datum na začátku souboru**
 
-### Technologie projektu (aktuální verze k 2025-01-27)
+### Technologie projektu (aktuální verze k 2025-11-19)
 - **Frontend**: React 19.2.0 + TypeScript 5.8.2 + Vite 6.2.0
 - **UI Framework**: Flowbite React 0.12.10 (vždy používej podle dokumentace!)
 - **CSS Framework**: Tailwind CSS 3.4.18 (integrovaný s Flowbite)
@@ -105,6 +105,24 @@ import { Button } from 'flowbite-react';
 - **Komponenty**: https://flowbite-react.com/docs/components/button
 - **Theme**: https://flowbite-react.com/docs/customize/theme
 
+### ⚙️ SETTINGS SCREENS UI
+Pro všechny obrazovky nastavení (Settings, Admin, User Management, atd.) dodržuj tato pravidla:
+
+1. **Layout**:
+   - Použij `PageHeader` pro záhlaví stránky (s `onBack` pokud je to podstránka)
+   - Obsah zabal do `Card` a `CardBody`
+   - Použij grid layout pro přehledy (např. `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`)
+
+2. **Komponenty**:
+   - **Tlačítka**: Používej `Button` z `components/ui/Button` (wrapper nad Flowbite)
+   - **Ikony**: Používej výhradně `lucide-react` (např. `Plus`, `Trash2`, `Edit`, `Save`)
+   - **Přepínače**: Používej `ToggleSwitch` z `flowbite-react`
+   - **Badge**: Používej `Badge` z `components/ui/Badge`
+
+3. **Konzistence**:
+   - Zachovej jednotný vzhled s ostatními obrazovkami nastavení
+   - Používej `SECTION_THEMES[AppState.SETTINGS]` pro barvy v hlavičce
+
 ---
 
 ## 🔥 FIREBASE PRAVIDLA
@@ -118,15 +136,61 @@ import { Button } from 'flowbite-react';
 
 2. **Firestore Database**
    - Všechny CRUD operace v `services/firestore/`
-   - Collections: `customers`, `audits`, `reports`, `settings`, `users`, `aiUsageLogs`, `reportTemplates`
-   - **Security Rules**: `firestore.rules` - user isolation
+   - Collections: 
+     - `customers` (deprecated, now part of operators/premises logic but kept for compatibility)
+     - `operators` (Provozovatelé)
+     - `premises` (Pracoviště)
+     - `audits` (Audity)
+     - `reports` (Reporty)
+     - `invoices` (Faktury)
+     - `suppliers` (Dodavatelé)
+     - `settings` (Globální nastavení)
+     - `billingSettings` (Fakturační nastavení uživatele)
+     - `users` (Uživatelé)
+     - `aiUsageLogs` (Logy AI)
+     - `reportTemplates` (Smart Templates)
+     - `invoiceNumberingTypes` (Číselné řady faktur)
+   - **Security Rules**: `firestore.rules` - user isolation + admin access
+   - **Indexes**: `firestore.indexes.json` - definice indexů pro složité dotazy
    - **ID systém**: Human-readable ID formát `{PREFIX}{YYYYMMDD}_{COUNTER}`
-     - Audity: `A20250811_0001`, `A20250811_0002`, ...
-     - Pracoviště: `P20250811_0001`, `P20250811_0002`, ...
-     - Provozovatelé: `O20250811_0001`, `O20250811_0002`, ...
-     - Reporty: `R20250811_0001`, `R20250811_0002`, ...
-     - Zákazníci: `C20250811_0001`, `C20250811_0002`, ...
+     - Audity: `A20250811_0001`
+     - Faktury: `I20250811_0001`
      - Utility: `utils/idGenerator.ts` - `generateHumanReadableId()`
+   - **Admin role a data access**:
+     - Admin uživatelé (`role === 'admin' && approved === true`) vidí všechna data ve všech collections
+     - Běžní uživatelé vidí pouze svá data (filtrováno podle `userId`)
+     - Pattern implementace: Každý service soubor obsahuje `isCurrentUserAdmin()` funkci
+     - Pokud je uživatel admin → dotaz bez `where('userId', '==', userId)` filtru
+     - Pokud není admin → dotaz s `where('userId', '==', userId)` filtrem
+     - Firestore security rules podporují admin přístup přes `isAdmin()` helper funkci
+     - Collections s admin access: `operators`, `premises`, `audits`, `reports`, `customers`, `invoices`, `pricing`, `suppliers`, `nonComplianceLocations`, `aiUsageLogs`, `invoiceNumberingTypes`
+     - Implementační pattern:
+       ```typescript
+       async function isCurrentUserAdmin(): Promise<boolean> {
+         try {
+           const userId = getCurrentUserId();
+           const metadata = await fetchUserMetadata(userId);
+           return metadata?.role === 'admin' && metadata?.approved === true;
+         } catch {
+           return false;
+         }
+       }
+       
+       // V fetch funkci:
+       const isAdmin = await isCurrentUserAdmin();
+       let q;
+       if (isAdmin) {
+         // Admin vidí všechna data
+         q = query(collection(db, COLLECTION_NAME), orderBy('field', 'asc'));
+       } else {
+         // Běžný uživatel vidí jen svá data
+         q = query(
+           collection(db, COLLECTION_NAME),
+           where('userId', '==', userId),
+           orderBy('field', 'asc')
+         );
+       }
+       ```
 
 3. **Firebase Storage**
    - `services/storage.ts` - upload/download fotek
@@ -139,8 +203,8 @@ import { Button } from 'flowbite-react';
 
 4. **Cloud Functions**
    - `functions/src/` - serverless funkce
-   - `generateReport.ts` - Legacy AI generování reportů (beze změny)
-   - `generateSmartReportPdf.ts` - Smart Template PDF generování (nová)
+   - `generateReport.ts` - Legacy AI generování reportů
+   - `generateSmartReportPdf.ts` - Smart Template PDF generování
    - `transcribeAudio.ts`, `generatePdf.ts`, `analyzeImage.ts`
    - Node.js 20 runtime
 
@@ -197,10 +261,10 @@ HACCP1/
 │   │   └── ...
 │   ├── icons/           # SVG ikony
 │   ├── report/          # Smart Template komponenty
-│   │   ├── SmartTemplateView.tsx
-│   │   ├── SmartTemplateSelector.tsx
-│   │   ├── SmartReportRenderer.tsx
-│   │   └── SmartReportDesigner.tsx
+│   ├── invoices/        # Fakturace komponenty
+│   │   ├── InvoicesPage.tsx
+│   │   ├── InvoiceDetailPage.tsx
+│   │   └── InvoiceForm.tsx
 │   └── [screens].tsx    # Obrazovky aplikace
 │
 ├── utils/               # Utility funkce
@@ -211,15 +275,21 @@ HACCP1/
 ├── services/            # Business logika a API
 │   ├── firestore/       # Firestore CRUD operace
 │   │   ├── reportTemplates.ts  # Smart Template šablony
-│   │   └── reports.ts           # Reports s smart poli
+│   │   ├── reports.ts           # Reports s smart poli
+│   │   ├── invoices.ts          # Fakturace CRUD
+│   │   ├── billingSettings.ts   # Fakturační nastavení
+│   │   └── invoiceNumberingTypes.ts # Číselné řady
 │   ├── smartTemplate/   # Smart Template služby
 │   │   ├── SmartTemplateEngine.ts
 │   │   ├── templateLoader.ts
 │   │   └── reportDocumentService.ts
+│   ├── aiLogic.ts       # AI logika
+│   ├── aiContentSuggestions.ts
 │   └── storage.ts       # Firebase Storage
 │
 ├── contexts/            # React Contexts
-│   └── AuthContext.tsx  # Firebase Authentication
+│   ├── AuthContext.tsx  # Firebase Authentication
+│   └── UnsavedChangesContext.tsx  # Tracking neuložených změn ve formulářích
 │
 ├── hooks/               # Custom React hooks
 │   ├── useAppData.ts    # Načítání dat z Firestore
@@ -227,11 +297,14 @@ HACCP1/
 │
 ├── types.ts             # TypeScript typy
 ├── types/
-│   └── smartReport.ts   # Smart Template typy
+│   ├── smartReport.ts   # Smart Template typy
+│   └── invoice.ts       # Fakturace typy
+│
 ├── constants/designSystem.ts  # Design systém (SECTION_THEMES)
 │
 ├── firebaseConfig.ts    # Firebase inicializace
 ├── firestore.rules      # Firestore security rules
+├── firestore.indexes.json # Firestore indexes
 ├── storage.rules        # Storage security rules
 │
 └── functions/src/       # Cloud Functions
@@ -240,13 +313,12 @@ HACCP1/
 
 ### Důležité soubory:
 
-- **`App.tsx`** - hlavní logika aplikace, routing
+- **`App.tsx`** - hlavní logika aplikace, routing, state management
 - **`AppWithAuth.tsx`** - wrapper s autentifikací
 - **`firebaseConfig.ts`** - Firebase SDK inicializace
+- **`FAKTURACE_SPEC.md`** - Specifikace modulu Fakturace
 - **`components/ui/Pagination.tsx`** - reusable pagination komponenta pro tabulky
 - **`components/ui/DetailTooltip.tsx`** - reusable detailní tooltip komponenta
-- **`components/ui/TooltipCell.tsx`** - wrapper pro `<td>` element s tooltipem
-- **`components/ui/ActionIconTooltip.tsx`** - reusable tooltip komponenta pro ikony akcí
 - **`vite.config.ts`** - automatické verzování z package.json při buildu
 - **`components/ReportView.tsx`** - zobrazení reportů (záložky Legacy/Smart)
 
@@ -262,12 +334,30 @@ HACCP1/
 4. **Otestuj v light mode** - aplikace je vždy světlá
 5. **Pro tooltips použij reusable komponenty** - `DetailTooltip`, `TooltipCell` a `ActionIconTooltip` z `components/ui/`
 
+### Při práci s formuláři:
+
+1. **Duplicate check pattern**:
+   - **Operators**: Kontrola duplicitního IČO (`operator_ico`) - implementováno v `OperatorForm.tsx`
+   - **Premises**: Kontrola kombinace `premise_name` + `premise_address` (case-insensitive) - implementováno v `PremiseForm.tsx`
+   - Pokud je nalezena duplicita → zobrazit modal dialog pro potvrzení
+   - Pattern: `setDirty(false)` na začátku `handleSubmit`, pak kontrola duplicity, pokud duplicita → `setDirty(true)` a zobrazení modalu
+
+2. **UnsavedChangesContext**:
+   - Používá se pro tracking neuložených změn ve formulářích
+   - Import: `import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';`
+   - Použití: `const { setDirty } = useUnsavedChanges();`
+   - `setDirty(true)` při změně hodnot ve formuláři
+   - `setDirty(false)` na začátku `handleSubmit` a před `onSave` v `performSave`
+   - Pokud uživatel chce odejít s neuloženými změnami → zobrazí se modal "Máte neuložené změny"
+   - Komponenta: `components/ConfirmationModal.tsx`
+
 ### Při práci s Firebase:
 
 1. **Zkontroluj existující service funkce** v `services/firestore/`
 2. **Použij existující funkce** místo přímého Firebase SDK
-3. **Respektuj security rules** - uživatelé jsou izolováni
-4. **Přidej error handling** - všechny operace mohou selhat
+3. **Respektuj security rules** - uživatelé jsou izolováni, admini vidí všechna data
+4. **Respektuj admin data access pattern** - při vytváření nových fetch funkcí použij `isCurrentUserAdmin()` pattern
+5. **Přidej error handling** - všechny operace mohou selhat
 
 ---
 
@@ -284,6 +374,7 @@ HACCP1/
 - [ ] Použil jsem existující service funkce?
 - [ ] Přidal jsem error handling?
 - [ ] Security rules jsou správně nastavené?
+- [ ] Respektuji admin data access pattern při práci s Firestore?
 - [ ] **Aktualizoval jsem dokumentaci pokud byla změna zásadní?**
 
 ### Obecné:
@@ -332,6 +423,7 @@ HACCP1/
 - ❌ Hlavní obrazovky (dashboard, seznamy) - přístupné přes sidebar
 - ❌ Formuláře (ADD_*, EDIT_*) - otevírají se jako overlay
 - ❌ Nastavení a další obrazovky
+- ❌ **Faktury** - používají standardní routing (`AppState.INVOICES`, `AppState.INVOICE_DETAIL`)
 
 ### Logika vytváření tabů
 
@@ -354,14 +446,6 @@ openOrActivateTab(
 2. Pokud existuje tab s jiným typem → aktualizuje se typ tabu
 3. Pokud tab neexistuje → vytvoří se nový tab
 
-**Všechna místa vytváření tabů používají tuto centrální funkci:**
-- `handleSelectPremiseForAudits()` - audit_list tab
-- `handleStartNewAudit()` - audit tab
-- `handleUnlockAudit()` - audit tab
-- `handleSelectAudit()` - audit nebo report tab
-- `handleFinishAudit()` - report tab
-- `handleHeaderUpdateAndContinue()` - audit tab
-
 ### Formát názvů tabů
 
 - **audit_list**: "Audity ([Název pracoviště])"
@@ -382,23 +466,11 @@ Každý tab má `title` atribut s detaily:
 - Pokud je aktivní `audit` nebo `report` tab → vrací na AUDIT_LIST pro dané pracoviště
 - Pokud nejsou taby → vrací na předchozí appState
 
-**Komponenty s "Zpět" tlačítkem:**
-- `ReportView` - volá `onBack={handleBackToAuditList}`
-- `AuditChecklist` - volá `onBack={handleBackToAuditList}`
-- `HeaderForm` - volá `onBack={handleBackToAuditList}`
-
 ### Zobrazení TabBar
 
 - **Desktop (xl+)**: TabBar se zobrazuje pod headerem (pouze jedenkrát)
 - **Mobile/Tablet**: TabBar se nezobrazuje (taby nejsou podporovány na malých obrazovkách)
 - **Renderování**: `components/Layout.tsx` - pouze pokud `tabs.length > 0`
-
-### Důležité soubory
-
-- **`App.tsx`** - centrální logika tabů (`openOrActivateTab`, `handleTabClick`, `handleTabClose`)
-- **`components/TabBar.tsx`** - UI komponenta pro zobrazení tabů
-- **`components/Layout.tsx`** - renderování TabBar
-- **`types.ts`** - Tab interface s `auditDate` a `status` pro tooltips
 
 ---
 
@@ -426,11 +498,33 @@ Každý tab má `title` atribut s detaily:
 - `components/report/SmartTemplateView.tsx` - hlavní UI komponenta
 - `types/smartReport.ts` - typy pro Smart Template
 
-### ⚠️ Při implementaci Smart Template:
-- Vždy ověř, že Legacy systém funguje beze změny
-- Používej Flowbite komponenty pro UI (Tabs, Button, atd.)
-- Dokumentuj všechny nové typy v `types/smartReport.ts`
-- Aktualizuj security rules pro nové collections a Storage cesty
+---
+
+## 🧾 FAKTURACE (INVOICES)
+
+### Základní principy
+- **Samostatný modul** - spravuje vydané faktury
+- **Vazba na audity** - fakturu lze vystavit z auditu (přenese se customer a položky)
+- **Vazba na zákazníky** - faktura je vždy vázaná na zákazníka (Customer/Operator)
+
+### Struktura Fakturace
+- **Collection**: `invoices`
+- **ID formát**: `I{YYYYMMDD}_{COUNTER}` (např. `I20251119_0001`)
+- **Statusy**: `draft`, `issued`, `paid`, `cancelled`
+- **Specifikace**: Detailní popis v `FAKTURACE_SPEC.md`
+
+### Důležité soubory Fakturace:
+- `components/invoices/InvoicesPage.tsx` - seznam faktur
+- `components/invoices/InvoiceDetailPage.tsx` - detail faktury
+- `components/invoices/InvoiceForm.tsx` - formulář
+- `services/firestore/invoices.ts` - CRUD operace
+- `services/firestore/billingSettings.ts` - nastavení fakturace
+- `types/invoice.ts` - TypeScript definice
+
+### Routing a Navigace
+- Faktury **nepoužívají** Tab systém
+- Používají `AppState`: `INVOICES`, `INVOICE_DETAIL`, `INVOICE_CREATE`, `INVOICE_EDIT`
+- Navigace zpět vede na seznam faktur (`AppState.INVOICES`)
 
 ---
 
@@ -451,7 +545,7 @@ Každý tab má `title` atribut s detaily:
 - Defaultně 20 položek/stránka
 - Možnost výběru: 10, 20, 50, 100
 - Komponenta: `components/ui/Pagination.tsx`
-- Implementováno v: OperatorDashboard, AllAuditsScreen, AuditList
+- Implementováno v: OperatorDashboard, AllAuditsScreen, AuditList, InvoicesPage
 
 ### User Avatar
 - Pouze jedno místo: vpravo nahoře v top baru (desktop) nebo v tablet top bar

@@ -3,24 +3,48 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-  fetchAIModelsConfig, 
-  fetchAIPricingConfig, 
-  saveAIPricingConfig, 
+import {
+  fetchAIModelsConfig,
+  fetchAIPricingConfig,
+  saveAIPricingConfig,
   saveAIModelsConfig,
   fetchAllGeminiModels,
   calculateModelCategory,
   type ModelCategory,
   type GeminiModelInfo
 } from '../services/firestore/settings';
-import { 
-  calculateCostsByOperation, 
-  calculateModelStats,
-  type OperationStats 
+import {
+  calculateCostsByOperation,
+  type OperationStats
 } from '../services/firestore/aiUsageLogs';
 import { updateGeminiPricesFromWeb, updateGeminiPricesWithLLM } from '../services/firestore/priceUpdater';
 import { toast } from '../utils/toast';
 import { DetailTooltip } from './ui/DetailTooltip';
+import { PageHeader } from './PageHeader';
+import { SECTION_THEMES } from '../constants/designSystem';
+import { AppState } from '../types';
+import { Card, CardBody, CardHeader } from './ui/Card';
+import { Button } from './ui/Button';
+import { TextField } from './ui/Input';
+import {
+  Save,
+  ArrowLeft,
+  Bot,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronUp,
+  DollarSign,
+  Cpu,
+  Globe,
+  AlertTriangle,
+  CheckCircle,
+  X,
+  Info
+} from 'lucide-react';
 
 interface ModelPricing {
   inputPrice: number;
@@ -28,10 +52,11 @@ interface ModelPricing {
   inputPriceHigh?: number;
   outputPriceHigh?: number;
   threshold?: number;
-  audioInputPrice?: number; // Speciální cena pro audio vstup (např. $1.00 pro Flash místo $0.30)
-  imageInputPrice?: number; // Speciální cena pro image vstup (většinou stejná jako text, ale může být jiná)
+  audioInputPrice?: number;
+  imageInputPrice?: number;
   note?: string;
   lastPriceUpdate?: string;
+  useCase?: string;
 }
 
 interface PricingConfig {
@@ -60,37 +85,36 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     outputPrice: number;
     description?: string;
     useCase?: string;
-    foundOnPage?: boolean; // Označit, zda byl model nalezen na stránce
+    foundOnPage?: boolean;
   }> | null>(null);
   const [lastLLMStatus, setLastLLMStatus] = useState<{
     status: 'running' | 'success' | 'error';
     message: string;
-    timestamp: string; // ISO string pro localStorage
+    timestamp: string;
     details?: string;
   } | null>(null);
-  const [hiddenModels, setHiddenModels] = useState<Set<string>>(new Set()); // Skryté modely
-  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set()); // Rozbalené modely v accordionu
-  const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({}); // Otevřené dropdowny pro výběr modelů
+  const [hiddenModels, setHiddenModels] = useState<Set<string>>(new Set());
+  const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
+  const [showDropdowns, setShowDropdowns] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newModelName, setNewModelName] = useState('');
   const [showAddModel, setShowAddModel] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
+  const sectionTheme = SECTION_THEMES[AppState.SETTINGS];
+
   useEffect(() => {
     loadConfig();
-    // Načíst poslední status LLM parsingu z localStorage
     const savedStatus = localStorage.getItem('aiPricing_llmStatus');
     if (savedStatus) {
       try {
         const status = JSON.parse(savedStatus);
-        // Pokud je status "running" a je starší než 10 minut, považovat za timeout
         if (status.status === 'running') {
           const statusTime = new Date(status.timestamp);
           const now = new Date();
           const diffMinutes = (now.getTime() - statusTime.getTime()) / 1000 / 60;
           if (diffMinutes > 10) {
-            // Považovat za timeout
             setLastLLMStatus({
               status: 'error',
               message: 'Parsing byl přerušen (timeout)',
@@ -112,38 +136,33 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
 
   const loadConfig = async () => {
     try {
-      // Před načtením zajistit inicializaci databáze
       try {
         const { initializeAIModelsDatabase } = await import('../services/firestore/settings');
         await initializeAIModelsDatabase();
       } catch (error) {
         console.error('Chyba při inicializaci databáze:', error);
       }
-      
-      // Načíst modely, pricing config a seznam všech modelů
+
       const [loadedModelsConfig, pricingConfig, allModels] = await Promise.all([
         fetchAIModelsConfig(),
         fetchAIPricingConfig(),
         fetchAllGeminiModels()
       ]);
-      
+
       setModelsConfig(loadedModelsConfig);
       setInitialModelsConfig(loadedModelsConfig);
       setAllModelsList(allModels.models || {});
       setLastFullUpdate(allModels.lastFullUpdate || null);
-      
-      // Načíst statistiky z logů
+
       try {
         const stats = await calculateCostsByOperation();
         setUsageStats(stats);
       } catch (error) {
         console.error('Chyba při načítání statistik:', error);
       }
-      
-      // Sloučit: modely z models config + jejich ceny z pricing configu
+
       const mergedModels: Record<string, ModelPricing> = {};
-      
-      // Nejdřív přidat všechny modely ze seznamu (allModelsList)
+
       Object.entries(allModels.models || {}).forEach(([name, modelInfo]: [string, any]) => {
         const existingPricing = pricingConfig.models?.[name];
         mergedModels[name] = existingPricing || {
@@ -153,8 +172,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
           lastPriceUpdate: modelInfo.lastPriceUpdate || new Date().toISOString().split('T')[0]
         };
       });
-      
-      // Přidat modely z models config (které mohou být použity, ale nejsou v allModelsList)
+
       Object.entries(loadedModelsConfig.models || {}).forEach(([usage, modelName]: [string, any]) => {
         const existingPricing = pricingConfig.models?.[modelName];
         if (!mergedModels[modelName]) {
@@ -166,20 +184,19 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
           };
         }
       });
-      
-      // Přidat i modely z pricing configu které nejsou v models config ani v allModelsList (vlastní modely)
+
       Object.keys(pricingConfig.models || {}).forEach(modelName => {
         if (!mergedModels[modelName]) {
           mergedModels[modelName] = pricingConfig.models[modelName];
         }
       });
-      
+
       const loadedConfig = {
         usdToCzk: pricingConfig.usdToCzk || 25,
         lastCurrencyUpdate: pricingConfig.lastCurrencyUpdate,
         models: mergedModels
       };
-      
+
       setConfig(loadedConfig);
       setInitialConfig(loadedConfig);
     } catch (error) {
@@ -189,12 +206,10 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     }
   };
 
-  // Detekce neuložených změn
-  const hasUnsavedChanges = 
+  const hasUnsavedChanges =
     JSON.stringify(config) !== JSON.stringify(initialConfig) ||
     JSON.stringify(modelsConfig) !== JSON.stringify(initialModelsConfig);
 
-  // Varování při odchodu pokud jsou neuložené změny
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges || saving) {
@@ -211,16 +226,14 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
   const handleSave = async () => {
     try {
       setSaving(true);
-      
-      // Uložit pricing config
+
       await saveAIPricingConfig({
         ...config,
         lastCurrencyUpdate: new Date().toISOString()
       });
-      
-      // Uložit models config
+
       await saveAIModelsConfig(modelsConfig);
-      
+
       setInitialConfig(config);
       setInitialModelsConfig(modelsConfig);
       setLastSaved(new Date());
@@ -233,9 +246,8 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     }
   };
 
-  const updateModelPrice = (modelName: string, field: keyof ModelPricing, value: number | string) => {
+  const updateModelPrice = (modelName: string, field: keyof ModelPricing, value: number | string | undefined) => {
     setConfig(prev => {
-      // Pokud model ještě není v config.models, vytvořit ho
       if (!prev.models[modelName]) {
         const modelInfo = allModelsList[modelName];
         prev.models[modelName] = {
@@ -245,14 +257,14 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
           lastPriceUpdate: new Date().toISOString().split('T')[0]
         };
       }
-      
+
       return {
         ...prev,
         models: {
           ...prev.models,
           [modelName]: {
             ...prev.models[modelName],
-            [field]: typeof value === 'string' ? value : value,
+            [field]: value,
             lastPriceUpdate: new Date().toISOString().split('T')[0]
           }
         }
@@ -265,7 +277,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       alert('Zadejte název modelu');
       return;
     }
-    
+
     if (config.models[newModelName]) {
       alert('Model už existuje');
       return;
@@ -282,7 +294,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
         }
       }
     }));
-    
+
     setNewModelName('');
     setShowAddModel(false);
   };
@@ -291,19 +303,16 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     try {
       setUpdatingPrices(true);
       setUpdateProgress({ step: 'Spouštím aktualizaci...' });
-      setParsingResults(null); // Resetovat předchozí výsledky
-      
+      setParsingResults(null);
+
       const result = await updateGeminiPricesFromWeb((step, details) => {
         setUpdateProgress({ step, details });
       });
-      
+
       setUpdateProgress(null);
-      setParsingResults(result.parsedModels || null); // Uložit výsledky parsování
-      console.log('[AIPricingConfigScreen] Výsledky parsování:', result.parsedModels);
-      console.log('[AIPricingConfigScreen] Počet nalezených modelů:', result.parsedModels ? Object.keys(result.parsedModels).length : 0);
+      setParsingResults((result as any).parsedModels || null);
       toast.success(`Aktualizováno ${result.updated} modelů. ${result.failed.length > 0 ? `Nepodařilo se aktualizovat: ${result.failed.join(', ')}` : ''}`);
-      
-      // Znovu načíst konfiguraci
+
       await loadConfig();
     } catch (error: any) {
       console.error('Chyba při aktualizaci cen:', error);
@@ -320,8 +329,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       setUpdatingPrices(true);
       setUpdateProgress({ step: 'Spouštím aktualizaci pomocí LLM...' });
       setParsingResults(null);
-      
-      // Uložit status "running" do localStorage
+
       const runningStatus = {
         status: 'running' as const,
         message: 'Parsing probíhá...',
@@ -330,10 +338,9 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       };
       setLastLLMStatus(runningStatus);
       localStorage.setItem('aiPricing_llmStatus', JSON.stringify(runningStatus));
-      
+
       const result = await updateGeminiPricesWithLLM((step, details) => {
         setUpdateProgress({ step, details });
-        // Aktualizovat status při progressu
         const progressStatus = {
           status: 'running' as const,
           message: step,
@@ -343,13 +350,10 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
         setLastLLMStatus(progressStatus);
         localStorage.setItem('aiPricing_llmStatus', JSON.stringify(progressStatus));
       });
-      
+
       setUpdateProgress(null);
-      setParsingResults(result.parsedModels || null);
-      console.log('[AIPricingConfigScreen] Výsledky parsování (LLM):', result.parsedModels);
-      console.log('[AIPricingConfigScreen] Počet nalezených modelů (LLM):', result.parsedModels ? Object.keys(result.parsedModels).length : 0);
-      
-      // Uložit úspěšný status
+      setParsingResults((result as any).parsedModels || null);
+
       const successStatus = {
         status: 'success' as const,
         message: `Úspěšně aktualizováno ${result.updated} modelů`,
@@ -358,28 +362,26 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       };
       setLastLLMStatus(successStatus);
       localStorage.setItem('aiPricing_llmStatus', JSON.stringify(successStatus));
-      
+
       toast.success(`Aktualizováno ${result.updated} modelů pomocí LLM. ${result.failed.length > 0 ? `Nepodařilo se aktualizovat: ${result.failed.join(', ')}` : ''}`);
-      
+
       await loadConfig();
     } catch (error: any) {
       console.error('Chyba při aktualizaci cen pomocí LLM:', error);
       setUpdateProgress(null);
       setParsingResults(null);
-      
-      // Uložit chybový status s lepší zprávou
+
       let errorMessage = error.message || 'Neznámá chyba';
       let errorDetails = error.message;
-      
-      // Zlepšit zprávu pro 503 chyby
-      if (error?.message?.includes('503') || 
-          error?.message?.includes('Service Unavailable') ||
-          error?.message?.includes('overloaded') ||
-          error?.message?.includes('unavailable')) {
+
+      if (error?.message?.includes('503') ||
+        error?.message?.includes('Service Unavailable') ||
+        error?.message?.includes('overloaded') ||
+        error?.message?.includes('unavailable')) {
         errorMessage = 'Model Gemini je momentálně přetížený';
         errorDetails = 'Systém automaticky zkoušel opakovat požadavek 3x, ale model je stále nedostupný. Zkuste to prosím znovu za chvíli nebo použijte HTML parsing místo LLM parsingu.';
       }
-      
+
       const errorStatus = {
         status: 'error' as const,
         message: errorMessage,
@@ -388,14 +390,13 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
       };
       setLastLLMStatus(errorStatus);
       localStorage.setItem('aiPricing_llmStatus', JSON.stringify(errorStatus));
-      
+
       toast.error(errorMessage);
     } finally {
       setUpdatingPrices(false);
     }
   };
 
-  // Získat kategorii modelu
   const getModelCategory = (modelName: string): ModelCategory => {
     const modelInfo = allModelsList[modelName];
     if (modelInfo) {
@@ -408,7 +409,6 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     return 'střední';
   };
 
-  // Zkontrolovat, zda je model zdarma (ceny 0)
   const isFreeModel = (modelName: string): boolean => {
     const modelInfo = allModelsList[modelName];
     const pricing = config.models[modelName];
@@ -417,7 +417,6 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
     return inputPrice === 0 && outputPrice === 0;
   };
 
-  // Získat popisek kategorie
   const getCategoryLabel = (category: ModelCategory): string => {
     const labels: Record<ModelCategory, string> = {
       'zdarma': '🆓 zdarma',
@@ -429,14 +428,13 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
   };
 
   const deleteModel = (modelName: string) => {
-    // Zkontrolovat jestli je model z výchozího seznamu Gemini modelů
     const isFromDefaultList = allModelsList[modelName];
-    
+
     if (isFromDefaultList) {
       alert('Tento model je součástí výchozího seznamu Gemini modelů a nelze ho smazat. Můžete změnit jeho ceny.');
       return;
     }
-    
+
     if (confirm(`Opravdu smazat model ${modelName}?`)) {
       setConfig(prev => {
         const newModels = { ...prev.models };
@@ -447,209 +445,155 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
   };
 
   if (loading) {
-    return <div className="text-center p-12">Načítání...</div>;
+    return (
+      <div className="w-full max-w-5xl mx-auto pb-10">
+        <PageHeader
+          section={sectionTheme}
+          title="Ceny AI modelů"
+          description="Nastavení cen modelů a kurzu"
+          onBack={onBack}
+        />
+        <div className="text-center p-12">Načítání...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-3 md:p-4">
-      <div className="max-w-5xl mx-auto">
-        {/* Status banner pro LLM parsing */}
-        {lastLLMStatus && (
-          <div className={`mb-4 rounded-xl shadow-lg p-4 ${
-            lastLLMStatus.status === 'running' 
-              ? 'bg-blue-50 border-2 border-blue-300' 
-              : lastLLMStatus.status === 'success'
-              ? 'bg-green-50 border-2 border-green-300'
-              : 'bg-red-50 border-2 border-red-300'
-          }`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  {lastLLMStatus.status === 'running' && (
-                    <>
-                      <span className="animate-spin text-blue-600">⏳</span>
-                      <span className="font-bold text-blue-800">LLM Parsing probíhá...</span>
-                    </>
-                  )}
-                  {lastLLMStatus.status === 'success' && (
-                    <>
-                      <span className="text-green-600">✓</span>
-                      <span className="font-bold text-green-800">LLM Parsing dokončen</span>
-                    </>
-                  )}
-                  {lastLLMStatus.status === 'error' && (
-                    <>
-                      <span className="text-red-600">✗</span>
-                      <span className="font-bold text-red-800">LLM Parsing selhal</span>
-                    </>
+    <div className="w-full max-w-7xl mx-auto">
+      <PageHeader
+        section={sectionTheme}
+        title="Ceny AI modelů"
+        description="Nastavení cen modelů a kurzu"
+        onBack={onBack}
+        action={
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleUpdatePrices}
+                disabled={updatingPrices}
+                leftIcon={updatingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+              >
+                {updatingPrices ? 'Aktualizuji...' : 'Aktualizovat (HTML)'}
+              </Button>
+              {updateProgress && (
+                <div className="absolute top-full left-0 mt-2 bg-gray-900 text-white p-3 rounded-lg shadow-lg z-50 min-w-[300px]">
+                  <div className="font-semibold text-sm mb-1">{updateProgress.step}</div>
+                  {updateProgress.details && (
+                    <div className="text-xs text-gray-300">{updateProgress.details}</div>
                   )}
                 </div>
-                <div className={`text-sm ${
-                  lastLLMStatus.status === 'running' ? 'text-blue-700' :
-                  lastLLMStatus.status === 'success' ? 'text-green-700' :
+              )}
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleUpdatePricesWithLLM}
+              disabled={updatingPrices}
+              leftIcon={updatingPrices ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+            >
+              {updatingPrices ? 'Aktualizuji...' : 'Aktualizovat (LLM)'}
+            </Button>
+
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSave}
+              disabled={saving || !hasUnsavedChanges}
+              className="bg-green-600 hover:bg-green-700 text-white focus:ring-green-500"
+              leftIcon={saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            >
+              {saving ? 'Ukládám...' : 'Uložit'}
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Status banner pro LLM parsing */}
+      {lastLLMStatus && (
+        <Card className={`mb-6 border-l-4 ${lastLLMStatus.status === 'running' ? 'border-l-blue-500 bg-blue-50' :
+          lastLLMStatus.status === 'success' ? 'border-l-green-500 bg-green-50' :
+            'border-l-red-500 bg-red-50'
+          }`}>
+          <CardBody className="flex items-start justify-between gap-3 p-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                {lastLLMStatus.status === 'running' && <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />}
+                {lastLLMStatus.status === 'success' && <CheckCircle className="w-5 h-5 text-green-600" />}
+                {lastLLMStatus.status === 'error' && <AlertTriangle className="w-5 h-5 text-red-600" />}
+                <span className={`font-bold ${lastLLMStatus.status === 'running' ? 'text-blue-800' :
+                  lastLLMStatus.status === 'success' ? 'text-green-800' :
+                    'text-red-800'
+                  }`}>
+                  {lastLLMStatus.status === 'running' ? 'LLM Parsing probíhá...' :
+                    lastLLMStatus.status === 'success' ? 'LLM Parsing dokončen' :
+                      'LLM Parsing selhal'}
+                </span>
+              </div>
+              <div className={`text-sm ${lastLLMStatus.status === 'running' ? 'text-blue-700' :
+                lastLLMStatus.status === 'success' ? 'text-green-700' :
                   'text-red-700'
                 }`}>
-                  {lastLLMStatus.message}
+                {lastLLMStatus.message}
+              </div>
+              {lastLLMStatus.details && (
+                <div className="text-xs mt-1 opacity-80">
+                  {lastLLMStatus.details}
                 </div>
-                {lastLLMStatus.details && (
-                  <div className={`text-xs mt-1 ${
-                    lastLLMStatus.status === 'running' ? 'text-blue-600' :
-                    lastLLMStatus.status === 'success' ? 'text-green-600' :
-                    'text-red-600'
-                  }`}>
-                    {lastLLMStatus.details}
-                  </div>
-                )}
-                <div className={`text-xs mt-2 ${
-                  lastLLMStatus.status === 'running' ? 'text-blue-500' :
-                  lastLLMStatus.status === 'success' ? 'text-green-600' :
-                  'text-red-600'
-                }`}>
-                  {new Date(lastLLMStatus.timestamp).toLocaleString('cs-CZ')}
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setLastLLMStatus(null);
-                  localStorage.removeItem('aiPricing_llmStatus');
-                }}
-                className="text-gray-400 hover:text-gray-600 text-xl font-bold"
-                title="Zavřít"
-              >
-                ×
-              </button>
-            </div>
-            {lastLLMStatus.status === 'running' && updateProgress && (
-              <div className="mt-3 pt-3 border-t border-blue-200">
-                <div className="text-xs text-blue-600 font-medium">{updateProgress.step}</div>
-                {updateProgress.details && (
-                  <div className="text-xs text-blue-500 mt-1">{updateProgress.details}</div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-1">
-              <h1 className="text-xl font-bold text-gray-800">💵 Ceny AI modelů</h1>
-              <div className="mt-1 flex items-center gap-3 text-xs">
-                {saving && (
-                  <span className="text-blue-600 font-medium flex items-center gap-1">
-                    <span className="animate-spin">⏳</span> Ukládám...
-                  </span>
-                )}
-                {!saving && lastSaved && (
-                  <span className="text-green-600 font-medium">
-                    ✓ Uloženo {lastSaved.toLocaleTimeString('cs-CZ')}
-                  </span>
-                )}
-                {hasUnsavedChanges && !saving && (
-                  <span className="text-orange-600 font-medium">
-                    ⚠ Neuložené změny
-                  </span>
-                )}
+              )}
+              <div className="text-xs mt-2 opacity-60">
+                {new Date(lastLLMStatus.timestamp).toLocaleString('cs-CZ')}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {/* HTML Parsing tlačítko */}
-              <div className="relative">
-                <button
-                  onClick={handleUpdatePrices}
-                  disabled={updatingPrices}
-                  className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
-                    updatingPrices
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-purple-600 text-white hover:bg-purple-700'
-                  }`}
-                >
-                  {updatingPrices ? (
-                    <>
-                      <span className="animate-spin">⏳</span> Aktualizuji...
-                    </>
-                  ) : (
-                    <>
-                      🔄 Aktualizovat (HTML)
-                    </>
-                  )}
-                </button>
-                {updateProgress && (
-                  <div className="absolute top-full left-0 mt-2 bg-gray-900 text-white p-3 rounded-lg shadow-lg z-50 min-w-[300px]">
-                    <div className="font-semibold text-sm mb-1">{updateProgress.step}</div>
-                    {updateProgress.details && (
-                      <div className="text-xs text-gray-300">{updateProgress.details}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {/* LLM Parsing tlačítko */}
-              <div className="relative">
-                <button
-                  onClick={handleUpdatePricesWithLLM}
-                  disabled={updatingPrices}
-                  className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
-                    updatingPrices
-                      ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  {updatingPrices ? (
-                    <>
-                      <span className="animate-spin">⏳</span> Aktualizuji...
-                    </>
-                  ) : (
-                    <>
-                      🤖 Aktualizovat (LLM)
-                    </>
-                  )}
-                </button>
-              </div>
-              
-              <button
-                onClick={handleSave}
-                disabled={saving || !hasUnsavedChanges}
-                className={`font-medium py-1.5 px-3 rounded-lg transition-colors text-sm ${
-                  saving || !hasUnsavedChanges
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-              >
-                {saving ? '⏳ Ukládám...' : '💾 Uložit'}
-              </button>
-              <button
-                onClick={onBack}
-                className="bg-gray-200 text-gray-800 font-medium py-1.5 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm"
-              >
-                ← Zpět
-              </button>
-            </div>
-          </div>
-        </div>
+            <button
+              onClick={() => {
+                setLastLLMStatus(null);
+                localStorage.removeItem('aiPricing_llmStatus');
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </CardBody>
+        </Card>
+      )}
 
-        {/* Kurz CZK/USD */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <h2 className="text-lg font-bold text-gray-800 mb-2">💱 Kurz měny</h2>
+      {/* Kurz CZK/USD */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-5 h-5 text-gray-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Kurz měny</h2>
+          </div>
+        </CardHeader>
+        <CardBody>
           <div className="flex items-center gap-3">
             <label className="text-gray-700 font-medium text-sm">1 USD =</label>
-            <input
-              type="number"
-              step="0.1"
-              value={config.usdToCzk}
-              onChange={(e) => setConfig(prev => ({ ...prev, usdToCzk: parseFloat(e.target.value) || 25 }))}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-24 text-sm"
-            />
+            <div className="w-32">
+              <TextField
+                type="number"
+                step="0.1"
+                value={config.usdToCzk}
+                onChange={(e) => setConfig(prev => ({ ...prev, usdToCzk: parseFloat(e.target.value) || 25 }))}
+              />
+            </div>
             <span className="text-gray-600 font-medium text-sm">Kč</span>
           </div>
-        </div>
+        </CardBody>
+      </Card>
 
-        {/* Výběr modelů pro operace */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <h2 className="text-lg font-bold text-gray-800 mb-3">🎯 Výběr modelů pro operace</h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {/* Výběr modelů pro operace */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Cpu className="w-5 h-5 text-gray-500" />
+            <h2 className="text-lg font-semibold text-gray-900">Výběr modelů pro operace</h2>
+          </div>
+        </CardHeader>
+        <CardBody>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {(['audio-transcription', 'image-analysis', 'report-generation', 'text-generation'] as const).map((operation) => {
               const operationLabels: Record<typeof operation, { icon: string; label: string }> = {
                 'audio-transcription': { icon: '🎤', label: 'Transkribce audio' },
@@ -657,24 +601,23 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                 'report-generation': { icon: '📄', label: 'Generování reportů' },
                 'text-generation': { icon: '📝', label: 'Generování textu' }
               };
-              
+
               const selectedModel = modelsConfig.models?.[operation] || '';
               const opStats = usageStats[operation];
               const allModelNames = Object.keys(allModelsList).length > 0 ? Object.keys(allModelsList) : Object.keys(config.models);
               const selectedModelInfo = selectedModel ? allModelsList[selectedModel] : null;
               const selectedPricing = selectedModel ? config.models[selectedModel] : null;
               const selectedCategory = selectedModel ? getModelCategory(selectedModel) : null;
-              
-              // Barvy podle kategorie
+
               const categoryColors: Record<ModelCategory, { bg: string; border: string; text: string; badge: string }> = {
                 'zdarma': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-700' },
                 'levný': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', badge: 'bg-green-100 text-green-700' },
                 'střední': { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-700' },
                 'drahý': { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', badge: 'bg-red-100 text-red-700' }
               };
-              
+
               const colors = selectedCategory ? categoryColors[selectedCategory] : { bg: 'bg-gray-50', border: 'border-gray-300', text: 'text-gray-700', badge: 'bg-gray-100 text-gray-700' };
-              
+
               return (
                 <div key={operation} className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -682,7 +625,7 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                       {operationLabels[operation].icon} {operationLabels[operation].label}
                     </label>
                     {opStats && opStats.count > 0 && (
-                      <span className="text-green-600 text-xs font-bold">💰</span>
+                      <span className="text-green-600 text-xs font-bold" title="Používáno">💰</span>
                     )}
                   </div>
                   <div className="relative">
@@ -690,7 +633,6 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                       type="button"
                       onClick={() => setShowDropdowns(prev => ({ ...prev, [operation]: !prev[operation] }))}
                       onBlur={(e) => {
-                        // Nezavřít pokud klikne na dropdown obsah
                         const relatedTarget = e.relatedTarget as HTMLElement;
                         if (!relatedTarget || !e.currentTarget.parentElement?.contains(relatedTarget)) {
                           setTimeout(() => {
@@ -698,20 +640,18 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                           }, 200);
                         }
                       }}
-                      className={`w-full px-3 py-2 pr-10 border-2 ${colors.border} ${colors.bg} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium ${colors.text} transition-all text-left flex items-center justify-between`}
+                      className={`w-full px-3 py-2 pr-10 border ${colors.border} ${colors.bg} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium ${colors.text} transition-all text-left flex items-center justify-between`}
                     >
                       <span className="truncate">
-                        {selectedModel 
+                        {selectedModel
                           ? `${selectedModel} (${getCategoryLabel(selectedCategory || 'střední').replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('🆓 ', '')})`
                           : '-- Vyberte --'}
                       </span>
-                      <svg className={`w-4 h-4 transition-transform ${showDropdowns[operation] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showDropdowns[operation] ? 'rotate-180' : ''}`} />
                     </button>
                     {showDropdowns[operation] && (
-                      <div 
-                        className="absolute z-50 w-full mt-1 bg-white border-2 border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+                      <div
+                        className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto"
                         onMouseDown={(e) => e.preventDefault()}
                       >
                         {allModelNames.map(modelName => {
@@ -723,13 +663,13 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                           const categoryLabel = getCategoryLabel(category);
                           const optionColors = categoryColors[category];
                           const isSelected = selectedModel === modelName;
-                          
+
                           return (
                             <div
                               key={modelName}
                               onMouseDown={(e) => {
                                 e.preventDefault();
-                                setModelsConfig(prev => ({
+                                setModelsConfig((prev: any) => ({
                                   ...prev,
                                   models: {
                                     ...prev.models,
@@ -738,17 +678,16 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                                 }));
                                 setShowDropdowns(prev => ({ ...prev, [operation]: false }));
                               }}
-                              className={`px-3 py-2 cursor-pointer transition-colors flex items-center justify-between ${
-                                isSelected 
-                                  ? `${optionColors.bg} ${optionColors.text} font-semibold` 
-                                  : category === 'zdarma' 
-                                    ? 'hover:bg-blue-50 hover:text-blue-700'
-                                    : category === 'levný'
-                                      ? 'hover:bg-green-50 hover:text-green-700'
-                                      : category === 'střední'
-                                        ? 'hover:bg-yellow-50 hover:text-yellow-700'
-                                        : 'hover:bg-red-50 hover:text-red-700'
-                              }`}
+                              className={`px-3 py-2 cursor-pointer transition-colors flex items-center justify-between ${isSelected
+                                ? `${optionColors.bg} ${optionColors.text} font-semibold`
+                                : category === 'zdarma'
+                                  ? 'hover:bg-blue-50 hover:text-blue-700'
+                                  : category === 'levný'
+                                    ? 'hover:bg-green-50 hover:text-green-700'
+                                    : category === 'střední'
+                                      ? 'hover:bg-yellow-50 hover:text-yellow-700'
+                                      : 'hover:bg-red-50 hover:text-red-700'
+                                }`}
                             >
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${optionColors.badge}`}>
@@ -790,100 +729,90 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
               );
             })}
           </div>
-        </div>
+        </CardBody>
+      </Card>
 
-        {/* Seznam modelů */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-800">🤖 Modely</h2>
+      {/* Seznam modelů */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Modely</h2>
+            </div>
             <div className="flex gap-2">
               {hiddenModels.size > 0 && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setHiddenModels(new Set())}
-                  className="bg-gray-500 text-white font-medium py-1 px-2 rounded text-xs hover:bg-gray-600 transition-colors"
-                  title={`Zobrazit ${hiddenModels.size} skrytých modelů`}
+                  leftIcon={<Eye className="w-4 h-4" />}
                 >
-                  👁️ ({hiddenModels.size})
-                </button>
+                  ({hiddenModels.size})
+                </Button>
               )}
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => setShowAddModel(!showAddModel)}
-                className="bg-blue-600 text-white font-medium py-1 px-2 rounded text-xs hover:bg-blue-700 transition-colors"
+                leftIcon={<Plus className="w-4 h-4" />}
               >
-                + Vlastní
-              </button>
+                Vlastní
+              </Button>
             </div>
           </div>
-
+        </CardHeader>
+        <CardBody>
           {/* Přidat nový model */}
           {showAddModel && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newModelName}
-                  onChange={(e) => setNewModelName(e.target.value)}
-                  placeholder="Název modelu"
-                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                />
-                <button
+                <div className="flex-1">
+                  <TextField
+                    value={newModelName}
+                    onChange={(e) => setNewModelName(e.target.value)}
+                    placeholder="Název modelu"
+                  />
+                </div>
+                <Button
+                  variant="primary"
                   onClick={addNewModel}
-                  className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                  className="bg-green-600 hover:bg-green-700 text-white focus:ring-green-500"
                 >
                   Přidat
-                </button>
-                <button
-                  onClick={() => setShowAddModel(false)}
-                  className="bg-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-400"
-                >
-                  ✕
-                </button>
+                </Button>
+                <Button variant="secondary" onClick={() => setShowAddModel(false)}>✕</Button>
               </div>
             </div>
           )}
 
           {/* Accordion s modely */}
-          <div className="space-y-2 overflow-visible">
-            {/* Zobrazit všechny modely ze seznamu, nejen ty s cenami */}
+          <div className="space-y-2">
             {Object.entries(allModelsList).length > 0 ? (
               Object.entries(allModelsList)
-                .filter(([modelName]) => !hiddenModels.has(modelName)) // Filtrovat skryté modely
+                .filter(([modelName]) => !hiddenModels.has(modelName))
                 .sort(([, a], [, b]) => {
-                  // Seřadit od nejdražšího po nejlevnější podle průměrné ceny (input + output)
                   const avgPriceA = (a.inputPrice || 0) + (a.outputPrice || 0);
                   const avgPriceB = (b.inputPrice || 0) + (b.outputPrice || 0);
-                  return avgPriceB - avgPriceA; // Sestupně (nejdražší první)
+                  return avgPriceB - avgPriceA;
                 })
                 .map(([modelName, modelInfo], index, array) => {
-                // Najít ceny z config.models nebo použít z modelInfo
-                const pricing = config.models[modelName] || {
-                  inputPrice: modelInfo.inputPrice || 0,
-                  outputPrice: modelInfo.outputPrice || 0,
-                  note: modelInfo.description,
-                  useCase: modelInfo.useCase || ''
-                };
-                
-                const category = getModelCategory(modelName);
-                const isFree = isFreeModel(modelName);
-                const isExpanded = expandedModels.has(modelName);
-                const isLastRow = index >= array.length - 2; // Poslední 2 řádky
-                
-                return (
-                  <div key={modelName} className="border border-gray-200 rounded-lg">
-                    {/* Accordion header */}
-                    <div
-                      onClick={() => {
-                        const newExpanded = new Set(expandedModels);
-                        if (isExpanded) {
-                          newExpanded.delete(modelName);
-                        } else {
-                          newExpanded.add(modelName);
-                        }
-                        setExpandedModels(newExpanded);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
+                  const pricing = config.models[modelName] || {
+                    inputPrice: modelInfo.inputPrice || 0,
+                    outputPrice: modelInfo.outputPrice || 0,
+                    note: modelInfo.description,
+                    useCase: modelInfo.useCase || ''
+                  };
+
+                  const category = getModelCategory(modelName);
+                  const isFree = isFreeModel(modelName);
+                  const isExpanded = expandedModels.has(modelName);
+                  const isLastRow = index >= array.length - 2;
+
+                  return (
+                    <div key={modelName} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div
+                        onClick={() => {
                           const newExpanded = new Set(expandedModels);
                           if (isExpanded) {
                             newExpanded.delete(modelName);
@@ -891,419 +820,368 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                             newExpanded.add(modelName);
                           }
                           setExpandedModels(newExpanded);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      className="w-full flex items-center justify-between p-2 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <DetailTooltip
-                        position={isLastRow ? 'top' : 'bottom'}
-                        content={
-                          <div className="space-y-1.5">
-                            <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{modelName}</div>
-                            {modelInfo.description && (
-                              <div className="flex items-start gap-2">
-                                <span className="font-semibold text-gray-300 min-w-[60px]">Popis:</span>
-                                <span className="text-white">{modelInfo.description}</span>
-                              </div>
-                            )}
-                            <div className="flex items-start gap-2">
-                              <span className="font-semibold text-gray-300 min-w-[60px]">Použití:</span>
-                              <span className="text-white">{modelInfo.useCase || 'Neuvedeno'}</span>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <span className="font-semibold text-gray-300 min-w-[60px]">Cena:</span>
-                              <span className="text-white">Input: ${pricing.inputPrice}/1M, Output: ${pricing.outputPrice}/1M</span>
-                            </div>
-                            {isFree && (
-                              <div className="text-xs text-blue-300 mt-2 pt-2 border-t border-gray-700">
-                                🆓 Free tier: Bezplatné používání s omezením
-                              </div>
-                            )}
-                          </div>
-                        }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            const newExpanded = new Set(expandedModels);
+                            if (isExpanded) {
+                              newExpanded.delete(modelName);
+                            } else {
+                              newExpanded.add(modelName);
+                            }
+                            setExpandedModels(newExpanded);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
                       >
-                        <div className="flex items-center gap-2 flex-1 min-w-0 cursor-help truncate block w-full">
-                          <span className="text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
-                          <h3 className="text-sm font-bold text-gray-800 truncate">{modelName}</h3>
-                          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            category === 'zdarma' ? 'bg-blue-100 text-blue-700' :
-                            category === 'levný' ? 'bg-green-100 text-green-700' :
-                            category === 'střední' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {getCategoryLabel(category).replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('🆓 ', '')}
-                          </span>
-                          <span className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                            ${pricing.inputPrice}/${pricing.outputPrice}/1M
-                          </span>
-                          <span className="text-xs text-gray-600 truncate max-w-[200px]">
-                            {(pricing.useCase || modelInfo.useCase) ? `• ${pricing.useCase || modelInfo.useCase}` : '• Použití neuvedeno'}
-                          </span>
-                        </div>
-                      </DetailTooltip>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const newHidden = new Set(hiddenModels);
-                            newHidden.add(modelName);
-                            setHiddenModels(newHidden);
-                          }}
-                          className="text-gray-500 hover:text-gray-700 text-xs p-1"
-                          title="Skrýt model"
+                        <DetailTooltip
+                          position={isLastRow ? 'top' : 'bottom'}
+                          content={
+                            <div className="space-y-1.5">
+                              <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{modelName}</div>
+                              {modelInfo.description && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[60px]">Popis:</span>
+                                  <span className="text-white">{modelInfo.description}</span>
+                                </div>
+                              )}
+                              <div className="flex items-start gap-2">
+                                <span className="font-semibold text-gray-300 min-w-[60px]">Použití:</span>
+                                <span className="text-white">{modelInfo.useCase || 'Neuvedeno'}</span>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <span className="font-semibold text-gray-300 min-w-[60px]">Cena:</span>
+                                <span className="text-white">Input: ${pricing.inputPrice}/1M, Output: ${pricing.outputPrice}/1M</span>
+                              </div>
+                              {isFree && (
+                                <div className="text-xs text-blue-300 mt-2 pt-2 border-t border-gray-700">
+                                  🆓 Free tier: Bezplatné používání s omezením
+                                </div>
+                              )}
+                            </div>
+                          }
                         >
-                          👁️
-                        </button>
-                        {!allModelsList[modelName] && (
+                          <div className="flex items-center gap-3 flex-1 min-w-0 cursor-help truncate block w-full">
+                            <span className="text-gray-400">{isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</span>
+                            <h3 className="text-sm font-bold text-gray-800 truncate">{modelName}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${category === 'zdarma' ? 'bg-blue-100 text-blue-700' :
+                              category === 'levný' ? 'bg-green-100 text-green-700' :
+                                category === 'střední' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                              }`}>
+                              {getCategoryLabel(category).replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('🆓 ', '')}
+                            </span>
+                            <span className="text-xs text-gray-500 truncate flex-1 min-w-0">
+                              ${pricing.inputPrice}/${pricing.outputPrice}/1M
+                            </span>
+                            <span className="text-xs text-gray-600 truncate max-w-[200px] hidden sm:inline">
+                              {(pricing.useCase || modelInfo.useCase) ? `• ${pricing.useCase || modelInfo.useCase}` : '• Použití neuvedeno'}
+                            </span>
+                          </div>
+                        </DetailTooltip>
+                        <div className="flex items-center gap-1 flex-shrink-0">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              deleteModel(modelName);
+                              const newHidden = new Set(hiddenModels);
+                              newHidden.add(modelName);
+                              setHiddenModels(newHidden);
                             }}
-                            className="text-red-600 hover:text-red-800 text-xs p-1"
-                            title="Smazat model"
+                            className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-200"
+                            title="Skrýt model"
                           >
-                            🗑️
+                            <EyeOff className="w-4 h-4" />
                           </button>
-                        )}
+                          {!allModelsList[modelName] && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteModel(modelName);
+                              }}
+                              className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-100"
+                              title="Smazat model"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    
-                    {/* Accordion content */}
-                    {isExpanded && (
-                      <div className="p-3 bg-white border-t border-gray-200">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Input ($/1M) <span className="text-gray-400">(text/image/video)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.inputPrice}
-                              onChange={(e) => updateModelPrice(modelName, 'inputPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {(pricing.inputPrice * config.usdToCzk).toFixed(2)} Kč/1M
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Output ($/1M)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.outputPrice}
-                              onChange={(e) => updateModelPrice(modelName, 'outputPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {(pricing.outputPrice * config.usdToCzk).toFixed(2)} Kč/1M
-                              </div>
-                            )}
-                          </div>
-                        </div>
 
-                        {/* Audio a Image Input Price */}
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Audio Input ($/1M) <span className="text-gray-400">(volitelné)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.audioInputPrice !== undefined ? pricing.audioInputPrice : ''}
-                              onChange={(e) => updateModelPrice(modelName, 'audioInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
-                              placeholder={pricing.inputPrice?.toString() || '0.00'}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {pricing.audioInputPrice !== undefined ? ((pricing.audioInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Image Input ($/1M) <span className="text-gray-400">(volitelné)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.imageInputPrice !== undefined ? pricing.imageInputPrice : ''}
-                              onChange={(e) => updateModelPrice(modelName, 'imageInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
-                              placeholder={pricing.inputPrice?.toString() || '0.00'}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {pricing.imageInputPrice !== undefined ? ((pricing.imageInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {pricing.threshold && (
-                          <div className="grid grid-cols-2 gap-3 mt-3">
+                      {isExpanded && (
+                        <div className="p-4 bg-white border-t border-gray-200">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Input High ($/1M)
-                              </label>
-                              <input
+                              <TextField
+                                label="Input ($/1M)"
                                 type="number"
                                 step="0.01"
-                                value={pricing.inputPriceHigh || 0}
-                                onChange={(e) => updateModelPrice(modelName, 'inputPriceHigh', parseFloat(e.target.value) || 0)}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                                value={pricing.inputPrice}
+                                onChange={(e) => updateModelPrice(modelName, 'inputPrice', parseFloat(e.target.value) || 0)}
+                                helperText={config.usdToCzk ? `${(pricing.inputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : undefined}
                               />
                             </div>
-                            
-                            <div>
-                              <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Threshold
-                              </label>
-                              <input
-                                type="number"
-                                value={pricing.threshold}
-                                onChange={(e) => updateModelPrice(modelName, 'threshold', parseInt(e.target.value) || 0)}
-                                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                              />
-                            </div>
-                          </div>
-                        )}
 
-                        {(pricing.lastPriceUpdate || modelInfo.lastPriceUpdate) && (
-                          <div className="mt-2 pt-2 border-t border-gray-200">
-                            <p className="text-xs text-gray-500">
-                              Aktualizováno: {pricing.lastPriceUpdate || modelInfo.lastPriceUpdate}
-                            </p>
+                            <div>
+                              <TextField
+                                label="Output ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.outputPrice}
+                                onChange={(e) => updateModelPrice(modelName, 'outputPrice', parseFloat(e.target.value) || 0)}
+                                helperText={config.usdToCzk ? `${(pricing.outputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : undefined}
+                              />
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                            <div>
+                              <TextField
+                                label="Audio Input ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.audioInputPrice !== undefined ? pricing.audioInputPrice : ''}
+                                onChange={(e) => updateModelPrice(modelName, 'audioInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                                placeholder={pricing.inputPrice?.toString() || '0.00'}
+                                helperText={config.usdToCzk ? (pricing.audioInputPrice !== undefined ? `${(pricing.audioInputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : 'Použije se Input cena') : undefined}
+                              />
+                            </div>
+
+                            <div>
+                              <TextField
+                                label="Image Input ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.imageInputPrice !== undefined ? pricing.imageInputPrice : ''}
+                                onChange={(e) => updateModelPrice(modelName, 'imageInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                                placeholder={pricing.inputPrice?.toString() || '0.00'}
+                                helperText={config.usdToCzk ? (pricing.imageInputPrice !== undefined ? `${(pricing.imageInputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : 'Použije se Input cena') : undefined}
+                              />
+                            </div>
+                          </div>
+
+                          {pricing.threshold && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                              <div>
+                                <TextField
+                                  label="Input High ($/1M)"
+                                  type="number"
+                                  step="0.01"
+                                  value={pricing.inputPriceHigh || 0}
+                                  onChange={(e) => updateModelPrice(modelName, 'inputPriceHigh', parseFloat(e.target.value) || 0)}
+                                />
+                              </div>
+
+                              <div>
+                                <TextField
+                                  label="Threshold"
+                                  type="number"
+                                  value={pricing.threshold}
+                                  onChange={(e) => updateModelPrice(modelName, 'threshold', parseInt(e.target.value) || 0)}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {(pricing.lastPriceUpdate || modelInfo.lastPriceUpdate) && (
+                            <div className="mt-4 pt-2 border-t border-gray-100">
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <Info className="w-3 h-3" />
+                                Aktualizováno: {pricing.lastPriceUpdate || modelInfo.lastPriceUpdate}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
             ) : (
-              // Fallback: zobrazit modely z config.models pokud allModelsList je prázdný
+              // Fallback
               Object.entries(config.models)
                 .sort(([, a], [, b]) => {
-                  // Seřadit od nejdražšího po nejlevnější podle průměrné ceny (input + output)
                   const avgPriceA = (a.inputPrice || 0) + (a.outputPrice || 0);
                   const avgPriceB = (b.inputPrice || 0) + (b.outputPrice || 0);
-                  return avgPriceB - avgPriceA; // Sestupně (nejdražší první)
+                  return avgPriceB - avgPriceA;
                 })
                 .map(([modelName, pricing], index, array) => {
-                const category = getModelCategory(modelName);
-                const isExpanded = expandedModels.has(modelName);
-                const isLastRow = index >= array.length - 2; // Poslední 2 řádky
-                
-                return (
-                  <div key={modelName} className="border border-gray-200 rounded-lg">
-                    <div
-                      onClick={() => {
-                        const newExpanded = new Set(expandedModels);
-                        if (isExpanded) {
-                          newExpanded.delete(modelName);
-                        } else {
-                          newExpanded.add(modelName);
-                        }
-                        setExpandedModels(newExpanded);
-                      }}
-                      className="w-full flex items-center justify-between p-2 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
-                    >
-                      <DetailTooltip
-                        position={isLastRow ? 'top' : 'bottom'}
-                        content={
-                          <div className="space-y-1.5">
-                            <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{modelName}</div>
-                            {pricing.note && (
-                              <div className="flex items-start gap-2">
-                                <span className="font-semibold text-gray-300 min-w-[60px]">Popis:</span>
-                                <span className="text-white">{pricing.note}</span>
-                              </div>
-                            )}
-                            <div className="flex items-start gap-2">
-                              <span className="font-semibold text-gray-300 min-w-[60px]">Použití:</span>
-                              <span className="text-white">{pricing.useCase || 'Neuvedeno'}</span>
-                            </div>
-                            <div className="flex items-start gap-2">
-                              <span className="font-semibold text-gray-300 min-w-[60px]">Cena:</span>
-                              <span className="text-white">Input: ${pricing.inputPrice}/1M, Output: ${pricing.outputPrice}/1M</span>
-                            </div>
-                            {pricing.lastPriceUpdate && (
-                              <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-700">
-                                Aktualizováno: {pricing.lastPriceUpdate}
-                              </div>
-                            )}
-                          </div>
-                        }
-                      >
-                        <div className="flex items-center gap-2 flex-1 min-w-0 cursor-help truncate block w-full">
-                          <span className="text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
-                          <h3 className="text-sm font-bold text-gray-800 truncate">{modelName}</h3>
-                          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            category === 'zdarma' ? 'bg-blue-100 text-blue-700' :
-                            category === 'levný' ? 'bg-green-100 text-green-700' :
-                            category === 'střední' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {getCategoryLabel(category).replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('🆓 ', '')}
-                          </span>
-                          <span className="text-xs text-gray-500 truncate flex-1 min-w-0">
-                            ${pricing.inputPrice}/${pricing.outputPrice}/1M
-                          </span>
-                          <span className="text-xs text-gray-600 truncate max-w-[200px]">
-                            {pricing.useCase ? `• ${pricing.useCase}` : '• Použití neuvedeno'}
-                          </span>
-                        </div>
-                      </DetailTooltip>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteModel(modelName);
-                        }}
-                        className="text-red-600 hover:text-red-800 text-xs p-1"
-                        title="Smazat model"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                    
-                    {isExpanded && (
-                      <div className="p-3 bg-white border-t border-gray-200">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Input ($/1M) <span className="text-gray-400">(text/image/video)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.inputPrice}
-                              onChange={(e) => updateModelPrice(modelName, 'inputPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {(pricing.inputPrice * config.usdToCzk).toFixed(2)} Kč/1M
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Output ($/1M)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.outputPrice}
-                              onChange={(e) => updateModelPrice(modelName, 'outputPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {(pricing.outputPrice * config.usdToCzk).toFixed(2)} Kč/1M
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                  const category = getModelCategory(modelName);
+                  const isExpanded = expandedModels.has(modelName);
+                  const isLastRow = index >= array.length - 2;
 
-                        {/* Audio a Image Input Price */}
-                        <div className="grid grid-cols-2 gap-3 mt-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Audio Input ($/1M) <span className="text-gray-400">(volitelné)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.audioInputPrice !== undefined ? pricing.audioInputPrice : ''}
-                              onChange={(e) => updateModelPrice(modelName, 'audioInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
-                              placeholder={pricing.inputPrice?.toString() || '0.00'}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {pricing.audioInputPrice !== undefined ? ((pricing.audioInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
+                  return (
+                    <div key={modelName} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div
+                        onClick={() => {
+                          const newExpanded = new Set(expandedModels);
+                          if (isExpanded) {
+                            newExpanded.delete(modelName);
+                          } else {
+                            newExpanded.add(modelName);
+                          }
+                          setExpandedModels(newExpanded);
+                        }}
+                        className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <DetailTooltip
+                          position={isLastRow ? 'top' : 'bottom'}
+                          content={
+                            <div className="space-y-1.5">
+                              <div className="font-bold text-sm mb-2 pb-2 border-b border-gray-700">{modelName}</div>
+                              {pricing.note && (
+                                <div className="flex items-start gap-2">
+                                  <span className="font-semibold text-gray-300 min-w-[60px]">Popis:</span>
+                                  <span className="text-white">{pricing.note}</span>
+                                </div>
+                              )}
+                              <div className="flex items-start gap-2">
+                                <span className="font-semibold text-gray-300 min-w-[60px]">Použití:</span>
+                                <span className="text-white">{pricing.useCase || 'Neuvedeno'}</span>
                               </div>
-                            )}
-                          </div>
-                          
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Image Input ($/1M) <span className="text-gray-400">(volitelné)</span>
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={pricing.imageInputPrice !== undefined ? pricing.imageInputPrice : ''}
-                              onChange={(e) => updateModelPrice(modelName, 'imageInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
-                              placeholder={pricing.inputPrice?.toString() || '0.00'}
-                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
-                            />
-                            {config.usdToCzk && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {pricing.imageInputPrice !== undefined ? ((pricing.imageInputPrice * config.usdToCzk).toFixed(2) + ' Kč/1M') : 'Použije se Input cena'}
+                              <div className="flex items-start gap-2">
+                                <span className="font-semibold text-gray-300 min-w-[60px]">Cena:</span>
+                                <span className="text-white">Input: ${pricing.inputPrice}/1M, Output: ${pricing.outputPrice}/1M</span>
                               </div>
-                            )}
+                              {pricing.lastPriceUpdate && (
+                                <div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-700">
+                                  Aktualizováno: {pricing.lastPriceUpdate}
+                                </div>
+                              )}
+                            </div>
+                          }
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0 cursor-help truncate block w-full">
+                            <span className="text-gray-400">{isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</span>
+                            <h3 className="text-sm font-bold text-gray-800 truncate">{modelName}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${category === 'zdarma' ? 'bg-blue-100 text-blue-700' :
+                              category === 'levný' ? 'bg-green-100 text-green-700' :
+                                category === 'střední' ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
+                              }`}>
+                              {getCategoryLabel(category).replace('🟢 ', '').replace('🟡 ', '').replace('🔴 ', '').replace('🆓 ', '')}
+                            </span>
+                            <span className="text-xs text-gray-500 truncate flex-1 min-w-0">
+                              ${pricing.inputPrice}/${pricing.outputPrice}/1M
+                            </span>
+                            <span className="text-xs text-gray-600 truncate max-w-[200px] hidden sm:inline">
+                              {pricing.useCase ? `• ${pricing.useCase}` : '• Použití neuvedeno'}
+                            </span>
                           </div>
-                        </div>
-                        
-                        {pricing.note && (
-                          <div className="mt-2 pt-2 border-t border-gray-200">
-                            <p className="text-xs text-gray-600">{pricing.note}</p>
-                          </div>
-                        )}
-                        
-                        {pricing.lastPriceUpdate && (
-                          <div className="mt-2 pt-2 border-t border-gray-200">
-                            <p className="text-xs text-gray-500">
-                              Aktualizováno: {pricing.lastPriceUpdate}
-                            </p>
-                          </div>
-                        )}
+                        </DetailTooltip>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteModel(modelName);
+                          }}
+                          className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-100"
+                          title="Smazat model"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                    )}
-                  </div>
-                );
-              })
+
+                      {isExpanded && (
+                        <div className="p-4 bg-white border-t border-gray-200">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <TextField
+                                label="Input ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.inputPrice}
+                                onChange={(e) => updateModelPrice(modelName, 'inputPrice', parseFloat(e.target.value) || 0)}
+                                helperText={config.usdToCzk ? `${(pricing.inputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : undefined}
+                              />
+                            </div>
+
+                            <div>
+                              <TextField
+                                label="Output ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.outputPrice}
+                                onChange={(e) => updateModelPrice(modelName, 'outputPrice', parseFloat(e.target.value) || 0)}
+                                helperText={config.usdToCzk ? `${(pricing.outputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : undefined}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                            <div>
+                              <TextField
+                                label="Audio Input ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.audioInputPrice !== undefined ? pricing.audioInputPrice : ''}
+                                onChange={(e) => updateModelPrice(modelName, 'audioInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                                placeholder={pricing.inputPrice?.toString() || '0.00'}
+                                helperText={config.usdToCzk ? (pricing.audioInputPrice !== undefined ? `${(pricing.audioInputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : 'Použije se Input cena') : undefined}
+                              />
+                            </div>
+
+                            <div>
+                              <TextField
+                                label="Image Input ($/1M)"
+                                type="number"
+                                step="0.01"
+                                value={pricing.imageInputPrice !== undefined ? pricing.imageInputPrice : ''}
+                                onChange={(e) => updateModelPrice(modelName, 'imageInputPrice', e.target.value === '' ? undefined : parseFloat(e.target.value) || 0)}
+                                placeholder={pricing.inputPrice?.toString() || '0.00'}
+                                helperText={config.usdToCzk ? (pricing.imageInputPrice !== undefined ? `${(pricing.imageInputPrice * config.usdToCzk).toFixed(2)} Kč/1M` : 'Použije se Input cena') : undefined}
+                              />
+                            </div>
+                          </div>
+
+                          {pricing.note && (
+                            <div className="mt-4 pt-2 border-t border-gray-100">
+                              <p className="text-xs text-gray-600">{pricing.note}</p>
+                            </div>
+                          )}
+
+                          {pricing.lastPriceUpdate && (
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <p className="text-xs text-gray-500 flex items-center gap-1">
+                                <Info className="w-3 h-3" />
+                                Aktualizováno: {pricing.lastPriceUpdate}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
             )}
           </div>
-          
-        </div>
+        </CardBody>
+      </Card>
 
-        {/* Výsledky parsování */}
-        {parsingResults && (
-          <div className="bg-blue-50 border-2 border-blue-300 rounded-xl shadow-lg p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold text-blue-800">📊 Výsledky parsování</h2>
-              <button
+      {/* Výsledky parsování */}
+      {parsingResults && (
+        <Card className="mb-6 border-l-4 border-l-blue-500 bg-blue-50">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-blue-800">Výsledky parsování</h2>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setParsingResults(null)}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                leftIcon={<X className="w-4 h-4" />}
               >
-                ✕ Zavřít
-              </button>
+                Zavřít
+              </Button>
             </div>
-            
-            <div className="bg-white rounded-lg p-3 border border-blue-200">
-              <div className="text-sm text-gray-700 mb-2">
+          </CardHeader>
+          <CardBody>
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="text-sm text-gray-700 mb-3">
                 <strong>Nalezeno modelů:</strong> {Object.keys(parsingResults).length}
               </div>
-              
+
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {Object.entries(parsingResults).length > 0 ? (
                   Object.entries(parsingResults).map(([modelName, modelData]) => (
@@ -1334,9 +1212,9 @@ const AIPricingConfigScreen: React.FC<AIPricingConfigScreenProps> = ({ onBack })
                 )}
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 };

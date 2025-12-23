@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Audit, Report, ReportStatus, AuditStructure, AuditAnswer, ReportData, NonComplianceData } from '../types';
 import SummaryReportContent from '../src/components/SummaryReport';
 import { Button } from './ui/Button';
@@ -12,38 +12,47 @@ interface ReportViewProps {
   onBack: () => void;
   reportVersions?: Report[]; // Všechny verze reportů pro tento audit
   onSelectVersion?: (reportId: string) => void; // Callback pro změnu verze
+  onCancelReportGeneration?: (reportId: string) => void; // Callback pro zrušení generování
 }
 
 const formatDate = (dateString?: string): string => {
-    if (!dateString) return 'Neuvedeno';
-    const date = new Date(dateString);
-    return isNaN(date.getTime()) ? 'Neplatné datum' : date.toLocaleDateString('cs-CZ');
+  if (!dateString) return 'Neuvedeno';
+  const date = new Date(dateString);
+  return isNaN(date.getTime()) ? 'Neplatné datum' : date.toLocaleDateString('cs-CZ');
 };
 
-const HeaderSection: React.FC<{ title: string; fields: {id: string, label: string}[]; values: any }> = ({ title, fields, values }) => (
-    <div className="mb-4 print:break-inside-avoid">
-        <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{title}</h2>
-        <table className="w-full text-sm">
-            <tbody>
-                {fields.map(field => (
-                    <tr key={field.id}>
-                        <td className="font-bold pr-4 py-1 align-top w-40">{field.label}</td>
-                        <td className="py-1">{values[field.id] || '-'}</td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    </div>
+const HeaderSection: React.FC<{ title: string; fields: { id: string, label: string }[]; values: any }> = ({ title, fields, values }) => (
+  <div className="mb-4 print:break-inside-avoid">
+    <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{title}</h2>
+    <table className="w-full text-sm">
+      <tbody>
+        {fields.map(field => (
+          <tr key={field.id}>
+            <td className="font-bold pr-4 py-1 align-top w-40">{field.label}</td>
+            <td className="py-1">{values[field.id] || '-'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
 );
 
 
-const GeneratingView: React.FC = () => (
+const GeneratingView: React.FC<{ onCancel?: () => void }> = ({ onCancel }) => (
   <div className="text-center p-12">
     <div className="flex justify-center items-center mb-4">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
     </div>
     <h3 className="text-2xl font-bold text-blue-600">Zpráva se generuje...</h3>
-    <p className="text-gray-600 mt-2">Váš report je právě zpracováván umělou inteligencí.</p>
+    <p className="text-gray-600 mt-2">Váš report se právě připravuje.</p>
+    {onCancel && (
+      <button
+        onClick={onCancel}
+        className="mt-6 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+      >
+        Zrušit generování
+      </button>
+    )}
   </div>
 );
 
@@ -55,162 +64,167 @@ const ErrorView: React.FC<{ error: string }> = ({ error }) => (
 );
 
 const FullReportContent: React.FC<{ report: Report | undefined, reportData: ReportData | undefined, audit: Audit, auditStructure: AuditStructure }> = ({ report, reportData, audit, auditStructure }) => {
-    
-    const getAnswerStatus = (answer: AuditAnswer | undefined) => {
-        if (answer && !answer.compliant) return { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' };
-        return { text: 'Vyhovuje', color: 'text-green-600 font-bold' };
-    };
+  // Použít snapshot headerValues z reportu pokud existuje, jinak použít audit.headerValues
+  const headerValues = report?.headerValuesSnapshot || audit.headerValues;
 
-    const nonCompliantDetails = useMemo(() => {
-        const details: (NonComplianceData & { sectionTitle: string; itemTitle: string })[] = [];
-        auditStructure.audit_sections.forEach(section => {
-            section.items.forEach(item => {
-                const answer = audit.answers[item.id];
-                if (answer && !answer.compliant && answer.nonComplianceData) {
-                    answer.nonComplianceData.forEach(ncData => {
-                        details.push({
-                            sectionTitle: section.title,
-                            itemTitle: item.title,
-                            ...ncData
-                        });
-                    });
-                }
+  const getAnswerStatus = (answer: AuditAnswer | undefined) => {
+    if (answer && !answer.compliant) return { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' };
+    return { text: 'Vyhovuje', color: 'text-green-600 font-bold' };
+  };
+
+  // Použít snapshot answers z reportu pokud existuje, jinak fallback na aktuální audit
+  const answersToUse = report?.answersSnapshot || audit.answers;
+
+  const nonCompliantDetails = useMemo(() => {
+    const details: (NonComplianceData & { sectionTitle: string; itemTitle: string })[] = [];
+    auditStructure.audit_sections.forEach(section => {
+      section.items.forEach(item => {
+        const answer = answersToUse[item.id];
+        if (answer && !answer.compliant && answer.nonComplianceData) {
+          answer.nonComplianceData.forEach(ncData => {
+            details.push({
+              sectionTitle: section.title,
+              itemTitle: item.title,
+              ...ncData
             });
-        });
-        return details;
-    }, [audit, auditStructure]);
+          });
+        }
+      });
+    });
+    return details;
+  }, [answersToUse, auditStructure]);
 
-    return (
-        <div className="bg-white p-8 md:p-12 font-sans text-sm print:p-0">
-            <h1 className="text-2xl font-bold text-center mb-4">{auditStructure.audit_title}</h1>
-            <div className="text-center mb-8 text-base">
-                <p><strong>Datum auditu:</strong> {formatDate(audit.completedAt)}</p>
-                <p><strong>Za provozovatele:</strong> {audit.headerValues.operator_name || 'Neuvedeno'}</p>
+  return (
+    <div className="bg-white p-8 md:p-12 font-sans text-sm print:p-0">
+      <h1 className="text-2xl font-bold text-center mb-4">{auditStructure.audit_title}</h1>
+      <div className="text-center mb-8 text-base">
+        <p><strong>Datum auditu:</strong> {formatDate(audit.completedAt)}</p>
+        <p><strong>Za provozovatele přítomen:</strong> {(headerValues as any).present_person || 'Neuvedeno'}</p>
+      </div>
+
+      <div className="mb-8 print:break-inside-avoid border-y-2 border-black py-2">
+        <h2 className="text-sm font-bold uppercase text-center mb-2">Zpracovatel Auditu</h2>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left">
+              {auditStructure.header_data.auditor.fields.map(field => (
+                <th key={field.id} className="font-bold p-1">{field.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {auditStructure.header_data.auditor.fields.map(field => {
+                // Používat uložené údaje z reportu (snapshot) pokud existují
+                const auditorInfo = report?.auditorSnapshot || {
+                  name: (headerValues as any)['auditor_name'] || '-',
+                  phone: (headerValues as any)['auditor_phone'] || '-',
+                  email: (headerValues as any)['auditor_email'] || '-',
+                  web: (headerValues as any)['auditor_web'] || '-',
+                };
+                const auditorValueMap: { [key: string]: string } = {
+                  'auditor_name': auditorInfo.name,
+                  'auditor_phone': auditorInfo.phone,
+                  'auditor_email': auditorInfo.email,
+                  'auditor_web': auditorInfo.web
+                };
+                return (
+                  <td key={field.id} className="p-1">{auditorValueMap[field.id] || '-'}</td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-12 mb-8">
+        <HeaderSection
+          title={auditStructure.header_data.audited_premise.title}
+          fields={auditStructure.header_data.audited_premise.fields}
+          values={headerValues}
+        />
+        <HeaderSection
+          title={auditStructure.header_data.operator.title}
+          fields={auditStructure.header_data.operator.fields}
+          values={headerValues}
+        />
+      </div>
+
+      <SummaryReportContent reportData={reportData} />
+
+      <div className="print:break-before-page mt-8">
+        <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">SEZNAM AUDITOVANÝCH POLOŽEK</h2>
+        <table className="w-full border-collapse border border-gray-400 mb-8 text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="border border-gray-300 p-2 text-left">Kontrolovaná oblast</th>
+              <th className="border border-gray-300 p-2 text-left w-32">Výsledek</th>
+            </tr>
+          </thead>
+          <tbody>
+            {auditStructure.audit_sections.filter(s => s.active).map((section, sectionIndex) => {
+              // NATVRDO: "SPRÁVNÁ VÝROBNÍ PRAXE" začíná na nové stránce
+              const forcePageBreak = section.title === "SPRÁVNÁ VÝROBNÍ PRAXE";
+
+              return (
+                <React.Fragment key={section.id}>
+                  <tr className={`bg-gray-50 print:break-inside-avoid-page ${forcePageBreak ? 'print:break-before-page' : ''
+                    }`}>
+                    <td colSpan={2} className="border border-gray-300 p-2 font-bold">{section.title}</td>
+                  </tr>
+                  {section.items.filter(i => i.active).map(item => {
+                    const status = getAnswerStatus(answersToUse[item.id]);
+                    return (
+                      <tr key={item.id} className="print:break-inside-avoid">
+                        <td className="border border-gray-300 p-2">{item.title}</td>
+                        <td className={`border border-gray-300 p-2 ${status.color}`}>{status.text}</td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {nonCompliantDetails.length > 0 && (
+        <div className="print:break-before-page mt-8">
+          <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESHOD</h2>
+          {nonCompliantDetails.map((nc, index) => (
+            <div key={index} className="mb-6 pt-4 print:break-inside-avoid border-t">
+              <h3 className="font-bold text-md">{index + 1}. {nc.itemTitle}</h3>
+              <p className="text-xs text-gray-500 mb-2">Sekce: {nc.sectionTitle}</p>
+
+              <div className="pl-4 border-l-4 border-red-500 mb-4">
+                <p><strong>Místo:</strong> {nc.location || '-'}</p>
+                <p><strong>Zjištění:</strong> {nc.finding || '-'}</p>
+                <p><strong>Doporučení:</strong> {nc.recommendation || '-'}</p>
+              </div>
+
+              {nc.photos && nc.photos.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {nc.photos.map((photo, pIndex) => (
+                    photo.base64 && <img
+                      key={pIndex}
+                      src={`data:image/jpeg;base64,${photo.base64}`}
+                      alt={`Fotografie neshody ${index + 1}`}
+                      className="w-full h-auto rounded-md shadow-md border"
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-            
-            <div className="mb-8 print:break-inside-avoid border-y-2 border-black py-2">
-                <h2 className="text-sm font-bold uppercase text-center mb-2">Zpracovatel Auditu</h2>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left">
-                      {auditStructure.header_data.auditor.fields.map(field => (
-                        <th key={field.id} className="font-bold p-1">{field.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      {auditStructure.header_data.auditor.fields.map(field => {
-                        // Používat uložené údaje z reportu (snapshot) pokud existují
-                        const auditorInfo = report?.auditorSnapshot || {
-                          name: (audit.headerValues as any)['auditor_name'] || '-',
-                          phone: (audit.headerValues as any)['auditor_phone'] || '-',
-                          email: (audit.headerValues as any)['auditor_email'] || '-',
-                          web: (audit.headerValues as any)['auditor_web'] || '-',
-                        };
-                        const auditorValueMap: { [key: string]: string } = {
-                          'auditor_name': auditorInfo.name,
-                          'auditor_phone': auditorInfo.phone,
-                          'auditor_email': auditorInfo.email,
-                          'auditor_web': auditorInfo.web
-                        };
-                        return (
-                          <td key={field.id} className="p-1">{auditorValueMap[field.id] || '-'}</td>
-                        );
-                      })}
-                    </tr>
-                  </tbody>
-                </table>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-12 mb-8">
-                <HeaderSection 
-                    title={auditStructure.header_data.audited_premise.title}
-                    fields={auditStructure.header_data.audited_premise.fields}
-                    values={audit.headerValues}
-                />
-                <HeaderSection 
-                    title={auditStructure.header_data.operator.title}
-                    fields={auditStructure.header_data.operator.fields}
-                    values={audit.headerValues}
-                />
-            </div>
-                        
-            <SummaryReportContent reportData={reportData} />
-
-            <div className="print:break-before-page mt-8">
-                <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">SEZNAM AUDITOVANÝCH POLOŽEK</h2>
-                <table className="w-full border-collapse border border-gray-400 mb-8 text-sm">
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="border border-gray-300 p-2 text-left">Kontrolovaná oblast</th>
-                            <th className="border border-gray-300 p-2 text-left w-32">Výsledek</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {auditStructure.audit_sections.filter(s => s.active).map((section, sectionIndex) => {
-                            // NATVRDO: "SPRÁVNÁ VÝROBNÍ PRAXE" začíná na nové stránce
-                            const forcePageBreak = section.title === "SPRÁVNÁ VÝROBNÍ PRAXE";
-                            
-                            return (
-                            <React.Fragment key={section.id}>
-                                <tr className={`bg-gray-50 print:break-inside-avoid-page ${
-                                    forcePageBreak ? 'print:break-before-page' : ''
-                                }`}>
-                                    <td colSpan={2} className="border border-gray-300 p-2 font-bold">{section.title}</td>
-                                </tr>
-                                {section.items.filter(i => i.active).map(item => {
-                                    const status = getAnswerStatus(audit.answers[item.id]);
-                                    return (
-                                        <tr key={item.id} className="print:break-inside-avoid">
-                                            <td className="border border-gray-300 p-2">{item.title}</td>
-                                            <td className={`border border-gray-300 p-2 ${status.color}`}>{status.text}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </React.Fragment>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
-            {nonCompliantDetails.length > 0 && (
-                 <div className="print:break-before-page mt-8">
-                     <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESCHOD</h2>
-                     {nonCompliantDetails.map((nc, index) => (
-                        <div key={index} className="mb-6 pt-4 print:break-inside-avoid border-t">
-                            <h3 className="font-bold text-md">{index + 1}. {nc.itemTitle}</h3>
-                            <p className="text-xs text-gray-500 mb-2">Sekce: {nc.sectionTitle}</p>
-                            
-                            <div className="pl-4 border-l-4 border-red-500 mb-4">
-                                <p><strong>Místo:</strong> {nc.location || '-'}</p>
-                                <p><strong>Zjištění:</strong> {nc.finding || '-'}</p>
-                                <p><strong>Doporučení:</strong> {nc.recommendation || '-'}</p>
-                            </div>
-
-                            {nc.photos && nc.photos.length > 0 && (
-                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                    {nc.photos.map((photo, pIndex) => (
-                                        photo.base64 && <img
-                                            key={pIndex}
-                                            src={`data:image/jpeg;base64,${photo.base64}`}
-                                            alt={`Fotografie neshody ${index + 1}`}
-                                            className="w-full h-auto rounded-md shadow-md border"
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                     ))}
-                 </div>
-            )}
+          ))}
         </div>
-    );
+      )}
+    </div>
+  );
 };
 
-const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack, reportVersions = [], onSelectVersion }) => {
-  const [activeTab, setActiveTab] = useState(0);
+import { ReportEditorV2 } from './report/ReportEditorV2';
+
+const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, onBack, reportVersions = [], onSelectVersion, onCancelReportGeneration }) => {
 
   const formatDateFull = (dateString?: string): string => {
     if (!dateString) return 'Neuvedeno';
@@ -224,35 +238,6 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
     });
   };
 
-  const renderLegacyContent = () => {
-    if (!audit || !auditStructure) return <ErrorView error="Přiřazený audit nebo jeho struktura nebyly nalezeny." />;
-    if (!report) return <ErrorView error="Pro tento audit neexistuje žádný záznam o reportu." />;
-
-    switch (report.status) {
-      case ReportStatus.PENDING:
-      case ReportStatus.GENERATING:
-        return <GeneratingView />;
-      case ReportStatus.ERROR:
-        return <ErrorView error={report.error || 'Neznámá chyba'} />;
-      case ReportStatus.DONE:
-        return <FullReportContent report={report} reportData={report.reportData} audit={audit} auditStructure={auditStructure} />;
-      default:
-        return <ErrorView error={`Neznámý stav reportu: ${report.status}`} />;
-    }
-  }
-
-  // Dynamicky importovat SmartTemplateView pouze pokud je potřeba
-  const [SmartTemplateView, setSmartTemplateView] = useState<React.ComponentType<any> | null>(null);
-  
-  React.useEffect(() => {
-    if (activeTab === 1) {
-      import('./report/SmartTemplateView').then((module) => {
-        setSmartTemplateView(() => module.default);
-      }).catch((error) => {
-        console.error('[ReportView] Chyba při načítání SmartTemplateView:', error);
-      });
-    }
-  }, [activeTab]);
 
   return (
     <div className="w-full max-w-7xl mx-auto">
@@ -315,20 +300,6 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
             )}
           </div>
           <div className="flex items-center gap-3 lg:self-center">
-            {activeTab === 0 && (
-              <Button
-                variant="primary"
-                onClick={() => window.print()}
-                leftIcon={
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                }
-                className="shadow-md hover:shadow-lg transition-all hover:scale-105"
-              >
-                Tisk / Uložit do PDF
-              </Button>
-            )}
             <BackButton
               onClick={onBack}
               label="Zpět"
@@ -336,61 +307,33 @@ const ReportView: React.FC<ReportViewProps> = ({ report, audit, auditStructure, 
           </div>
         </div>
       </div>
-      
-      {/* Tabs - Legacy / Smart Template */}
-      <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in print:shadow-none print:w-full print:max-w-none print:rounded-none">
-        <div className="p-6 print:hidden">
-          <div className="border-b border-gray-200 mb-4">
-            <nav className="-mb-px flex space-x-8" aria-label="Report modes">
-              <button
-                onClick={() => setActiveTab(0)}
-                className={`
-                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                  ${activeTab === 0
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }
-                `}
-              >
-                Legacy
-              </button>
-              <button
-                onClick={() => setActiveTab(1)}
-                className={`
-                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                  ${activeTab === 1
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }
-                `}
-              >
-                Smart Template
-              </button>
-            </nav>
+
+      {/* Status Views or Tabs */}
+      {(report?.status === ReportStatus.PENDING || report?.status === ReportStatus.GENERATING) ? (
+        <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in p-8 mt-6">
+          <GeneratingView onCancel={onCancelReportGeneration && report ? () => onCancelReportGeneration(report.id) : undefined} />
+        </div>
+      ) : (report?.status === ReportStatus.ERROR) ? (
+        <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in p-8 mt-6">
+          <ErrorView error={report.error || 'Neznámá chyba'} />
+        </div>
+      ) : (
+        <div className="w-full max-w-7xl bg-white rounded-2xl shadow-xl animate-fade-in print:shadow-none print:w-full print:max-w-none print:rounded-none">
+          {/* Report content */}
+          <div className="report-body">
+            {report && audit && auditStructure && (
+              <ReportEditorV2
+                key={report.id} // Force re-render when report changes
+                report={report}
+                audit={audit}
+                auditStructure={auditStructure}
+                onBack={onBack}
+                onReportCreated={onSelectVersion}
+              />
+            )}
           </div>
         </div>
-        
-        {/* Report content */}
-        <div className="report-body">
-          {activeTab === 0 && renderLegacyContent()}
-          {activeTab === 1 && report && audit && auditStructure && SmartTemplateView && (
-            <SmartTemplateView
-              report={report}
-              audit={audit}
-              auditStructure={auditStructure}
-              onBack={onBack}
-            />
-          )}
-          {activeTab === 1 && !SmartTemplateView && (
-            <div className="text-center p-12">
-              <div className="flex justify-center items-center mb-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              </div>
-              <p className="text-gray-600 mt-2">Načítání Smart Template systému...</p>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

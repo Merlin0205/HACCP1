@@ -314,16 +314,25 @@ firebase deploy
 
 - ✅ **Správa zákazníků** - CRUD operace v Firestore
 - ✅ **HACCP Audity** - Interaktivní checklist s fotodokumentací
+- ✅ **Fakturace** - Vystavování faktur z auditů, správa vydaných faktur
 - ✅ **Hlasový přepis** - Gemini AI audio transcription
 - ✅ **AI Reporty** - Automatické generování protokolů
   - **Legacy systém** - stávající AI generování reportů (beze změny)
-  - **Smart Template systém** - nový systém s šablonami a WYSIWYG editací (v plánu)
+  - **Smart Template systém** - nový systém s šablonami a WYSIWYG editací
 - ✅ **PDF Export** - Puppeteer v Cloud Functions
 - ✅ **Cloudová databáze** - Firestore (real-time sync)
 - ✅ **Autentifikace** - Email/heslo + Google OAuth
 - ✅ **Multi-user** - Každý auditor má vlastní účet
 - ✅ **Fotky v cloudu** - Firebase Storage (optimalizované)
 - ✅ **Security** - User isolation, validace na DB úrovni
+
+## 🎨 UI & UX VYLEPŠENÍ
+
+### Sjednocení nastavení (Settings Unification)
+- **Konzistentní design**: Všechny obrazovky nastavení nyní používají jednotný vzhled.
+- **Flowbite komponenty**: Využití standardních komponent (`Card`, `Button`, `Badge`, `ToggleSwitch`) pro čistý a moderní vzhled.
+- **Lucide ikony**: Přechod na sadu ikon `lucide-react` pro lepší čitelnost a konzistenci.
+- **Vylepšená navigace**: Intuitivní drobečková navigace a tlačítka zpět v hlavičkách stránek.
 
 ## 🛠️ TECH STACK
 
@@ -342,7 +351,7 @@ firebase deploy
 - **Puppeteer** - PDF generování (Legacy)
 - **@react-pdf/renderer** - PDF generování (Smart Template)
 
-### Smart Template systém (v plánu):
+### Smart Template systém:
 - **@react-pdf/renderer** - WYSIWYG PDF preview a generování
 - **@dnd-kit/core** - Drag & drop pro editaci layoutu
 - **Template Rules** - JSON pravidla pro automatické generování layoutu
@@ -457,6 +466,7 @@ firebase emulators:start
 4. **Proveďte audit** - Vyberte zákazníka → Nový audit
 5. **Vygenerujte report** - Dokončit audit → Report se vytvoří automaticky
 6. **Stáhněte PDF** - Export to PDF
+7. **Vystavte fakturu** - V sekci Faktury nebo přímo z auditu
 
 ---
 
@@ -483,7 +493,7 @@ firebase emulators:start
 
 ---
 
-## 🧩 SMART TEMPLATE SYSTÉM (V PLÁNU)
+## 🧩 SMART TEMPLATE SYSTÉM
 
 ### O Smart Template systému
 Nový systém generování reportů, který umožňuje:
@@ -501,7 +511,25 @@ Smart Template systém je implementován a funguje paralelně s Legacy systémem
 
 ---
 
+## 🧾 FAKTURACE (INVOICES)
+
+### O modulu Fakturace
+Nový modul pro správu vydaných faktur:
+- ✅ Vystavení faktury z auditu (přenos dat)
+- ✅ Manuální vystavení faktury
+- ✅ Správa stavů (Draft, Issued, Paid, Cancelled)
+- ✅ Vazba na zákazníky a audity
+
+### Dokumentace Fakturace
+- **Specifikace**: `FAKTURACE_SPEC.md`
+- **Deploy instrukce**: `DEPLOY_INVOICES.md`
+- **Kompletní dokumentace**: `.cursor/rules/cursorrules.mdc` - sekce "FAKTURACE (INVOICES)"
+
+---
+
 *Poslední aktualizace: 2025-01-27*
-*Verze: 2.0 - Firebase Edition*
+*Verze: 2.1 - Firebase Edition + Invoices*
 *Smart Template: Implementováno*
+*Fakturace: Implementováno*
+*Admin role data access: Implementováno*
 *Kompletní dokumentace: `.cursor/rules/cursorrules.mdc`*

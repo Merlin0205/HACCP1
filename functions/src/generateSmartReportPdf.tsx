@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
 });
 
 // React komponenta pro PDF renderování
-const ReportPDFDocument: React.FC<{ document: ReportDocument }> = ({ document }) => {
+const ReportPDFDocument: React.FC<{ document: ReportDocument }> = ({ document }: { document: ReportDocument }) => {
   const renderElement = (element: any, index: number) => {
     switch (element.type) {
       case 'cover':
@@ -169,17 +169,17 @@ const ReportPDFDocument: React.FC<{ document: ReportDocument }> = ({ document })
 
   return (
     <Document>
-      {document.pages.map((page, pageIdx) => {
+      {document.pages.map((page: any, pageIdx: number) => {
         // Cover page je samostatná stránka
-        const coverElement = page.elements.find(e => e.type === 'cover');
+        const coverElement = page.elements.find((e: any) => e.type === 'cover');
         if (coverElement) {
           return renderElement(coverElement, pageIdx);
         }
-        
+
         // Ostatní stránky
         return (
           <Page key={pageIdx} size="A4" style={styles.page}>
-            {page.elements.map((element, elemIdx) => renderElement(element, elemIdx))}
+            {page.elements.map((element: any, elemIdx: number) => renderElement(element, elemIdx))}
           </Page>
         );
       })}
@@ -219,7 +219,7 @@ export const generateSmartReportPdf = functions
       const storagePath = `users/${userId}/reports/${reportId}/smart/pdf/${fileName}`;
 
       console.log('[generateSmartReportPdf] Generating PDF from ReportDocument...');
-      
+
       // Renderovat PDF pomocí @react-pdf/renderer
       const pdfDoc = <ReportPDFDocument document={reportDocument} />;
       const pdfInstance = pdf(pdfDoc);
@@ -230,7 +230,7 @@ export const generateSmartReportPdf = functions
       // Uložit do Storage
       const bucket = admin.storage().bucket();
       const file = bucket.file(storagePath);
-      
+
       await file.save(pdfBuffer, {
         metadata: {
           contentType: 'application/pdf',
@@ -252,17 +252,17 @@ export const generateSmartReportPdf = functions
       // Najdeme nejnovější finální verzi a přidáme pdfPath
       const reportRef = admin.firestore().collection('reports').doc(reportId);
       const reportDoc = await reportRef.get();
-      
+
       if (reportDoc.exists) {
         const reportData = reportDoc.data();
         const smartData = reportData?.smart || {};
         const finalVersions = smartData.finalVersions || [];
-        
+
         // Pokud existují finální verze, přidat pdfPath k nejnovější
         if (finalVersions.length > 0) {
           const latestVersion = finalVersions[finalVersions.length - 1];
           latestVersion.pdfPath = storagePath;
-          
+
           await reportRef.update({
             'smart.finalVersions': finalVersions
           });

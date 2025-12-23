@@ -18,7 +18,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { Audit } from '../../types';
-import { fetchUserMetadata } from './users';
 import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'audits';
@@ -32,19 +31,6 @@ function getCurrentUserId(): string {
     throw new Error('User not authenticated');
   }
   return user.uid;
-}
-
-/**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -62,27 +48,13 @@ function docToAudit(docSnapshot: any): Audit {
 }
 
 /**
- * Načte všechny audity (všechny pro admina, jen své pro běžného uživatele)
+ * Načte všechny audity (sdílený režim)
  */
 export async function fetchAudits(): Promise<Audit[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechny audity
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('createdAt', 'desc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-  }
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('createdAt', 'desc')
+  );
   
   const snapshot = await getDocs(q);
   const audits = snapshot.docs.map(docToAudit);
@@ -94,26 +66,11 @@ export async function fetchAudits(): Promise<Audit[]> {
  * Načte audity pro konkrétní pracoviště
  */
 export async function fetchAuditsByPremise(premiseId: string): Promise<Audit[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechny audity pro dané pracoviště
-    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('premiseId', '==', premiseId)
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      where('premiseId', '==', premiseId)
-    );
-  }
+  // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    where('premiseId', '==', premiseId)
+  );
   
   const snapshot = await getDocs(q);
   const audits = snapshot.docs.map(docToAudit);
@@ -173,13 +130,8 @@ export async function updateAudit(auditId: string, auditData: Partial<Audit>): P
   // Odstranit id z dat
   const { id, userId, ...dataToUpdate } = auditData as any;
   
-  // Použít userId z auditData, nebo aktuálního uživatele
-  // Pokud uživatel může audit vidět, musí být vlastníkem
-  const finalUserId = userId || getCurrentUserId();
-  
   await updateDoc(docRef, {
     ...dataToUpdate,
-    userId: finalUserId, // Explicitně zachovat userId (security rules vyžadují)
     updatedAt: Timestamp.now()
   });
 }

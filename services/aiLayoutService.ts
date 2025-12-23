@@ -113,7 +113,7 @@ Vrať mi JSON odpověď ve formátu:
     const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
     
     await addAIUsageLog(
-      modelName,
+      response.modelUsed || modelName,
       'text-generation',
       response.usageMetadata.promptTokenCount,
       response.usageMetadata.candidatesTokenCount,

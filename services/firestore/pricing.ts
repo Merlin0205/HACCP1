@@ -24,16 +24,11 @@ function docToPriceItem(docSnapshot: any): PriceItem {
 }
 
 /**
- * Načte všechny ceníkové položky pro aktuálního uživatele
+ * Načte všechny ceníkové položky (sdílený režim)
  */
 export async function fetchPriceItems(): Promise<PriceItem[]> {
-  const userId = getCurrentUserId();
   // Dočasně použít jednodušší dotaz bez orderBy, dokud se index nestaví
-  // Po dokončení indexu můžeme přidat zpět orderBy('createdAt', 'desc')
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('userId', '==', userId)
-  );
+  const q = query(collection(db, COLLECTION_NAME));
   
   const snapshot = await getDocs(q);
   const items = snapshot.docs.map(docToPriceItem);
@@ -100,10 +95,8 @@ export async function deletePriceItem(itemId: string): Promise<void> {
  * Hledá case-insensitive - načte všechny aktivní položky a filtruje lokálně
  */
 export async function findPriceItemByName(name: string): Promise<PriceItem | null> {
-  const userId = getCurrentUserId();
   const q = query(
     collection(db, COLLECTION_NAME),
-    where('userId', '==', userId),
     where('active', '==', true)
   );
   

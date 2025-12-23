@@ -10,6 +10,10 @@ import { Tooltip } from 'flowbite-react';
 import { fetchCompanyByIco } from '../services/aresService';
 import { checkVat } from '../services/viesService';
 import { toast } from '../utils/toast';
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
+import { PageHeader } from './PageHeader';
+import { SECTION_THEMES } from '../constants/designSystem';
+import { AppState } from '../types';
 
 type OperatorData = Omit<Operator, 'id'>;
 
@@ -27,7 +31,7 @@ const VatVerificationIcon: React.FC<{
     if (isVisible && wrapperRef.current && tooltipRef.current) {
       const updatePosition = () => {
         if (!wrapperRef.current || !tooltipRef.current) return;
-        
+
         const rect = wrapperRef.current.getBoundingClientRect();
         const tooltipRect = tooltipRef.current.getBoundingClientRect();
         const scrollX = window.scrollX || window.pageXOffset;
@@ -84,7 +88,7 @@ const VatVerificationIcon: React.FC<{
 
   return (
     <>
-      <div 
+      <div
         ref={wrapperRef}
         className="inline-flex items-center cursor-help"
         onMouseEnter={() => setIsVisible(true)}
@@ -105,7 +109,7 @@ const VatVerificationIcon: React.FC<{
         )}
       </div>
       {isVisible && (
-        <div 
+        <div
           ref={tooltipRef}
           className="fixed px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl pointer-events-none z-[10000]"
           style={{
@@ -126,11 +130,14 @@ const VatVerificationIcon: React.FC<{
 
 interface OperatorFormProps {
   initialData: Operator | null;
+  operators?: Operator[]; // Seznam existujících provozovatelů pro kontrolu duplicit
   onSave: (operatorData: OperatorData) => void;
   onBack: () => void;
 }
 
-export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave, onBack }) => {
+export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, operators = [], onSave, onBack }) => {
+  const { setDirty } = useUnsavedChanges();
+  const title = initialData ? 'Upravit provozovatele' : 'Nový provozovatel';
   const defaultOperatorData: OperatorData = {
     operator_name: '',
     operator_street: '',
@@ -149,6 +156,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
   const [isCheckingVat, setIsCheckingVat] = useState(false);
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [rawAresData, setRawAresData] = useState<any>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -162,11 +170,12 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setOperatorData(prev => ({ ...prev, [name]: value }));
+    setDirty(true);
   };
 
   const handleFetchFromAres = async () => {
     const ico = operatorData.operator_ico?.trim();
-    
+
     if (!ico || !/^\d{8}$/.test(ico)) {
       toast.error('IČO musí mít přesně 8 číslic');
       return;
@@ -175,13 +184,14 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
     setIsLoadingAres(true);
     try {
       const companyData = await fetchCompanyByIco(ico);
-      
+
+      // Uložit raw data pro debugování
       // Uložit raw data pro debugování
       if (companyData.rawAresData) {
         setRawAresData(companyData.rawAresData);
-        setShowDebugModal(true); // Zobrazit debug okno
+        // setShowDebugModal(true); // Zobrazit debug okno - vypnuto na žádost uživatele
       }
-      
+
       // Automaticky předvyplnit všechna pole
       setOperatorData(prev => ({
         ...prev,
@@ -195,6 +205,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
         operator_ico: companyData.operator_ico || prev.operator_ico,
         // Telefon a email ponecháme původní hodnoty (ARES je neobsahuje)
       }));
+      setDirty(true);
 
       toast.success('Údaje byly načteny z ARES');
     } catch (error: any) {
@@ -212,7 +223,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
 
   const handleCheckVat = async () => {
     const dic = operatorData.operator_dic?.trim();
-    
+
     if (!dic || dic.length < 3) {
       toast.error('DIČ musí být vyplněné');
       return;
@@ -221,7 +232,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
     setIsCheckingVat(true);
     try {
       const result = await checkVat(dic);
-      
+
       // Uložit výsledek ověření do operatorData
       setOperatorData(prev => ({
         ...prev,
@@ -234,6 +245,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
           vatNumber: result.vatNumber
         }
       }));
+      setDirty(true);
 
       if (result.valid) {
         toast.success('DIČ je platné - subjekt je plátce DPH');
@@ -265,18 +277,89 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Nastavit dirty na false OKAMŽITĚ při kliknutí na "Uložit", aby se nezobrazilo modální okno
+    // o neuložených změnách při navigaci po uložení
+    setDirty(false);
+
+    // Kontrola duplicitního IČO (pouze při vytváření nového)
+    if (!initialData && operatorData.operator_ico) {
+      const duplicate = operators.find(o => o.operator_ico === operatorData.operator_ico);
+      if (duplicate) {
+        setDirty(true); // Vrátit dirty na true, protože uživatel ještě neuložil (zobrazí se modální okno duplicity)
+        setShowDuplicateModal(true);
+        return;
+      }
+    }
+
+    await performSave();
+  };
+
+  const performSave = async () => {
     setIsSubmitting(true);
     try {
+      setDirty(false); // Nastavit dirty na false PŘED uložením, aby nedošlo k blokování navigace
       await onSave(operatorData);
+    } catch (error) {
+      setDirty(true); // V případě chyby vrátit dirty na true
+      console.error('Error saving operator:', error);
     } finally {
       setIsSubmitting(false);
+      setShowDuplicateModal(false);
     }
   };
 
   return (
     <div className="w-full">
-      {/* Description */}
-      <p className="text-gray-600 mb-6">Vyplňte údaje o provozovateli</p>
+      {/* ... (existing JSX) ... */}
+
+      {/* Duplicate IČO Warning Modal */}
+      <Modal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        title="Duplicitní IČO"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 text-amber-600 bg-amber-50 p-4 rounded-lg">
+            <WarningIcon className="h-6 w-6 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Provozovatel s tímto IČO již existuje!</p>
+              <p className="text-sm mt-1 text-amber-700">
+                V systému již máte uloženého provozovatele s IČO {operatorData.operator_ico}.
+                Opravdu chcete vytvořit dalšího se stejným IČO?
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="ghost" onClick={() => setShowDuplicateModal(false)}>
+              Zrušit
+            </Button>
+            <Button
+              variant="primary"
+              onClick={performSave}
+              isLoading={isSubmitting}
+            >
+              Přesto uložit
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Header with Breadcrumbs */}
+      <PageHeader
+        section={SECTION_THEMES[AppState.OPERATOR_DASHBOARD]}
+        title={title}
+        description="Vyplňte údaje o provozovateli"
+        breadcrumbs={[
+          { label: 'Domů', onClick: onBack },
+          { label: 'Zákazníci', onClick: onBack },
+          { label: initialData ? initialData.operator_name : 'Nový zákazník', isActive: true }
+        ]}
+        onBack={onBack}
+      />
+
 
       {/* Form */}
       <Card>
@@ -353,7 +436,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
                     {/* Ikona výsledku ověření hned vedle pole */}
                     {operatorData.vatVerification && !isCheckingVat && (
                       <div className="flex items-center px-1" style={{ marginTop: '28px' }}>
-                        <VatVerificationIcon 
+                        <VatVerificationIcon
                           verification={operatorData.vatVerification}
                           dic={operatorData.operator_dic || ''}
                           formatDate={formatVerificationDate}
@@ -383,7 +466,7 @@ export const OperatorForm: React.FC<OperatorFormProps> = ({ initialData, onSave,
                   onChange={handleChange}
                 />
                 <TextField
-                  label="Mobil"
+                  label="Telefon"
                   name="operator_phone"
                   type="tel"
                   value={operatorData.operator_phone || ''}

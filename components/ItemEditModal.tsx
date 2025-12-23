@@ -2,6 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AuditItem, AuditSection } from '../types';
 import { XIcon } from './icons';
 import { lucideIconCategories, allLucideIcons, searchLucideIcons, LucideIconOption } from './lucideIconRegistry';
+import { toast } from '../utils/toast';
+// import { IconGenerationModal } from './modals/IconGenerationModal'; // Removed
+// import { fetchCustomIcons } from './lucideIconRegistry'; // Removed
+// import { auth } from '../firebaseConfig'; // Removed
+// import { onAuthStateChanged } from 'firebase/auth'; // Removed
 
 interface ItemEditModalProps {
   item: AuditItem;
@@ -17,6 +22,9 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
   const [selectedIconId, setSelectedIconId] = useState<string>(item.icon || 'check-circle-2');
   const [iconSearchQuery, setIconSearchQuery] = useState<string>('');
 
+  // Removed AI icon generation state and effects
+
+
   useEffect(() => {
     setEditedItem(item);
     setSelectedSectionId(currentSectionId);
@@ -25,21 +33,28 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
   }, [item, currentSectionId]);
 
   // Filtrovat ikony podle vyhledávání
-  const filteredIcons = useMemo(() => {
+  const filteredIcons: { [key: string]: LucideIconOption[] } = useMemo(() => {
     // Debug: zkontrolovat, zda jsou ikony načteny
     if (!lucideIconCategories || Object.keys(lucideIconCategories).length === 0) {
       console.warn('[ItemEditModal] lucideIconCategories je prázdný!');
       return {};
     }
-    
+
     if (!iconSearchQuery.trim()) {
       return lucideIconCategories;
     }
-    
+
     const searchResults = searchLucideIcons(iconSearchQuery);
+
+    // Sloučit výsledky hledání
+    // const normalizedQuery = iconSearchQuery.trim().toLowerCase();
+    // const filteredCustomIcons = customIcons.filter(icon => ...); // Removed custom icons logic
+
+    const allIconsToDisplay = [...searchResults];
+
     // Seskupit výsledky podle kategorií
     const grouped: { [key: string]: LucideIconOption[] } = {};
-    searchResults.forEach(icon => {
+    allIconsToDisplay.forEach(icon => {
       if (!grouped[icon.category]) {
         grouped[icon.category] = [];
       }
@@ -55,6 +70,8 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
 
   // Zjistit, zda je to nová položka nebo editace existující
   const isNewItem = item.title === "Nová položka" && !item.description && item.icon === undefined;
+
+  // Removed handleAIIconSuggestion logic
 
   return (
     <div
@@ -99,7 +116,7 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
               style={{ colorScheme: 'light' }}
             />
           </div>
-           <div>
+          <div>
             <label htmlFor="item-section" className="block text-sm font-medium text-gray-700 mb-1">
               Sekce
             </label>
@@ -117,14 +134,14 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
               ))}
             </select>
           </div>
-          
+
           <div>
             <label htmlFor="item-icon" className="block text-sm font-medium text-gray-700 mb-2">
               Ikona
             </label>
-            
+
             {/* Vyhledávání ikon */}
-            <div className="mb-3">
+            <div className="mb-3 flex gap-2">
               <input
                 type="text"
                 placeholder="Hledat ikonu podle názvu (např. voda, budova, dokument)..."
@@ -134,7 +151,7 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
                 style={{ colorScheme: 'light' }}
               />
             </div>
-            
+
             <div className="border border-gray-300 rounded-lg p-3 bg-white max-h-96 overflow-y-auto">
               {(() => {
                 const categoryCount = Object.keys(filteredIcons).length;
@@ -150,62 +167,70 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
                     </div>
                   );
                 }
-                
+
                 return null;
               })()}
               {Object.keys(filteredIcons).length > 0 && (
-                Object.entries(filteredIcons).map(([categoryName, icons]) => (
-                  <div key={categoryName} className="mb-6 last:mb-0">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2 sticky top-0 bg-white py-1 z-10">
-                      {categoryName} ({icons.length})
-                    </h4>
-                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                      {icons.map(icon => {
-                        const IconComponent = icon.component;
-                        const isSelected = selectedIconId === icon.id;
-                        
-                        if (!IconComponent || typeof IconComponent !== 'function') {
-                          console.warn(`[ItemEditModal] Ikona ${icon.id} nemá komponentu nebo není funkce`);
-                          return null;
-                        }
-                        
-                        return (
-                          <button
-                            key={icon.id}
-                            type="button"
-                            onClick={() => setSelectedIconId(icon.id)}
-                            className={`
+                Object.entries(filteredIcons)
+                  .sort(([a], [b]) => {
+                    // Ostatní podle pořadí v CATEGORY_ORDER (pokud bychom ho importovali) nebo abecedně?
+                    // Pro teď necháme původní pořadí (které je dané iterací) pro ostatní
+                    return 0;
+                  })
+                  .map(([categoryName, icons]) => (
+                    <div key={categoryName} className="mb-6 last:mb-0">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2 sticky top-0 bg-white py-1 z-10">
+                        {categoryName} ({icons.length})
+                      </h4>
+                      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                        {icons.map(icon => {
+                          const IconComponent = icon.component;
+                          const isSelected = selectedIconId === icon.id;
+
+                          if (!IconComponent) {
+                            console.warn(`[ItemEditModal] Ikona ${icon.id} nemá komponentu`);
+                            return null;
+                          }
+
+                          return (
+                            <button
+                              key={icon.id}
+                              type="button"
+                              onClick={() => setSelectedIconId(icon.id)}
+                              className={`
                               flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all
-                              ${isSelected 
-                                ? 'border-blue-500 bg-blue-50 shadow-sm' 
-                                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                              }
+                              ${isSelected
+                                  ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                }
                             `}
-                            title={icon.name}
-                          >
-                            <IconComponent className={`h-5 w-5 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
-                            <span className={`text-[10px] mt-1 text-center leading-tight px-0.5 ${isSelected ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>
-                              {icon.name}
-                            </span>
-                          </button>
-                        );
-                      })}
+                              title={icon.name}
+                            >
+                              <IconComponent className={`h-5 w-5 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
+                              <span className={`text-[10px] mt-1 text-center leading-tight px-0.5 ${isSelected ? 'text-blue-600 font-semibold' : 'text-gray-600'}`}>
+                                {icon.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
-            
+
             {/* Zobrazit aktuálně vybranou ikonu */}
             {selectedIconId && (
               <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">Vybraná ikona:</span>
                   {(() => {
+                    // Hledat ve standardních ikonách
                     const selectedIcon = allLucideIcons.find(icon => icon.id === selectedIconId);
+
                     if (selectedIcon) {
                       const IconComponent = selectedIcon.component;
-                      if (IconComponent && typeof IconComponent === 'function') {
+                      if (IconComponent) {
                         return (
                           <>
                             <IconComponent className="h-5 w-5 text-blue-600" />
@@ -214,7 +239,7 @@ export const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, currentSecti
                         );
                       }
                     }
-                    return <span className="text-sm text-gray-500">Neznámá ikona</span>;
+                    return <span className="text-sm text-gray-500">Neznámá ikona ({selectedIconId})</span>;
                   })()}
                 </div>
               </div>

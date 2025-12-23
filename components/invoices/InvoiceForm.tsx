@@ -5,11 +5,11 @@ import { Operator, Premise, Audit } from '../../types';
 import { findPriceItemByName, fetchAudit, fetchPriceItems } from '../../services/firestore';
 import { PriceItem } from '../../types/pricing';
 import { Card, CardBody, CardHeader } from '../ui/Card';
-import { TextField, TextArea, Select } from '../ui/Input';
+import { TextField, TextArea, Select, SearchableSelect } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { BackButton } from '../BackButton';
 import { PlusIcon, TrashIcon, ChevronDownIcon, ChevronUpIcon, ReceiptIcon, UserIcon, BuildingIcon, ListIcon, CalculatorIcon } from '../icons';
-import { createInvoice, updateInvoice, createOperator } from '../../services/firestore';
+import { createInvoice, updateInvoice, createOperator, createPremise } from '../../services/firestore';
 import { fetchBillingSettings, generateNextInvoiceNumber } from '../../services/firestore/billingSettings';
 import { generateNextInvoiceNumber as generateNextInvoiceNumberFromType, getInvoiceNumberPreview, incrementInvoiceNumberingCounter } from '../../services/firestore/invoiceNumberingTypes';
 import { toast } from '../../utils/toast';
@@ -19,9 +19,11 @@ import { AppState } from '../../types';
 import { Modal } from '../ui/Modal';
 import { OperatorForm } from '../OperatorForm';
 import { SupplierForm } from '../SupplierForm';
+import { PremiseForm } from '../PremiseForm';
 import { DetailTooltip } from '../ui/DetailTooltip';
 import { Supplier } from '../../types';
 import { fetchSuppliers, fetchDefaultSupplier, createSupplier } from '../../services/firestore/suppliers';
+import { useUnsavedChanges } from '../../contexts/UnsavedChangesContext';
 
 interface InvoiceFormProps {
   invoice?: Invoice | null;
@@ -60,6 +62,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const [isInitializing, setIsInitializing] = useState(false);
   const [showAddOperatorModal, setShowAddOperatorModal] = useState(false);
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
+  const [showAddPremiseModal, setShowAddPremiseModal] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [isCustomerExpanded, setIsCustomerExpanded] = useState(true); // Otevřené defaultně
@@ -67,7 +70,10 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(true); // Otevřené defaultně
   const [isNotesExpanded, setIsNotesExpanded] = useState(false); // Sbalené defaultně
   const [isPremiseExpanded, setIsPremiseExpanded] = useState(false); // Sbalené defaultně, ale pokud je z auditu, otevřít
-  
+  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const [isPremiseDropdownOpen, setIsPremiseDropdownOpen] = useState(false);
+
   // Form state
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [variableSymbol, setVariableSymbol] = useState('');
@@ -77,7 +83,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const [dueDate, setDueDate] = useState('');
   const [currency, setCurrency] = useState('CZK');
   const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'cash' | 'card' | 'other'>('bank_transfer');
-  
+
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customer, setCustomer] = useState({
     name: '',
@@ -91,7 +97,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     email: '',
     phone: '',
   });
-  
+
   const [selectedPremiseId, setSelectedPremiseId] = useState<string>('');
   const [premise, setPremise] = useState<{
     name: string;
@@ -100,17 +106,19 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     phone?: string;
     email?: string;
   } | null>(null);
-  
+
+  const { setDirty, checkUnsavedChanges } = useUnsavedChanges();
+
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [note, setNote] = useState('');
   const [footerNote, setFooterNote] = useState('');
   const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
   const [priceSelectKeys, setPriceSelectKeys] = useState<Record<string, number>>({});
-  
+
   // Collapsible sections state
   const [isSupplierExpanded, setIsSupplierExpanded] = useState(false);
   // isPremiseExpanded je deklarováno výše s ostatními stavy
-  
+
   // Validation errors
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
@@ -145,7 +153,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           if (!currentSupplier || !currentSupplier.isDefault || currentSupplier.id !== defaultSupplier.id) {
             console.log('[InvoiceForm] Automaticky vybírám výchozího dodavatele:', defaultSupplier.id);
             setSelectedSupplierId(defaultSupplier.id);
-            
+
             // Zobrazit preview čísla faktury podle výchozího dodavatele
             try {
               if (defaultSupplier.invoiceNumberingTypeId) {
@@ -170,7 +178,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           // Pokud není výchozí a není vybrán žádný, použít prvního
           console.log('[InvoiceForm] Není výchozí dodavatel, používám prvního:', suppliers[0].id);
           setSelectedSupplierId(suppliers[0].id);
-          
+
           // Zobrazit preview čísla faktury podle prvního dodavatele
           try {
             const firstSupplier = suppliers[0];
@@ -203,7 +211,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       // Nejprve zkusit migrovat z BillingSettings pokud ještě neexistují dodavatelé
       const { migrateSupplierFromBillingSettings } = await import('../../services/firestore/suppliers');
       await migrateSupplierFromBillingSettings();
-      
+
       const loadedSuppliers = await fetchSuppliers();
       setSuppliers(loadedSuppliers);
     } catch (error: any) {
@@ -223,7 +231,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             setInvoiceNumber(loadedInvoice.invoiceNumber);
             setVariableSymbol(loadedInvoice.variableSymbol);
             setConstantSymbol(loadedInvoice.constantSymbol || '308');
-            setCreatedAt(loadedInvoice.createdAt instanceof Timestamp 
+            setCreatedAt(loadedInvoice.createdAt instanceof Timestamp
               ? loadedInvoice.createdAt.toDate().toISOString().split('T')[0]
               : new Date(loadedInvoice.createdAt as string).toISOString().split('T')[0]);
             setTaxableSupplyDate(loadedInvoice.taxableSupplyDate instanceof Timestamp
@@ -239,8 +247,8 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             setPremise(loadedInvoice.premise || null);
             // Pokud je premise v načtené faktuře, najít její ID v seznamu premises
             if (loadedInvoice.premise && loadedInvoice.customerId && premises.length > 0) {
-              const premiseForCustomer = premises.find(p => 
-                p.operatorId === loadedInvoice.customerId && 
+              const premiseForCustomer = premises.find(p =>
+                p.operatorId === loadedInvoice.customerId &&
                 p.premise_name === loadedInvoice.premise?.name
               );
               if (premiseForCustomer) {
@@ -250,16 +258,16 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             setItems(loadedInvoice.items);
             setNote(loadedInvoice.note || '');
             setFooterNote(loadedInvoice.footerNote || '');
-            
+
             // Pokud faktura nemá logoUrl nebo stampUrl, zkusit je načíst z aktuálního dodavatele
             // (může se stát, že faktura byla vytvořena před nahráním loga/razítka)
             if (suppliers.length > 0 && loadedInvoice.supplier) {
               // Najít dodavatele podle názvu nebo IČO
-              const matchingSupplier = suppliers.find(s => 
-                s.supplier_name === loadedInvoice.supplier.name || 
+              const matchingSupplier = suppliers.find(s =>
+                s.supplier_name === loadedInvoice.supplier.name ||
                 s.supplier_ico === loadedInvoice.supplier.companyId
               );
-              
+
               if (matchingSupplier) {
                 // Pokud faktura nemá logoUrl, ale dodavatel má, použít z dodavatele
                 if (!loadedInvoice.supplier.logoUrl && matchingSupplier.supplier_logoUrl) {
@@ -285,7 +293,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       setInvoiceNumber(invoice.invoiceNumber);
       setVariableSymbol(invoice.variableSymbol);
       setConstantSymbol(invoice.constantSymbol || '308');
-      setCreatedAt(invoice.createdAt instanceof Timestamp 
+      setCreatedAt(invoice.createdAt instanceof Timestamp
         ? invoice.createdAt.toDate().toISOString().split('T')[0]
         : new Date(invoice.createdAt as string).toISOString().split('T')[0]);
       setTaxableSupplyDate(invoice.taxableSupplyDate instanceof Timestamp
@@ -301,8 +309,8 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       setPremise(invoice.premise || null);
       // Pokud je premise v načtené faktuře, najít její ID v seznamu premises
       if (invoice.premise && invoice.customerId && premises.length > 0) {
-        const premiseForCustomer = premises.find(p => 
-          p.operatorId === invoice.customerId && 
+        const premiseForCustomer = premises.find(p =>
+          p.operatorId === invoice.customerId &&
           p.premise_name === invoice.premise?.name
         );
         if (premiseForCustomer) {
@@ -318,16 +326,16 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       setPriceSelectKeys(initialKeys);
       setNote(invoice.note || '');
       setFooterNote(invoice.footerNote || '');
-      
+
       // Pokud faktura nemá logoUrl nebo stampUrl, zkusit je načíst z aktuálního dodavatele
       // (může se stát, že faktura byla vytvořena před nahráním loga/razítka)
       if (suppliers.length > 0 && invoice.supplier) {
         // Najít dodavatele podle názvu nebo IČO
-        const matchingSupplier = suppliers.find(s => 
-          s.supplier_name === invoice.supplier.name || 
+        const matchingSupplier = suppliers.find(s =>
+          s.supplier_name === invoice.supplier.name ||
           s.supplier_ico === invoice.supplier.companyId
         );
-        
+
         if (matchingSupplier) {
           // Pokud faktura nemá logoUrl, ale dodavatel má, použít z dodavatele
           if (!invoice.supplier.logoUrl && matchingSupplier.supplier_logoUrl) {
@@ -351,22 +359,22 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     if (invoiceId || invoice) {
       return;
     }
-    
+
     // Pouze pokud máme initialAuditId nebo initialCustomerId
     if (!initialAuditId && !initialCustomerId) {
       return;
     }
-    
+
     // Pouze pokud už neprobíhá inicializace
     if (isInitializing) {
       return;
     }
-    
+
     // Pokud ještě načítáme billingSettings, počkat
     if (isLoadingSettings) {
       return;
     }
-    
+
     setIsInitializing(true);
     initializeNewInvoice()
       .catch((error) => {
@@ -384,28 +392,28 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     if (invoiceId || invoice || initialAuditId || initialCustomerId) {
       return;
     }
-    
+
     // Pouze pokud už neprobíhá inicializace
     if (isInitializing) {
       return;
     }
-    
+
     // Pokud ještě načítáme billingSettings, počkat
     if (isLoadingSettings) {
       return;
     }
-    
+
     // Pokud už máme číslo faktury, variabilní symbol a splatnost, neinicializovat znovu
     if (invoiceNumber && variableSymbol && dueDate) {
       return;
     }
-    
+
     setIsInitializing(true);
-    
+
     const initializeBasicFields = async () => {
       try {
         const today = new Date();
-        
+
         // Vždy předvyplnit datumy
         if (!createdAt) {
           setCreatedAt(today.toISOString().split('T')[0]);
@@ -413,12 +421,12 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         if (!taxableSupplyDate) {
           setTaxableSupplyDate(today.toISOString().split('T')[0]);
         }
-        
+
         // Zobrazit preview čísla faktury (bez inkrementace čítače)
         if (!invoiceNumber && !invoiceId && !invoice) {
           try {
             let previewNumber: string | null = null;
-            
+
             // Zkusit použít typ číslování z vybraného dodavatele
             if (selectedSupplierId) {
               const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
@@ -438,7 +446,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
               previewNumber = prefix + String(nextNumber).padStart(padding, '0');
               console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému (žádný dodavatel)');
             }
-            
+
             if (previewNumber) {
               setInvoiceNumber(previewNumber);
               // Extrahovat číselnou část pro variabilní symbol
@@ -450,7 +458,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             // Nezobrazovat chybu uživateli, jen logovat
           }
         }
-        
+
         // Splatnost
         if (!dueDate) {
           const dueDateValue = new Date(today);
@@ -467,7 +475,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         setIsInitializing(false);
       }
     };
-    
+
     initializeBasicFields();
   }, [billingSettings, invoiceId, invoice, initialAuditId, initialCustomerId, isLoadingSettings, invoiceNumber, variableSymbol, dueDate, createdAt, taxableSupplyDate, selectedSupplierId, suppliers]);
 
@@ -495,7 +503,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const initializeNewInvoice = async () => {
     try {
       const today = new Date();
-      
+
       // Pokud není billingSettings, použít výchozí hodnoty
       if (!billingSettings) {
         // Vždy předvyplnit datumy
@@ -517,7 +525,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         if (!invoiceNumber && !invoiceId && !invoice) {
           try {
             let previewNumber: string | null = null;
-            
+
             // Zkusit použít typ číslování z vybraného dodavatele
             if (selectedSupplierId) {
               const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
@@ -537,7 +545,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
               previewNumber = prefix + String(nextNumber).padStart(padding, '0');
               console.log('[InvoiceForm] Zobrazuji preview čísla faktury ze starého systému (žádný dodavatel)');
             }
-            
+
             if (previewNumber) {
               setInvoiceNumber(previewNumber);
               // Extrahovat číselnou část pro variabilní symbol
@@ -553,7 +561,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           const numericPart = invoiceNumber.replace(/^[A-Za-z]+/, '');
           setVariableSymbol(numericPart || invoiceNumber);
         }
-        
+
         // Vždy předvyplnit datumy (z billingSettings nebo výchozí)
         if (!createdAt) {
           setCreatedAt(today.toISOString().split('T')[0]);
@@ -567,11 +575,11 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           dueDateValue.setDate(dueDateValue.getDate() + billingSettings.supplier.defaultDueDays);
           setDueDate(dueDateValue.toISOString().split('T')[0]);
         }
-        
+
         setCurrency(billingSettings.supplier.defaultCurrency);
         setPaymentMethod(billingSettings.supplier.defaultPaymentMethod);
       }
-      
+
       // Pokud je initialAuditId, načíst zákazníka z auditu
       if (initialAuditId) {
         // Zkusit najít audit v lokálních datech nebo načíst z Firestore
@@ -583,7 +591,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             console.error('[InvoiceForm] Error fetching audit:', error);
           }
         }
-        
+
         if (audit) {
           // Najít premise podle premiseId
           let premise = premises.find(p => p.id === audit!.premiseId);
@@ -596,7 +604,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
               console.error('[InvoiceForm] Error fetching premise:', error);
             }
           }
-          
+
           if (premise) {
             // Najít operator podle operatorId z premise
             let operator = operators.find(o => o.id === premise!.operatorId);
@@ -609,11 +617,11 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                 console.error('[InvoiceForm] Error fetching operator:', error);
               }
             }
-            
+
             if (operator) {
               setSelectedCustomerId(operator.id);
               loadCustomerData(operator);
-              
+
               // Nastavit provozovnu (premise) - automaticky předvyplnit z auditu
               if (premise) {
                 // Nastavit selectedPremiseId pokud premise existuje v seznamu
@@ -628,20 +636,20 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                 // Otevřít sekci provozovny pokud je načtena z auditu
                 setIsPremiseExpanded(true);
               }
-              
+
               // Nastavit datum zdanitelného plnění na datum dokončení auditu
               if (audit.completedAt) {
                 const completedDate = new Date(audit.completedAt);
                 setTaxableSupplyDate(completedDate.toISOString().split('T')[0]);
               }
-              
+
               // Načíst cenu z ceníku pro "Audit" (pouze pokud ještě nejsou položky)
               if (items.length === 0) {
                 try {
                   const priceItem = await findPriceItemByName('Audit');
                   if (priceItem && priceItem.active) {
                     // Přidat položku do faktury s přesnými daty z ceníku
-                    const invoiceItem: InvoiceItem = {
+                    const baseItem = {
                       id: '1',
                       name: priceItem.name, // Použít přesný název z ceníku
                       description: priceItem.description || undefined, // Použít popis z ceníku pokud existuje
@@ -649,12 +657,8 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                       unit: priceItem.unit,
                       unitPrice: priceItem.unitPrice,
                       vatRate: priceItem.vatRate,
-                      ...calculateItemTotals({
-                        quantity: 1,
-                        unitPrice: priceItem.unitPrice,
-                        vatRate: priceItem.vatRate,
-                      }),
                     };
+                    const invoiceItem: InvoiceItem = calculateItemTotals(baseItem);
                     setItems([invoiceItem]);
                   }
                 } catch (error: any) {
@@ -676,7 +680,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             console.error('[InvoiceForm] Error fetching operator:', error);
           }
         }
-        
+
         if (operator && !selectedCustomerId) {
           setSelectedCustomerId(operator.id);
           loadCustomerData(operator);
@@ -693,7 +697,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     let street = '';
     let city = '';
     let zip = '';
-    
+
     if ((operator as any).operator_street && (operator as any).operator_city && (operator as any).operator_zip) {
       // Nový formát - rozdělená adresa
       street = (operator as any).operator_street || '';
@@ -758,7 +762,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     return premises.filter(p => p.operatorId === selectedCustomerId);
   }, [premises, selectedCustomerId]);
 
-  const handleAddItem = () => {
+  const handleAddItem = (initialData?: Partial<Omit<InvoiceItem, 'totalWithoutVat' | 'vatAmount' | 'totalWithVat'>>) => {
     const newItemId = Date.now().toString();
     const newItem: Omit<InvoiceItem, 'totalWithoutVat' | 'vatAmount' | 'totalWithVat'> = {
       id: newItemId,
@@ -768,15 +772,17 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       unit: 'ks',
       unitPrice: 0,
       vatRate: 21,
+      ...initialData
     };
     const calculatedItem = calculateItemTotals(newItem);
     setItems([...items, calculatedItem]);
-    // Inicializovat select key pro novou položku
+    setDirty(true);
+
     setPriceSelectKeys(prev => ({
       ...prev,
       [newItemId]: 0
     }));
-    // Vymazat chybu když přidáme položku
+
     if (validationErrors.items) {
       setValidationErrors(prev => {
         const newErrors = { ...prev };
@@ -789,10 +795,11 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
   const handleItemChange = (itemId: string, field: keyof InvoiceItem, value: any) => {
     setItems(items.map(item => {
       if (item.id !== itemId) return item;
-      
+
       const updatedItem = { ...item, [field]: value };
       return calculateItemTotals(updatedItem);
     }));
+    setDirty(true);
   };
 
   const handleRemoveItem = (itemId: string) => {
@@ -806,7 +813,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     // Aktualizovat položku faktury s daty z ceníku
     setItems(items.map(item => {
       if (item.id !== itemId) return item;
-      
+
       const updatedItem: InvoiceItem = {
         ...item,
         name: priceItem.name,
@@ -834,12 +841,12 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     if (e) {
       e.preventDefault();
     }
-    
+
     // Reset validation errors
     setValidationErrors({});
-    
+
     const errors: Record<string, string> = {};
-    
+
     // Validace - číslo faktury se vygeneruje automaticky pokud není vyplněno
     // Pokud už je vyplněno (editace), ponecháme ho
     if (!createdAt) {
@@ -860,7 +867,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     if (!selectedSupplierId && !billingSettings) {
       errors.supplier = 'Vyberte dodavatele nebo nastavte fakturační nastavení';
     }
-    
+
     // Pokud jsou chyby, zobrazit je a zastavit submit
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -880,7 +887,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
 
     try {
       setIsSubmitting(true);
-      
+
       console.log('[InvoiceForm] Saving invoice with dates:', {
         createdAt,
         taxableSupplyDate,
@@ -889,7 +896,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         taxableSupplyDateType: typeof taxableSupplyDate,
         dueDateType: typeof dueDate,
       });
-      
+
       // Validace dat před uložením
       if (!createdAt || createdAt === '') {
         console.error('[InvoiceForm] createdAt is empty!');
@@ -909,29 +916,29 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         setIsSubmitting(false);
         return;
       }
-      
+
       const createdAtTimestamp = Timestamp.fromDate(new Date(createdAt));
       const taxableSupplyDateTimestamp = Timestamp.fromDate(new Date(taxableSupplyDate));
       const dueDateTimestamp = Timestamp.fromDate(new Date(dueDate));
-      
+
       console.log('[InvoiceForm] Converted timestamps:', {
         createdAt: createdAtTimestamp.toDate().toISOString(),
         taxableSupplyDate: taxableSupplyDateTimestamp.toDate().toISOString(),
         dueDate: dueDateTimestamp.toDate().toISOString(),
       });
-      
+
       // Vygenerovat nebo použít číslo faktury a inkrementovat čítač (pouze pro nové faktury)
       let finalInvoiceNumber = invoiceNumber;
       let finalVariableSymbol = variableSymbol;
       let numberingTypeIdToIncrement: string | null = null;
-      
+
       if (!invoiceId && !invoice) {
         // Nová faktura - musíme zajistit číslo faktury a inkrementovat čítač
         try {
           if (finalInvoiceNumber.trim()) {
             // Už máme preview číslo - použijeme ho a inkrementujeme čítač
             console.log('[InvoiceForm] Používám existující preview číslo faktury:', finalInvoiceNumber);
-            
+
             // Najít typ číslování pro inkrementaci
             if (selectedSupplierId) {
               const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
@@ -939,7 +946,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                 numberingTypeIdToIncrement = selectedSupplier.invoiceNumberingTypeId;
               }
             }
-            
+
             // Extrahovat číselnou část pro variabilní symbol pokud není
             if (!finalVariableSymbol) {
               finalVariableSymbol = finalInvoiceNumber.replace(/^[A-Za-z]+/, '') || finalInvoiceNumber;
@@ -962,7 +969,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
               finalInvoiceNumber = await generateNextInvoiceNumber();
               console.log('[InvoiceForm] Generuji číslo faktury podle starého systému z BillingSettings (žádný dodavatel)');
             }
-            
+
             if (finalInvoiceNumber) {
               // Extrahovat číselnou část pro variabilní symbol
               finalVariableSymbol = finalInvoiceNumber.replace(/^[A-Za-z]+/, '') || finalInvoiceNumber;
@@ -980,7 +987,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         // Pokud už máme číslo faktury (editace), ale nemáme variabilní symbol, extrahovat číselnou část
         finalVariableSymbol = finalInvoiceNumber.replace(/^[A-Za-z]+/, '') || finalInvoiceNumber;
       }
-      
+
       // Načíst data dodavatele
       let supplierData: InvoiceSupplier;
       if (selectedSupplierId) {
@@ -1080,7 +1087,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       } else {
         // Create mode - vytvořit fakturu
         finalInvoiceId = await createInvoice(invoiceData);
-        
+
         // Po úspěšném vytvoření faktury inkrementovat čítač (pokud máme typ číslování)
         if (numberingTypeIdToIncrement) {
           try {
@@ -1120,18 +1127,18 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     try {
       const newId = await createOperator(operatorData);
       const newOperator: Operator = { id: newId, ...operatorData };
-      
+
       // Aktualizovat lokální state zákazníků
       if (onOperatorAdded) {
         onOperatorAdded(newOperator);
       }
-      
+
       // Automaticky vybrat nového zákazníka
       handleCustomerChange(newId);
-      
+
       // Zavřít modální okno
       setShowAddOperatorModal(false);
-      
+
       toast.success('Zákazník byl přidán');
     } catch (error: any) {
       console.error('[InvoiceForm] Error saving operator:', error);
@@ -1139,10 +1146,37 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
     }
   };
 
+  const handleSavePremiseFromModal = async (premiseData: Omit<Premise, 'id'>) => {
+    try {
+      if (!selectedCustomerId) {
+        toast.error('Nejdříve vyberte zákazníka');
+        return;
+      }
+
+      const newId = await createPremise(premiseData);
+      const newPremise: Premise = { id: newId, ...premiseData };
+
+      // Aktualizovat lokální state provozoven (pokud je callback)
+      // Poznámka: InvoiceForm nemá onPremiseAdded callback, ale premises jsou předávány z rodiče
+      // Rodič se aktualizuje automaticky při reload dat
+
+      // Automaticky vybrat novou provozovnu
+      handlePremiseChange(newId);
+
+      // Zavřít modální okno
+      setShowAddPremiseModal(false);
+
+      toast.success('Provozovna byla přidána');
+    } catch (error: any) {
+      console.error('[InvoiceForm] Error saving premise:', error);
+      toast.error('Chyba při přidávání provozovny: ' + error.message);
+    }
+  };
+
   const handleSaveSupplierFromModal = async (supplierData: Omit<Supplier, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, logoFile?: File, stampFile?: File) => {
     try {
       const newId = await createSupplier(supplierData);
-      
+
       // Pokud je logo file, nahrát ho
       if (logoFile) {
         try {
@@ -1156,7 +1190,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           toast.error('Chyba při nahrávání loga: ' + error.message);
         }
       }
-      
+
       // Pokud je stamp file, nahrát ho
       if (stampFile) {
         try {
@@ -1170,10 +1204,10 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           toast.error('Chyba při nahrávání razítka: ' + error.message);
         }
       }
-      
+
       // Znovu načíst seznam dodavatelů, aby se získaly aktuální data včetně userId
       await loadSuppliers();
-      
+
       // Pokud je nový dodavatel nastaven jako výchozí, automaticky ho vybrat
       // (loadSuppliers už to udělá, ale pro jistotu)
       if (supplierData.isDefault) {
@@ -1184,7 +1218,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           setSelectedSupplierId(newId);
         }
       }
-      
+
       if (onSupplierAdded) {
         // Načíst nového dodavatele pro callback
         const { fetchSupplier } = await import('../../services/firestore/suppliers');
@@ -1193,10 +1227,10 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           onSupplierAdded(newSupplier);
         }
       }
-      
+
       // Zavřít modální okno
       setShowAddSupplierModal(false);
-      
+
       toast.success('Dodavatel byl přidán');
     } catch (error: any) {
       console.error('[InvoiceForm] Error saving supplier:', error);
@@ -1206,7 +1240,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
 
   const handleSupplierChange = async (supplierId: string) => {
     setSelectedSupplierId(supplierId);
-    
+
     // Aktualizovat preview čísla faktury podle nového dodavatele (pouze pro nové faktury)
     if (!invoiceId && !invoice && supplierId) {
       try {
@@ -1380,32 +1414,34 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
 
       {/* Dodavatel a Odběratel - vedle sebe, moderní design */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Dodavatel */}
-            <Card className="rounded-xl shadow-sm border-0">
-              <CardHeader className="bg-gradient-to-br from-amber-50 to-orange-50 border-b border-gray-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-                    <BuildingIcon className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-gray-900">Dodavatel</h3>
-                </div>
-              </CardHeader>
+        {/* Dodavatel */}
+        <Card className="rounded-xl shadow-sm border-0">
+          <CardHeader className="bg-gradient-to-br from-amber-50 to-orange-50 border-b border-gray-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                <BuildingIcon className="h-3.5 w-3.5 text-white" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900">Dodavatel</h3>
+            </div>
+          </CardHeader>
           <CardBody className="p-4 space-y-3">
             <div className="relative group">
-              <Select
+              <SearchableSelect
                 label="Vyberte dodavatele"
                 value={selectedSupplierId}
-                onChange={(e) => handleSupplierChange(e.target.value)}
+                onChange={(value) => handleSupplierChange(value)}
                 options={[
                   { value: '', label: '-- Vyberte --' },
                   ...suppliers.map(sup => ({ value: sup.id, label: sup.supplier_name })),
                 ]}
+                placeholder="Vyhledat dodavatele..."
                 className="text-sm"
+                onOpenChange={setIsSupplierDropdownOpen}
               />
-              {selectedSupplierId && (() => {
+              {selectedSupplierId && !isSupplierDropdownOpen && (() => {
                 const selectedSupplier = suppliers.find(sup => sup.id === selectedSupplierId);
                 if (!selectedSupplier) return null;
-                
+
                 return (
                   <div className="absolute inset-0 pointer-events-none">
                     <DetailTooltip
@@ -1448,23 +1484,23 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           </CardBody>
         </Card>
 
-            {/* Odběratel */}
-            <Card className="rounded-xl shadow-sm border-0">
-              <CardHeader className="bg-gradient-to-br from-emerald-50 to-teal-50 border-b border-gray-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    <UserIcon className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-gray-900">Odběratel</h3>
-                </div>
-              </CardHeader>
+        {/* Odběratel */}
+        <Card className="rounded-xl shadow-sm border-0">
+          <CardHeader className="bg-gradient-to-br from-emerald-50 to-teal-50 border-b border-gray-100 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                <UserIcon className="h-3.5 w-3.5 text-white" />
+              </div>
+              <h3 className="text-sm font-semibold text-gray-900">Odběratel</h3>
+            </div>
+          </CardHeader>
           <CardBody className="p-4 space-y-3">
             <div className="relative group" data-field="customerName">
-              <Select
+              <SearchableSelect
                 label="Vyberte zákazníka"
                 value={selectedCustomerId}
-                onChange={(e) => {
-                  handleCustomerChange(e.target.value);
+                onChange={(value) => {
+                  handleCustomerChange(value);
                   if (validationErrors.customerName) {
                     setValidationErrors(prev => {
                       const newErrors = { ...prev };
@@ -1477,16 +1513,19 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                   { value: '', label: '-- Vyberte --' },
                   ...operators.map(op => ({ value: op.id, label: op.operator_name })),
                 ]}
-                className={`text-sm ${validationErrors.customerName ? 'border-red-500' : ''}`}
+                placeholder="Vyhledat zákazníka..."
+                error={validationErrors.customerName}
+                className="text-sm"
+                onOpenChange={setIsCustomerDropdownOpen}
               />
-              {selectedCustomerId && (() => {
+              {selectedCustomerId && !isCustomerDropdownOpen && (() => {
                 const selectedOperator = operators.find(op => op.id === selectedCustomerId);
                 if (!selectedOperator) return null;
-                
+
                 let street = '';
                 let city = '';
                 let zip = '';
-                
+
                 if ((selectedOperator as any).operator_street && (selectedOperator as any).operator_city && (selectedOperator as any).operator_zip) {
                   street = (selectedOperator as any).operator_street || '';
                   city = (selectedOperator as any).operator_city || '';
@@ -1499,7 +1538,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                   zip = zipMatch ? zipMatch[1] : '';
                   city = zipMatch ? zipMatch[2] : cityZip;
                 }
-                
+
                 return (
                   <div className="absolute inset-0 pointer-events-none">
                     <DetailTooltip
@@ -1572,21 +1611,23 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             {selectedCustomerId ? (
               <>
                 <div className="relative group">
-                  <Select
+                  <SearchableSelect
                     label="Vyberte provozovnu"
                     value={selectedPremiseId}
-                    onChange={(e) => handlePremiseChange(e.target.value)}
+                    onChange={(value) => handlePremiseChange(value)}
                     options={[
                       { value: '', label: '-- Vyberte provozovnu --' },
                       ...availablePremises.map(prem => ({ value: prem.id, label: prem.premise_name })),
                     ]}
+                    placeholder="Vyhledat provozovnu..."
                     className="text-sm"
                     disabled={!selectedCustomerId}
+                    onOpenChange={setIsPremiseDropdownOpen}
                   />
-                  {selectedPremiseId && premise && (() => {
+                  {selectedPremiseId && premise && !isPremiseDropdownOpen && (() => {
                     const selectedPremise = premises.find(p => p.id === selectedPremiseId);
                     if (!selectedPremise) return null;
-                    
+
                     return (
                       <div className="absolute inset-0 pointer-events-none">
                         <DetailTooltip
@@ -1617,6 +1658,22 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
                     );
                   })()}
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (!selectedCustomerId) {
+                      toast.warning('Nejdříve vyberte zákazníka');
+                      return;
+                    }
+                    setShowAddPremiseModal(true);
+                  }}
+                  leftIcon={<PlusIcon className="h-3 w-3" />}
+                  className="w-full text-xs"
+                  disabled={!selectedCustomerId}
+                >
+                  Přidat novou provozovnu
+                </Button>
                 {selectedPremiseId && premise && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-gray-200">
                     <TextField
@@ -1664,203 +1721,209 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
       </Card>
 
       {/* Items */}
-      <Card 
-        className={`mb-6 border-l-4 ${validationErrors.items ? 'border-red-500 border-2' : ''}`} 
-        style={{ borderLeftColor: validationErrors.items ? '#ef4444' : (sectionTheme.colors.accent || '#3b82f6') }}
+      <Card
+        className={`mb-6 border-l-4 ${validationErrors.items ? 'border-red-500 border-2' : ''}`}
+        style={{ borderLeftColor: validationErrors.items ? '#ef4444' : (sectionTheme.colors.primary || '#3b82f6') }}
         data-field="items"
       >
-        <CardHeader className={`bg-gradient-to-r ${validationErrors.items ? 'bg-red-50' : ''}`} style={validationErrors.items ? {} : { 
-          background: `linear-gradient(to right, ${sectionTheme.colors.accent || '#3b82f6'}15, ${sectionTheme.colors.accent || '#3b82f6'}05)` 
+        <CardHeader className={`bg-gradient-to-r ${validationErrors.items ? 'bg-red-50' : ''}`} style={validationErrors.items ? {} : {
+          background: `linear-gradient(to right, ${sectionTheme.colors.primary || '#3b82f6'}15, ${sectionTheme.colors.primary || '#3b82f6'}05)`
         }}>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center flex-wrap gap-4">
             <button
               type="button"
               onClick={() => setIsItemsExpanded(!isItemsExpanded)}
               className="flex items-center gap-3"
             >
-              <ListIcon className="h-6 w-6" style={{ color: validationErrors.items ? '#ef4444' : (sectionTheme.colors.accent || '#3b82f6') }} />
+              <ListIcon className="h-6 w-6" style={{ color: validationErrors.items ? '#ef4444' : (sectionTheme.colors.primary || '#3b82f6') }} />
               <h2 className={`text-lg font-semibold ${validationErrors.items ? 'text-red-700' : 'text-gray-900'}`}>Položky</h2>
               {validationErrors.items && (
                 <span className="text-red-600 text-sm font-medium">({validationErrors.items})</span>
               )}
             </button>
             <div className="flex items-center gap-2">
-              <Button variant="primary" size="sm" onClick={handleAddItem} leftIcon={<PlusIcon className="h-4 w-4" />}>
-                Přidat položku
+              {priceItems.length > 0 && (
+                <div className="relative">
+                  <select
+                    className="pl-3 pr-8 py-1.5 text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const selectedPriceItem = priceItems.find(p => p.id === e.target.value);
+                        if (selectedPriceItem) {
+                          handleAddItem({
+                            name: selectedPriceItem.name,
+                            description: selectedPriceItem.description || '',
+                            unit: selectedPriceItem.unit,
+                            unitPrice: selectedPriceItem.unitPrice,
+                            vatRate: selectedPriceItem.vatRate,
+                          });
+                        }
+                        e.target.value = ""; // Reset select
+                      }
+                    }}
+                  >
+                    <option value="">+ Přidat z ceníku</option>
+                    {priceItems.map((priceItem) => (
+                      <option key={priceItem.id} value={priceItem.id}>
+                        {priceItem.name} ({formatCurrency(priceItem.unitPrice)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <Button variant="primary" size="sm" onClick={() => handleAddItem()} leftIcon={<PlusIcon className="h-4 w-4" />}>
+                Přidat prázdnou
               </Button>
               {isItemsExpanded ? (
-                <ChevronUpIcon className="h-5 w-5 text-gray-500 cursor-pointer" onClick={() => setIsItemsExpanded(false)} />
+                <button type="button" onClick={() => setIsItemsExpanded(false)} className="focus:outline-none">
+                  <ChevronUpIcon className="h-5 w-5 text-gray-500" />
+                </button>
               ) : (
-                <ChevronDownIcon className="h-5 w-5 text-gray-500 cursor-pointer" onClick={() => setIsItemsExpanded(true)} />
+                <button type="button" onClick={() => setIsItemsExpanded(true)} className="focus:outline-none">
+                  <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+                </button>
               )}
             </div>
           </div>
         </CardHeader>
         {isItemsExpanded && (
-        <CardBody className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Z ceníku</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Název</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Popis</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Množství</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Jednotka</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase">Cena/jednotka</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase">DPH %</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase">Celkem</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Akce</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {items.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-8 text-center">
-                      <div className="space-y-2">
-                        <p className={`text-sm ${validationErrors.items ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                          {validationErrors.items ? (
-                            <span className="flex items-center justify-center gap-2">
-                              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                              </svg>
-                              {validationErrors.items}
-                            </span>
-                          ) : (
-                            'Žádné položky. Klikněte na "Přidat položku" pro přidání.'
-                          )}
-                        </p>
-                        {validationErrors.items && (
-                          <Button 
-                            variant="primary" 
-                            size="sm" 
-                            onClick={() => {
-                              handleAddItem();
-                              setIsItemsExpanded(true);
-                              // Vymazat chybu když přidáme položku
-                              setValidationErrors(prev => {
-                                const newErrors = { ...prev };
-                                delete newErrors.items;
-                                return newErrors;
-                              });
-                            }}
-                            leftIcon={<PlusIcon className="h-4 w-4" />}
-                          >
-                            Přidat první položku
-                          </Button>
-                        )}
-                      </div>
-                    </td>
+          <CardBody className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[40%]">Položka</th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]">Množství</th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]">Jedn.</th>
+                    <th className="px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]">Cena/jedn.</th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[10%]">DPH</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[15%]">Celkem</th>
+                    <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[5%]"></th>
                   </tr>
-                ) : (
-                  items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-6 py-4">
-                        {priceItems.length > 0 ? (
-                          <select
-                            key={`price-select-${item.id}-${priceSelectKeys[item.id] || 0}`}
-                            defaultValue=""
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                handleSelectPriceItem(item.id, e.target.value);
-                              }
-                            }}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-500"
-                          >
-                            <option value="">Vybrat z ceníku...</option>
-                            {priceItems.map((priceItem) => (
-                              <option key={priceItem.id} value={priceItem.id}>
-                                {priceItem.name} ({formatCurrency(priceItem.unitPrice)})
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-xs text-gray-400">Žádný ceník</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                          placeholder="Název položky"
-                          required
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="text"
-                          value={item.description || ''}
-                          onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                          placeholder="Popis"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="text"
-                          value={item.unit}
-                          onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="number"
-                          value={item.unitPrice}
-                          onChange={(e) => handleItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-right"
-                          min="0"
-                          step="0.01"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
-                        <select
-                          value={item.vatRate}
-                          onChange={(e) => handleItemChange(item.id, 'vatRate', parseFloat(e.target.value))}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                        >
-                          <option value="0">0%</option>
-                          <option value="10">10%</option>
-                          <option value="15">15%</option>
-                          <option value="21">21%</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 text-right text-sm font-medium">
-                        {formatAmount(item.totalWithVat)}
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="text-red-600 hover:text-red-800"
-                          title="Odstranit položku"
-                        >
-                          <TrashIcon className="h-5 w-5" />
-                        </button>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center">
+                        <div className="space-y-2">
+                          <p className={`text-sm ${validationErrors.items ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                            {validationErrors.items ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                                {validationErrors.items}
+                              </span>
+                            ) : (
+                              'Žádné položky. Klikněte na "Přidat položku" pro přidání.'
+                            )}
+                          </p>
+                          {validationErrors.items && (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => {
+                                handleAddItem();
+                                setIsItemsExpanded(true);
+                                setValidationErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.items;
+                                  return newErrors;
+                                });
+                              }}
+                              leftIcon={<PlusIcon className="h-4 w-4" />}
+                            >
+                              Přidat první položku
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardBody>
+                  ) : (
+                    items.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 align-top">
+                          <div className="flex flex-col gap-2">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleItemChange(item.id, 'name', e.target.value)}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-medium text-gray-900 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="Název položky"
+                              required
+                            />
+                            <input
+                              type="text"
+                              value={item.description || ''}
+                              onChange={(e) => handleItemChange(item.id, 'description', e.target.value)}
+                              className="w-full px-2 py-1 border-0 border-b border-gray-200 text-xs text-gray-600 focus:ring-0 focus:border-blue-500 bg-transparent placeholder-gray-400"
+                              placeholder="Popis (volitelné)"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <input
+                            type="text"
+                            value={item.unit}
+                            onChange={(e) => handleItemChange(item.id, 'unit', e.target.value)}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unitPrice}
+                            onChange={(e) => handleItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-right focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-3 align-top">
+                          <select
+                            value={item.vatRate}
+                            onChange={(e) => handleItemChange(item.id, 'vatRate', parseInt(e.target.value))}
+                            className="w-full px-1 py-1.5 border border-gray-300 rounded text-sm text-center focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value={21}>21 %</option>
+                            <option value={12}>12 %</option>
+                            <option value={0}>0 %</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 align-top text-right font-medium text-gray-900 pt-4">
+                          {formatCurrency(item.totalWithVat)}
+                        </td>
+                        <td className="px-2 py-3 align-top text-center pt-3">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"
+                            title="Odstranit položku"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardBody>
         )}
       </Card>
-
       {/* Summary */}
-      <Card className="mb-6 border-l-4" style={{ borderLeftColor: sectionTheme.colors.success || '#10b981' }}>
+      <Card className="mb-6 border-l-4" style={{ borderLeftColor: '#10b981' }}>
         <CardHeader>
           <button
             type="button"
@@ -1868,7 +1931,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
             className="w-full flex justify-between items-center text-left"
           >
             <div className="flex items-center gap-3">
-              <CalculatorIcon className="h-6 w-6" style={{ color: sectionTheme.colors.success || '#10b981' }} />
+              <CalculatorIcon className="h-6 w-6" style={{ color: '#10b981' }} />
               <h2 className="text-lg font-semibold text-gray-900">Souhrn</h2>
             </div>
             {isSummaryExpanded ? (
@@ -1879,57 +1942,57 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           </button>
         </CardHeader>
         {isSummaryExpanded && (
-        <CardBody>
-          <div className="bg-blue-50 p-6 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Základ podle DPH sazeb</h3>
-                <div className="space-y-2">
-                  {Object.keys(items.reduce((acc, item) => {
-                    acc[item.vatRate] = (acc[item.vatRate] || 0) + item.totalWithoutVat;
-                    return acc;
-                  }, {} as Record<number, number>)).sort((a, b) => Number(b) - Number(a)).map(vatRateStr => {
-                    const vatRate = Number(vatRateStr);
-                    const baseForRate = items
-                      .filter(item => item.vatRate === vatRate)
-                      .reduce((sum, item) => sum + item.totalWithoutVat, 0);
-                    
-                    return (
-                      <div key={vatRate} className="flex justify-between text-sm">
-                        <span className="text-gray-700">Základ {vatRate}% DPH:</span>
-                        <span className="font-medium">{formatAmount(baseForRate)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-700">Celkem bez DPH:</span>
-                    <span className="font-medium">{formatAmount(totals.baseWithoutVat)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-700">DPH celkem:</span>
-                    <span className="font-medium">{formatAmount(totals.vatAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm border-t border-gray-300 pt-2">
-                    <span className="text-gray-700">Celkem s DPH:</span>
-                    <span className="font-medium">{formatAmount(totals.totalWithVat)}</span>
+          <CardBody>
+            <div className="bg-blue-50 p-6 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Základ podle DPH sazeb</h3>
+                  <div className="space-y-2">
+                    {Object.keys(items.reduce((acc, item) => {
+                      acc[item.vatRate] = (acc[item.vatRate] || 0) + item.totalWithoutVat;
+                      return acc;
+                    }, {} as Record<number, number>)).sort((a, b) => Number(b) - Number(a)).map(vatRateStr => {
+                      const vatRate = Number(vatRateStr);
+                      const baseForRate = items
+                        .filter(item => item.vatRate === vatRate)
+                        .reduce((sum, item) => sum + item.totalWithoutVat, 0);
+
+                      return (
+                        <div key={vatRate} className="flex justify-between text-sm">
+                          <span className="text-gray-700">Základ {vatRate}% DPH:</span>
+                          <span className="font-medium">{formatAmount(baseForRate)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="pt-4 border-t-2 border-gray-400">
-                  <div className="flex justify-between">
-                    <span className="text-lg font-bold text-gray-900">Celková částka:</span>
-                    <span className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(totals.totalWithVat, currency)}
-                    </span>
+                <div>
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-700">Celkem bez DPH:</span>
+                      <span className="font-medium">{formatAmount(totals.baseWithoutVat)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-700">DPH celkem:</span>
+                      <span className="font-medium">{formatAmount(totals.vatAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm border-t border-gray-300 pt-2">
+                      <span className="text-gray-700">Celkem s DPH:</span>
+                      <span className="font-medium">{formatAmount(totals.totalWithVat)}</span>
+                    </div>
+                  </div>
+                  <div className="pt-4 border-t-2 border-gray-400">
+                    <div className="flex justify-between">
+                      <span className="text-lg font-bold text-gray-900">Celková částka:</span>
+                      <span className="text-2xl font-bold text-gray-900">
+                        {formatCurrency(totals.totalWithVat, currency)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </CardBody>
+          </CardBody>
         )}
       </Card>
 
@@ -1950,26 +2013,26 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
           </button>
         </CardHeader>
         {isNotesExpanded && (
-        <CardBody className="p-4">
-          <div className="space-y-3">
-            <TextArea
-              label="Poznámka na faktuře"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={2}
-              placeholder="Např. Zboží zůstává až do úplného uhrazení..."
-              className="text-sm"
-            />
-            <TextArea
-              label="Poznámka v patičce"
-              value={footerNote}
-              onChange={(e) => setFooterNote(e.target.value)}
-              rows={2}
-              placeholder="Např. Info o zápisu v OR..."
-              className="text-sm"
-            />
-          </div>
-        </CardBody>
+          <CardBody className="p-4">
+            <div className="space-y-3">
+              <TextArea
+                label="Poznámka na faktuře"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="Např. Zboží zůstává až do úplného uhrazení..."
+                className="text-sm"
+              />
+              <TextArea
+                label="Poznámka v patičce"
+                value={footerNote}
+                onChange={(e) => setFooterNote(e.target.value)}
+                rows={2}
+                placeholder="Např. Info o zápisu v OR..."
+                className="text-sm"
+              />
+            </div>
+          </CardBody>
         )}
       </Card>
 
@@ -1978,7 +2041,7 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         <Button variant="primary" onClick={handleSubmit} isLoading={isSubmitting}>
           {invoice ? 'Uložit změny' : 'Vygenerovat fakturu'}
         </Button>
-        <Button variant="ghost" onClick={onBack}>
+        <Button variant="ghost" onClick={() => checkUnsavedChanges(onBack)}>
           Zrušit
         </Button>
       </div>
@@ -1991,10 +2054,11 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         size="3xl"
         closeOnBackdropClick={false}
       >
-        <OperatorForm 
-          initialData={null} 
-          onSave={handleSaveOperatorFromModal} 
-          onBack={() => setShowAddOperatorModal(false)} 
+        <OperatorForm
+          initialData={null}
+          operators={operators}
+          onSave={handleSaveOperatorFromModal}
+          onBack={() => setShowAddOperatorModal(false)}
         />
       </Modal>
 
@@ -2006,13 +2070,32 @@ export const InvoiceForm: React.FC<InvoiceFormProps> = ({
         size="4xl"
         closeOnBackdropClick={false}
       >
-        <SupplierForm 
-          initialData={null} 
-          onSave={handleSaveSupplierFromModal} 
-          onBack={() => setShowAddSupplierModal(false)} 
+        <SupplierForm
+          initialData={null}
+          onSave={handleSaveSupplierFromModal}
+          onBack={() => setShowAddSupplierModal(false)}
         />
       </Modal>
-    </div>
+
+      {/* Modal pro přidání nové provozovny */}
+      {selectedCustomerId && (
+        <Modal
+          isOpen={showAddPremiseModal}
+          onClose={() => setShowAddPremiseModal(false)}
+          title="Nová provozovna"
+          size="3xl"
+          closeOnBackdropClick={false}
+        >
+          <PremiseForm
+            initialData={null}
+            operatorId={selectedCustomerId}
+            premises={availablePremises}
+            onSave={handleSavePremiseFromModal}
+            onBack={() => setShowAddPremiseModal(false)}
+          />
+        </Modal>
+      )}
+    </div >
   );
 };
 

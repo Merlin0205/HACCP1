@@ -37,7 +37,7 @@ export const transcribeAudio = async (audioPart: Part): Promise<string> => {
   ]);
   
   await addAIUsageLog(
-    modelName,
+    response.modelUsed || modelName,
     'audio-transcription',
     response.usageMetadata.promptTokenCount,
     response.usageMetadata.candidatesTokenCount,
@@ -72,7 +72,7 @@ export const analyzeImageWithAI = async (photo: Part): Promise<string> => {
   ]);
   
   await addAIUsageLog(
-    modelName,
+    response.modelUsed || modelName,
     'image-analysis',
     response.usageMetadata.promptTokenCount,
     response.usageMetadata.candidatesTokenCount,
@@ -93,7 +93,7 @@ export const generateReportConclusionWithAI = async (summary: string): Promise<s
   const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
   
   await addAIUsageLog(
-    modelName,
+    response.modelUsed || modelName,
     'text-generation',
     response.usageMetadata.promptTokenCount,
     response.usageMetadata.candidatesTokenCount,

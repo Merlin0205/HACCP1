@@ -17,7 +17,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { InvoiceNumberingType } from '../../types';
-import { fetchUserMetadata } from './users';
 import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'invoiceNumberingTypes';
@@ -34,19 +33,6 @@ function getCurrentUserId(): string {
 }
 
 /**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Převede Firestore dokument na InvoiceNumberingType objekt
  */
 function docToInvoiceNumberingType(docSnapshot: any): InvoiceNumberingType {
@@ -58,27 +44,13 @@ function docToInvoiceNumberingType(docSnapshot: any): InvoiceNumberingType {
 }
 
 /**
- * Načte všechny typy číslování (všechny pro admina, jen své pro běžného uživatele)
+ * Načte všechny typy číslování (sdílený režim)
  */
 export async function fetchInvoiceNumberingTypes(): Promise<InvoiceNumberingType[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechny typy číslování
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('name', 'asc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('name', 'asc')
-    );
-  }
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('name', 'asc')
+  );
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToInvoiceNumberingType);
@@ -142,11 +114,8 @@ export async function updateInvoiceNumberingType(
   // Odstranit id z dat
   const { id, userId, ...dataToUpdate } = typeData as any;
   
-  const finalUserId = userId || getCurrentUserId();
-  
   await updateDoc(docRef, {
     ...dataToUpdate,
-    userId: finalUserId,
     updatedAt: new Date().toISOString()
   });
 }

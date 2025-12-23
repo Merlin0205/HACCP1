@@ -84,8 +84,8 @@ const renderTableElement = (content: TableContent, index: number) => {
             <tr key={rowIdx} className="print:break-inside-avoid">
               {row.map((cell, cellIdx) => {
                 const alignment = content.alignments?.[cellIdx] || 'left';
-                const isStatus = cell === 'NEVYHOVUJE' || cell === 'Vyhovuje';
-                const statusColor = cell === 'NEVYHOVUJE' ? 'text-red-600 font-bold' : 'text-green-600 font-bold';
+                const isStatus = cell === 'NEVYHOVUJE' || cell === 'VYHOVUJE';
+                const statusColor = cell === 'NEVYHOVUJE' ? 'text-red-600 font-bold' : 'text-black font-bold';
 
                 return (
                   <td
@@ -122,7 +122,7 @@ const renderImagesElement = (content: ImagesContent, index: number) => {
             <img
               src={`data:image/jpeg;base64,${img.base64}`}
               alt={img.caption || 'Fotografie'}
-              className="w-full h-auto rounded-md shadow-md border"
+              className="w-full h-auto"
             />
           )}
           {img.caption && (

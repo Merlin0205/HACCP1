@@ -11,10 +11,12 @@ import {
   deleteDoc,
   Timestamp,
   limit,
-  addDoc
+  addDoc,
+  QueryConstraint
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { fetchAIPricingConfig, DEFAULT_GEMINI_MODELS } from './settings';
+import { fetchUserMetadata } from './users';
 
 const COLLECTION_NAME = 'aiUsageLogs';
 
@@ -27,6 +29,19 @@ function getCurrentUserId(): string {
     throw new Error('User not authenticated');
   }
   return user.uid;
+}
+
+/**
+ * Zkontroluje, jestli je aktuální uživatel admin
+ */
+async function isCurrentUserAdmin(): Promise<boolean> {
+  try {
+    const userId = getCurrentUserId();
+    const metadata = await fetchUserMetadata(userId);
+    return metadata?.role === 'admin' && metadata?.approved === true;
+  } catch {
+    return false;
+  }
 }
 
 export interface AIUsageLog {
@@ -55,31 +70,49 @@ function docToLog(docSnapshot: any): AIUsageLog {
 }
 
 /**
- * Načte AI usage logy aktuálního uživatele
+ * Načte AI usage logy aktuálního uživatele nebo globálně
  */
-export async function fetchAIUsageLogs(maxResults: number = 100): Promise<AIUsageLog[]> {
-  const userId = getCurrentUserId();
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('userId', '==', userId),
+export async function fetchAIUsageLogs(maxResults: number = 100, userId: string | null | undefined = undefined): Promise<AIUsageLog[]> {
+  // Pokud je userId undefined, použijeme aktuálního uživatele. Pokud je null, načteme vše (globální).
+  const targetUserId = userId === undefined ? getCurrentUserId() : userId;
+
+  const constraints: QueryConstraint[] = [
     orderBy('timestamp', 'desc'),
     limit(maxResults)
+  ];
+
+  if (targetUserId !== null) {
+    constraints.unshift(where('userId', '==', targetUserId));
+  }
+
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    ...constraints
   );
-  
+
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToLog);
 }
 
 /**
- * Smaže všechny AI usage logy aktuálního uživatele
+ * Smaže všechny AI usage logy (všechny pro admina, jen své pro běžného uživatele)
  */
 export async function clearAIUsageLogs(): Promise<void> {
   const userId = getCurrentUserId();
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('userId', '==', userId)
-  );
+  const isAdmin = await isCurrentUserAdmin();
   
+  let q;
+  if (isAdmin) {
+    // Admin smaže všechny logy
+    q = query(collection(db, COLLECTION_NAME));
+  } else {
+    // Běžný uživatel smaže jen své
+    q = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId)
+    );
+  }
+
   const snapshot = await getDocs(q);
   const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
   await Promise.all(deletePromises);
@@ -97,10 +130,10 @@ async function calculateCost(model: string, promptTokens: number, completionToke
   try {
     const pricingConfig = await fetchAIPricingConfig();
     const usdToCzk = pricingConfig.usdToCzk || 25;
-    
+
     // Zkusit najít ceny v pricing configu
     let pricing = pricingConfig.models?.[model];
-    
+
     // Pokud není v pricing configu, použít výchozí ceny z DEFAULT_GEMINI_MODELS
     if (!pricing) {
       const defaultModel = DEFAULT_GEMINI_MODELS[model];
@@ -117,7 +150,7 @@ async function calculateCost(model: string, promptTokens: number, completionToke
         return { usd: 0, czk: 0 };
       }
     }
-    
+
     // Vybrat správnou input cenu podle typu operace
     let inputPrice = pricing.inputPrice || 0;
     if (operation === 'audio-transcription' && pricing.audioInputPrice !== undefined) {
@@ -125,15 +158,15 @@ async function calculateCost(model: string, promptTokens: number, completionToke
     } else if (operation === 'image-analysis' && pricing.imageInputPrice !== undefined) {
       inputPrice = pricing.imageInputPrice;
     }
-    
+
     const outputPrice = pricing.outputPrice || 0;
-    
+
     // Ceny jsou obvykle za 1M tokenů
     const inputCost = (promptTokens / 1000000) * inputPrice;
     const outputCost = (completionTokens / 1000000) * outputPrice;
     const totalUsd = inputCost + outputCost;
     const totalCzk = totalUsd * usdToCzk;
-    
+
     return { usd: totalUsd, czk: totalCzk };
   } catch (error) {
     console.error('[AI-USAGE] Chyba při výpočtu nákladů:', error);
@@ -154,10 +187,10 @@ export async function addAIUsageLog(
 ): Promise<void> {
   try {
     const userId = getCurrentUserId();
-    
+
     // Vypočítat náklady s operation parametrem pro správný výběr ceny
     const cost = await calculateCost(model, promptTokens, completionTokens, operation);
-    
+
     // Přidat log do Firestore
     await addDoc(collection(db, COLLECTION_NAME), {
       userId,
@@ -171,7 +204,7 @@ export async function addAIUsageLog(
       costCzk: cost.czk,
       source: source || 'cloud-functions' // Default je cloud-functions pro zpětnou kompatibilitu
     });
-    
+
     const sourceLabel = source === 'sdk' ? 'SDK' : 'Cloud Functions';
     console.log(`[AI-USAGE] Zalogováno (${sourceLabel}): ${model}, ${totalTokens} tokens, $${cost.usd.toFixed(6)} (${cost.czk.toFixed(6)} Kč)`);
   } catch (error) {
@@ -181,18 +214,32 @@ export async function addAIUsageLog(
 }
 
 /**
- * Načte AI usage logy filtrované podle operace
+ * Načte AI usage logy filtrované podle operace (všechny pro admina, jen své pro běžného uživatele)
  */
 export async function fetchAIUsageLogsByOperation(operation: string, maxResults: number = 1000): Promise<AIUsageLog[]> {
   const userId = getCurrentUserId();
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('userId', '==', userId),
-    where('operation', '==', operation),
-    orderBy('timestamp', 'desc'),
-    limit(maxResults)
-  );
+  const isAdmin = await isCurrentUserAdmin();
   
+  let q;
+  if (isAdmin) {
+    // Admin vidí všechny logy pro danou operaci
+    q = query(
+      collection(db, COLLECTION_NAME),
+      where('operation', '==', operation),
+      orderBy('timestamp', 'desc'),
+      limit(maxResults)
+    );
+  } else {
+    // Běžný uživatel vidí jen své
+    q = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId),
+      where('operation', '==', operation),
+      orderBy('timestamp', 'desc'),
+      limit(maxResults)
+    );
+  }
+
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToLog);
 }
@@ -221,13 +268,13 @@ export interface OperationStats {
  * Vypočítá náklady podle operací
  */
 export async function calculateCostsByOperation(): Promise<Record<string, OperationStats>> {
-  const logs = await fetchAIUsageLogs(1000); // Načíst maximálně 1000 záznamů
-  
+  const logs = await fetchAIUsageLogs(1000, null); // Načíst maximálně 1000 záznamů, globálně
+
   const operations: Record<string, OperationStats> = {};
-  
+
   logs.forEach(log => {
     const op = log.operation || 'unknown';
-    
+
     if (!operations[op]) {
       operations[op] = {
         totalCostUsd: 0,
@@ -239,7 +286,7 @@ export async function calculateCostsByOperation(): Promise<Record<string, Operat
         byModel: {}
       };
     }
-    
+
     const opStats = operations[op];
     opStats.totalCostUsd += log.costUsd || 0;
     opStats.totalCostCzk += log.costCzk || 0;
@@ -247,7 +294,7 @@ export async function calculateCostsByOperation(): Promise<Record<string, Operat
     opStats.totalPromptTokens += log.promptTokens || 0;
     opStats.totalCompletionTokens += log.completionTokens || 0;
     opStats.count += 1;
-    
+
     // Statistiky podle modelu
     if (!opStats.byModel[log.model]) {
       opStats.byModel[log.model] = {
@@ -259,7 +306,7 @@ export async function calculateCostsByOperation(): Promise<Record<string, Operat
         count: 0
       };
     }
-    
+
     const modelStats = opStats.byModel[log.model];
     modelStats.totalCostUsd += log.costUsd || 0;
     modelStats.totalCostCzk += log.costCzk || 0;
@@ -268,7 +315,7 @@ export async function calculateCostsByOperation(): Promise<Record<string, Operat
     modelStats.totalCompletionTokens += log.completionTokens || 0;
     modelStats.count += 1;
   });
-  
+
   return operations;
 }
 
@@ -291,15 +338,15 @@ export async function calculateModelStats(modelName: string, operation?: string)
     count: number;
   }>;
 }> {
-  const logs = await fetchAIUsageLogs(1000);
-  
+  const logs = await fetchAIUsageLogs(1000, null);
+
   // Filtrovat podle modelu a volitelně podle operace
   const filteredLogs = logs.filter(log => {
     if (log.model !== modelName) return false;
     if (operation && log.operation !== operation) return false;
     return true;
   });
-  
+
   const stats = {
     totalCostUsd: 0,
     totalCostCzk: 0,
@@ -316,7 +363,7 @@ export async function calculateModelStats(modelName: string, operation?: string)
       count: number;
     }>
   };
-  
+
   filteredLogs.forEach(log => {
     stats.totalCostUsd += log.costUsd || 0;
     stats.totalCostCzk += log.costCzk || 0;
@@ -324,7 +371,7 @@ export async function calculateModelStats(modelName: string, operation?: string)
     stats.totalPromptTokens += log.promptTokens || 0;
     stats.totalCompletionTokens += log.completionTokens || 0;
     stats.count += 1;
-    
+
     // Rozpis podle operací
     const op = log.operation || 'unknown';
     if (!stats.byOperation[op]) {
@@ -337,7 +384,7 @@ export async function calculateModelStats(modelName: string, operation?: string)
         count: 0
       };
     }
-    
+
     const opStats = stats.byOperation[op];
     opStats.totalCostUsd += log.costUsd || 0;
     opStats.totalCostCzk += log.costCzk || 0;
@@ -346,7 +393,7 @@ export async function calculateModelStats(modelName: string, operation?: string)
     opStats.totalCompletionTokens += log.completionTokens || 0;
     opStats.count += 1;
   });
-  
+
   return stats;
 }
 
@@ -359,8 +406,8 @@ export async function calculateAIUsageStats(): Promise<{
   totalTokens: number;
   logCount: number;
 }> {
-  const logs = await fetchAIUsageLogs(1000); // Načíst maximálně 1000 záznamů
-  
+  const logs = await fetchAIUsageLogs(1000, null); // Načíst maximálně 1000 záznamů, globálně
+
   const stats = logs.reduce((acc, log) => {
     return {
       totalCostUsd: acc.totalCostUsd + (log.costUsd || 0),
@@ -374,6 +421,6 @@ export async function calculateAIUsageStats(): Promise<{
     totalTokens: 0,
     logCount: 0
   });
-  
+
   return stats;
 }

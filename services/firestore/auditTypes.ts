@@ -40,6 +40,28 @@ function getCurrentUserId(): string {
 }
 
 /**
+ * Migruje strukturu - aktualizuje "Mobil" na "Telefon"
+ */
+function migrateAuditStructure(structure: AuditStructure): { migrated: AuditStructure; needsUpdate: boolean } {
+  let needsUpdate = false;
+  const migratedStructure = JSON.parse(JSON.stringify(structure)); // Deep copy
+  
+  // Aktualizovat labely v header_data
+  ['auditor', 'audited_premise', 'operator'].forEach(sectionKey => {
+    if (migratedStructure.header_data?.[sectionKey]?.fields) {
+      migratedStructure.header_data[sectionKey].fields.forEach((field: any) => {
+        if (field.label === 'Mobil') {
+          field.label = 'Telefon';
+          needsUpdate = true;
+        }
+      });
+    }
+  });
+  
+  return { migrated: migratedStructure, needsUpdate };
+}
+
+/**
  * Načte všechny typy auditů
  */
 export async function fetchAllAuditTypes(): Promise<AuditType[]> {
@@ -49,12 +71,24 @@ export async function fetchAllAuditTypes(): Promise<AuditType[]> {
   );
   
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
+  const types = querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
     createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
     updatedAt: doc.data().updatedAt?.toDate?.() || doc.data().updatedAt
   })) as AuditType[];
+  
+  // Migrace: Aktualizovat všechny typy auditů, které mají "Mobil" v labelech
+  const updatePromises = types.map(async (type) => {
+    const { migrated, needsUpdate } = migrateAuditStructure(type.auditStructure);
+    if (needsUpdate) {
+      await updateAuditType(type.id, { auditStructure: migrated });
+      return { ...type, auditStructure: migrated };
+    }
+    return type;
+  });
+  
+  return Promise.all(updatePromises);
 }
 
 /**
@@ -77,12 +111,21 @@ export async function fetchAuditType(auditTypeId: string): Promise<AuditType | n
   }
   
   const data = docSnap.data();
-  return {
+  const auditType = {
     id: docSnap.id,
     ...data,
     createdAt: data.createdAt?.toDate?.() || data.createdAt,
     updatedAt: data.updatedAt?.toDate?.() || data.updatedAt
   } as AuditType;
+  
+  // Migrace: Aktualizovat strukturu pokud obsahuje "Mobil"
+  const { migrated, needsUpdate } = migrateAuditStructure(auditType.auditStructure);
+  if (needsUpdate) {
+    await updateAuditType(auditTypeId, { auditStructure: migrated });
+    return { ...auditType, auditStructure: migrated };
+  }
+  
+  return auditType;
 }
 
 /**
@@ -117,6 +160,8 @@ export async function createAuditType(
     name,
     active: true,
     auditStructure,
+    reportTextNoNonCompliances: '',
+    reportTextWithNonCompliances: '',
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   });
@@ -129,7 +174,7 @@ export async function createAuditType(
  */
 export async function updateAuditType(
   auditTypeId: string,
-  updates: Partial<Pick<AuditType, 'name' | 'active' | 'auditStructure'>>
+  updates: Partial<Pick<AuditType, 'name' | 'active' | 'auditStructure' | 'reportTextNoNonCompliances' | 'reportTextWithNonCompliances'>>
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, auditTypeId);
   
@@ -159,6 +204,8 @@ export async function updateAuditType(
           ...currentData,
           id: newId,
           name: updates.name,
+          reportTextNoNonCompliances: updates.reportTextNoNonCompliances ?? currentData.reportTextNoNonCompliances ?? '',
+          reportTextWithNonCompliances: updates.reportTextWithNonCompliances ?? currentData.reportTextWithNonCompliances ?? '',
           updatedAt: Timestamp.now()
         });
         

@@ -22,11 +22,6 @@ export function getAIInstance() {
         // App Check se automaticky použije pokud je nastaven
       });
     } catch (error: any) {
-      console.error('[AI Logic SDK] ❌ Chyba při inicializaci SDK:', {
-        message: error?.message,
-        code: error?.code,
-        name: error?.name,
-      });
       throw error;
     }
   }
@@ -56,6 +51,8 @@ export interface AIUsageMetadata {
 export interface AIGenerateContentResponse {
   text: string;
   usageMetadata: AIUsageMetadata;
+  /** Skutečně použitý model (může se lišit od požadovaného kvůli fallbacku při 429). */
+  modelUsed: string;
 }
 
 /**
@@ -73,14 +70,36 @@ export async function generateContentWithSDK(
     controller.abort();
   }, timeout);
 
-  try {
-    const model = getModel(modelName);
-    
+  const isRateLimit429 = (err: any) => {
+    const errAny = err as any;
+    const msg = String(errAny?.message || '');
+    const stack = String(errAny?.stack || '');
+    const statusCandidate =
+      errAny?.status ??
+      errAny?.httpStatusCode ??
+      errAny?.customData?.status ??
+      errAny?.customData?.httpStatus ??
+      errAny?.customData?.httpStatusCode ??
+      errAny?.data?.status ??
+      null;
+    return (
+      statusCandidate === 429 ||
+      /\b429\b/.test(msg) ||
+      /\b429\b/.test(stack) ||
+      msg.includes('Too Many Requests') ||
+      msg.includes('RESOURCE_EXHAUSTED') ||
+      msg.toLowerCase().includes('overloaded')
+    );
+  };
+
+  const doGenerate = async (modelToUse: string): Promise<AIGenerateContentResponse> => {
+    const model = getModel(modelToUse);
+
     // Zkusit volat generateContent s timeout
     // Poznámka: Firebase AI Logic SDK nemusí podporovat AbortSignal přímo,
     // ale můžeme použít Promise.race pro timeout
     const generatePromise = model.generateContent(prompt);
-    
+
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(new Error(`Timeout: Request trval déle než ${timeout / 1000} sekund`));
@@ -88,19 +107,16 @@ export async function generateContentWithSDK(
     });
 
     const result = await Promise.race([generatePromise, timeoutPromise]);
-    clearTimeout(timeoutId);
-    
     const response = result.response;
-    
     const text = response.text();
-    
+
     // usageMetadata je vlastnost na response objektu, ne funkce
     const usageMetadata = response.usageMetadata || null;
-    
+
     const promptTokenCount = usageMetadata?.promptTokenCount || 0;
     const candidatesTokenCount = usageMetadata?.candidatesTokenCount || 0;
     const totalTokenCount = usageMetadata?.totalTokenCount || 0;
-    
+
     return {
       text,
       usageMetadata: {
@@ -108,24 +124,72 @@ export async function generateContentWithSDK(
         candidatesTokenCount,
         totalTokenCount,
       },
+      modelUsed: modelToUse,
     };
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    
-    const errorDetails = {
-      message: error?.message,
-      code: error?.code,
-      name: error?.name,
-      stack: error?.stack,
-    };
-    console.error('[AI Logic SDK] ❌ Chyba při generování obsahu:', errorDetails);
-    
-    // Pokud je to timeout nebo abort error, poskytnout lepší zprávu
-    if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('Timeout')) {
-      throw new Error(`Request byl přerušen (timeout nebo abort). Zkuste zkrátit prompt nebo použít jiný model. Původní chyba: ${error?.message || 'Neznámá chyba'}`);
+  };
+
+  try {
+    const primary = modelName;
+    const fallbackModels: string[] = [];
+
+    // Pokud je model často přetížený, zkusit okamžitě alternativy (bez čekání)
+    if (primary.includes('gemini-2.5-flash')) {
+      fallbackModels.push('gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-2.5-flash-lite');
+    } else if (primary.includes('gemini-2.5-pro')) {
+      fallbackModels.push('gemini-2.5-flash', 'gemini-2.0-flash-exp', 'gemini-2.0-flash');
+    } else if (primary.includes('gemini-2.0-flash-lite')) {
+      fallbackModels.push('gemini-2.0-flash-exp', 'gemini-2.0-flash');
     }
-    
-    throw new Error(`Firebase AI Logic SDK selhalo: ${error?.message || 'Neznámá chyba'}. Kód: ${error?.code || 'N/A'}`);
+
+    const uniqueModels = [primary, ...fallbackModels].filter((m, idx, arr) => arr.indexOf(m) === idx);
+
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < uniqueModels.length; attempt++) {
+      const modelToUse = uniqueModels[attempt];
+      try {
+        const result = await doGenerate(modelToUse);
+        clearTimeout(timeoutId);
+
+        return result;
+      } catch (error: any) {
+        lastErr = error;
+
+        // Pokud je to timeout nebo abort error, poskytnout lepší zprávu
+        if (error?.name === 'AbortError' || error?.message?.includes('aborted') || error?.message?.includes('Timeout')) {
+          clearTimeout(timeoutId);
+          throw new Error(`Request byl přerušen (timeout nebo abort). Zkuste zkrátit prompt nebo použít jiný model. Původní chyba: ${error?.message || 'Neznámá chyba'}`);
+        }
+
+        const errAny = error as any;
+        const msg = String(errAny?.message || '');
+        const is429 = isRateLimit429(error);
+
+        // Pokud 429 a máme další fallback, pokračovat na další model
+        if (is429 && attempt < uniqueModels.length - 1) {
+          continue;
+        }
+
+        // Rate limit / overload (429) – typicky dočasné přetížení/kvóta Gemini API
+        if (is429) {
+          clearTimeout(timeoutId);
+          throw new Error('AI je momentálně přetížená (429). Zkuste to prosím znovu za 20–60 sekund.');
+        }
+
+        // Firebase AI SDK někdy vrací fetch-error bez explicitního statusu (uživatel vidí 429 jen v Network)
+        if (errAny?.code === 'fetch-error' && msg.includes('firebasevertexai')) {
+          clearTimeout(timeoutId);
+          throw new Error('AI je momentálně nedostupná (pravděpodobně přetížení/kvóta). Zkuste to prosím za chvilku znovu.');
+        }
+
+        clearTimeout(timeoutId);
+        throw new Error(`Firebase AI Logic SDK selhalo: ${error?.message || 'Neznámá chyba'}. Kód: ${error?.code || 'N/A'}`);
+      }
+    }
+
+    clearTimeout(timeoutId);
+    throw lastErr || new Error('Neznámá chyba při volání AI.');
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

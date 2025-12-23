@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { Supplier } from '../types';
 import { fetchSuppliers, deleteSupplier, updateSupplier } from '../services/firestore/suppliers';
 import { useUserRole } from '../hooks/useUserRole';
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
 import { toast } from '../utils/toast';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
@@ -26,6 +27,7 @@ interface SupplierManagementScreenProps {
 }
 
 export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> = ({ onBack }) => {
+  const { checkUnsavedChanges } = useUnsavedChanges();
   const { isAdmin } = useUserRole();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +51,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
       // Nejprve zkusit migrovat z BillingSettings pokud ještě neexistují dodavatelé
       const { migrateSupplierFromBillingSettings } = await import('../services/firestore/suppliers');
       await migrateSupplierFromBillingSettings();
-      
+
       const loadedSuppliers = await fetchSuppliers();
       setSuppliers(loadedSuppliers);
     } catch (error: any) {
@@ -95,7 +97,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
       if (editingSupplier) {
         // Update existing
         await updateSupplier(editingSupplier.id, supplierData);
-        
+
         // Pokud je logo file, nahrát ho
         if (logoFile) {
           try {
@@ -108,7 +110,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
             toast.error('Chyba při nahrávání loga: ' + error.message);
           }
         }
-        
+
         // Pokud je stamp file, nahrát ho
         if (stampFile) {
           try {
@@ -121,14 +123,14 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
             toast.error('Chyba při nahrávání razítka: ' + error.message);
           }
         }
-        
+
         toast.success('Dodavatel byl aktualizován');
         await loadSuppliers(); // Reload to get updated data
       } else {
         // Create new
         const { createSupplier } = await import('../services/firestore/suppliers');
         const newId = await createSupplier(supplierData);
-        
+
         // Pokud je logo file, nahrát ho
         if (logoFile) {
           try {
@@ -141,7 +143,7 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
             toast.error('Chyba při nahrávání loga: ' + error.message);
           }
         }
-        
+
         // Pokud je stamp file, nahrát ho
         if (stampFile) {
           try {
@@ -318,11 +320,10 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
                           <td className="px-3 md:px-2 xl:px-6 py-3 md:py-2 xl:py-4 text-sm text-gray-900">
                             <button
                               onClick={() => handleToggleDefault(supplier)}
-                              className={`px-2 py-1 rounded text-xs font-medium ${
-                                supplier.isDefault
+                              className={`px-2 py-1 rounded text-xs font-medium ${supplier.isDefault
                                   ? 'bg-green-100 text-green-800'
                                   : 'bg-gray-100 text-gray-800'
-                              }`}
+                                }`}
                             >
                               {supplier.isDefault ? 'Ano' : 'Ne'}
                             </button>
@@ -380,10 +381,10 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
       {/* Add/Edit Modal */}
       <Modal
         isOpen={showAddModal}
-        onClose={() => {
+        onClose={() => checkUnsavedChanges(() => {
           setShowAddModal(false);
           setEditingSupplier(null);
-        }}
+        })}
         title={editingSupplier ? 'Upravit dodavatele' : 'Nový dodavatel'}
         size="4xl"
         closeOnBackdropClick={false}
@@ -391,10 +392,10 @@ export const SupplierManagementScreen: React.FC<SupplierManagementScreenProps> =
         <SupplierForm
           initialData={editingSupplier}
           onSave={handleSaveSupplier}
-          onBack={() => {
+          onBack={() => checkUnsavedChanges(() => {
             setShowAddModal(false);
             setEditingSupplier(null);
-          }}
+          })}
         />
       </Modal>
 

@@ -39,13 +39,18 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   onSave,
   usePuppeteer = false, // Výchozí = stará verze
 }) => {
+  // Použít snapshot answers z reportu pokud existuje, jinak fallback na aktuální audit
+  const answersToUse = report.answersSnapshot || audit.answers;
+  // Použít snapshot headerValues z reportu pokud existuje, jinak použít audit.headerValues
+  const headerValues = report.headerValuesSnapshot || audit.headerValues;
+
   // Konverze původních dat na editovatelný formát
   const initialNonCompliances = useMemo((): EditableNonCompliance[] => {
     const ncs: EditableNonCompliance[] = [];
-    
+
     auditStructure.audit_sections.forEach(section => {
       section.items.forEach(item => {
-        const answer = audit.answers[item.id];
+        const answer = answersToUse[item.id];
         if (answer && !answer.compliant && answer.nonComplianceData) {
           answer.nonComplianceData.forEach((ncData, index) => {
             ncs.push({
@@ -58,6 +63,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
               photos: (ncData.photos || []).map((photo, pIndex) => ({
                 id: `${item.id}_${index}_${pIndex}`,
                 base64: photo.base64 || '',
+                url: photo.url || '', // OPRAVA: přidat URL pro zobrazení obrázků ze Storage
                 caption: '',
                 width: 100,
                 position: 'center',
@@ -69,9 +75,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
         }
       });
     });
-    
+
     return ncs;
-  }, [audit, auditStructure]);
+  }, [answersToUse, auditStructure]);
 
   // Load saved data from localStorage OR use initial
   const loadSavedData = (): EditableNonCompliance[] => {
@@ -96,7 +102,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
 
   // OPRAVA: Uložit a obnovit data při přepínání módů
   const previousViewMode = React.useRef<string>('edit');
-  
+
   useEffect(() => {
     // Při návratu na edit mode, obnovit data z localStorage
     if (viewMode === 'edit' && previousViewMode.current !== 'edit') {
@@ -125,31 +131,31 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   const handleOptimizeLayout = async () => {
     setIsGeneratingLayout(true);
     toast.info('Optimalizuji rozložení pomocí AI...');
-    
+
     try {
       const suggestion = await suggestOptimalLayout(editableData);
       setAiLayout(suggestion.layout);
-      
+
       // OPRAVA: Aplikovat page breaks z AI layoutu přímo do dat
-      const updatedData = editableData.map(nc => ({ 
-        ...nc, 
-        pageBreakBefore: false, 
+      const updatedData = editableData.map(nc => ({
+        ...nc,
+        pageBreakBefore: false,
         pageBreakAfter: false,
         // Automaticky nastavit grid layout pro položky s 2+ fotkami
-        photos: nc.photos.length >= 2 
+        photos: nc.photos.length >= 2
           ? nc.photos.map((photo, idx) => ({
-              ...photo,
-              column: (idx % 2 === 0 ? 1 : 2) as 1 | 2,
-              gridPosition: idx,
-              width: 48  // Grid: 48% šířky
-            }))
+            ...photo,
+            column: (idx % 2 === 0 ? 1 : 2) as 1 | 2,
+            gridPosition: idx,
+            width: 48  // Grid: 48% šířky
+          }))
           : nc.photos.map(photo => ({ ...photo, width: photo.width || 100 }))  // Stack: zachovat původní
       }));
-      
+
       // Projít stránky a aplikovat page breaks
       suggestion.layout.pages.forEach((page, pageIndex) => {
         if (pageIndex === 0) return; // První stránka nemá break
-        
+
         const firstItemOnPage = page.items[0];
         if (firstItemOnPage && typeof firstItemOnPage !== 'string' && 'id' in firstItemOnPage) {
           const index = updatedData.findIndex(nc => nc.id === firstItemOnPage.id);
@@ -158,9 +164,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
           }
         }
       });
-      
+
       setEditableData(updatedData);
-      
+
       const photoOptimizedCount = editableData.filter(nc => nc.photos.length >= 2).length;
       toast.success(`Rozložení optimalizováno na ${suggestion.layout.pages.length} stránek! ${photoOptimizedCount > 0 ? `Fotografie u ${photoOptimizedCount} položek nastaveny na grid layout.` : ''}`);
     } catch (error) {
@@ -175,7 +181,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   const handleGenerateSuggestions = async () => {
     setIsGeneratingSuggestions(true);
     toast.info('AI analyzuje obsah reportu...');
-    
+
     try {
       const suggestions = await generateContentSuggestions(editableData);
       setAiSuggestions(suggestions);
@@ -193,14 +199,14 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   const handleAcceptSuggestion = (suggestion: ContentSuggestion) => {
     const updated = applySuggestion(editableData, suggestion);
     setEditableData(updated);
-    
+
     // Označit návrh jako aplikovaný
     setAppliedSuggestions(prev => {
       const newSet = new Set(prev);
       newSet.add(`${suggestion.nonComplianceId}_${suggestion.field}`);
       return newSet;
     });
-    
+
     // Odstranit z návrhů
     if (aiSuggestions) {
       setAiSuggestions({
@@ -210,7 +216,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
         ),
       });
     }
-    
+
     toast.success('Změna přijata!');
   };
 
@@ -230,10 +236,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   // Přijmout všechny návrhy
   const handleAcceptAllSuggestions = () => {
     if (!aiSuggestions) return;
-    
+
     const updated = applyAllSuggestions(editableData, aiSuggestions.suggestions);
     setEditableData(updated);
-    
+
     toast.success(`Přijato ${aiSuggestions.suggestions.length} změn!`);
     setAiSuggestions({ ...aiSuggestions, suggestions: [] });
     setViewMode('edit');
@@ -242,7 +248,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
   // Zamítnout všechny návrhy
   const handleRejectAllSuggestions = () => {
     if (!aiSuggestions) return;
-    
+
     toast.info(`Zamítnuto ${aiSuggestions.suggestions.length} návrhů`);
     setAiSuggestions({ ...aiSuggestions, suggestions: [] });
     setViewMode('edit');
@@ -261,11 +267,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
       prev.map(nc =>
         nc.id === ncId
           ? {
-              ...nc,
-              photos: nc.photos.map(p =>
-                p.id === photoId ? { ...p, width } : p
-              ),
-            }
+            ...nc,
+            photos: nc.photos.map(p =>
+              p.id === photoId ? { ...p, width } : p
+            ),
+          }
           : nc
       )
     );
@@ -301,30 +307,30 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
     if (onSave) {
       onSave(editableData);
     }
-    
+
     // STARÁ VERZE - window.print()
     if (!usePuppeteer) {
       // Přepnout na preview mode
       setViewMode('preview');
       toast.info('Příprava PDF...');
-      
+
       // Spustit tisk po zobrazení preview
       setTimeout(() => {
         window.print();
       }, 500);
       return;
     }
-    
+
     // NOVÁ VERZE - Puppeteer (Best Practice podle jak_na_to.md)
     try {
       toast.info('Generování PDF pomocí Puppeteer...');
-      
+
       // Získat aktuální údaje auditora z nastavení
       const auditorInfo = getAuditorInfo();
       const auditorName = auditorInfo.name || 'Neznámý';
-      
+
       console.log('[ReportEditor] Používám údaje auditora:', auditorInfo);
-      
+
       // Vygenerovat HTML pro Puppeteer (getAuditorInfo() se volá uvnitř funkce)
       const html = generatePrintableHTML(
         auditStructure.audit_title,
@@ -332,19 +338,19 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
         auditorName,
         editableData
       );
-      
+
       console.log('[ReportEditor] Odesílání HTML na server...');
-      
+
       // Zavolat Puppeteer backend
       const pdfBlob = await generatePDF(html);
-      
+
       // Stáhnout PDF
       const filename = `audit-${auditStructure.audit_title.replace(/\s+/g, '-').substring(0, 30)}-${new Date().toISOString().split('T')[0]}.pdf`;
       downloadPDF(pdfBlob, filename);
-      
+
       toast.success('✅ PDF úspěšně vygenerováno!');
       console.log('[ReportEditor] PDF vygenerováno a staženo:', filename);
-      
+
     } catch (error) {
       console.error('[ReportEditor] Chyba při generování PDF:', error);
       toast.error(`❌ Chyba při generování PDF: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
@@ -409,11 +415,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
               }
             }}
             disabled={isGeneratingSuggestions}
-            className={`font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${
-              viewMode === 'ai-suggestions'
+            className={`font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 ${viewMode === 'ai-suggestions'
                 ? 'bg-purple-600 text-white'
                 : 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-100'
-            }`}
+              }`}
           >
             {isGeneratingSuggestions ? '⏳ Analyzuji...' : '🤖 AI Návrhy'}
             {aiSuggestions && aiSuggestions.suggestions.length > 0 && viewMode !== 'ai-suggestions' && (
@@ -425,11 +430,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
 
           <button
             onClick={() => setViewMode('preview')}
-            className={`font-semibold py-2 px-4 rounded-lg transition-colors ${
-              viewMode === 'preview'
+            className={`font-semibold py-2 px-4 rounded-lg transition-colors ${viewMode === 'preview'
                 ? 'bg-indigo-600 text-white'
                 : 'bg-white text-gray-800 border border-gray-300 hover:bg-gray-100'
-            }`}
+              }`}
           >
             👁 Preview
           </button>
@@ -465,7 +469,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({
               </p>
             </div>
           )}
-          
+
           {viewMode === 'edit' && (
             <div className="flex-1 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
               <p className="text-blue-800">
@@ -523,9 +527,8 @@ const EditMode: React.FC<{
       {data.map((nc, index) => (
         <div
           key={nc.id}
-          className={`p-6 border-2 rounded-lg ${
-            nc.pageBreakBefore ? 'border-blue-500' : 'border-gray-200'
-          } hover:border-blue-300 transition-colors`}
+          className={`p-6 border-2 rounded-lg ${nc.pageBreakBefore ? 'border-blue-500' : 'border-gray-200'
+            } hover:border-blue-300 transition-colors`}
         >
           {/* Header */}
           <div className="flex justify-between items-start mb-4">
@@ -533,27 +536,25 @@ const EditMode: React.FC<{
               <h3 className="font-bold text-lg">{index + 1}. {nc.itemTitle}</h3>
               <p className="text-xs text-gray-500">Sekce: {nc.sectionTitle}</p>
             </div>
-            
+
             {/* Page Break Controls */}
             <div className="flex gap-2">
               <button
                 onClick={() => onTogglePageBreak(nc.id, 'before')}
-                className={`text-xs px-2 py-1 rounded ${
-                  nc.pageBreakBefore
+                className={`text-xs px-2 py-1 rounded ${nc.pageBreakBefore
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700'
-                }`}
+                  }`}
                 title="Nová stránka před"
               >
                 ⬆ Break
               </button>
               <button
                 onClick={() => onTogglePageBreak(nc.id, 'after')}
-                className={`text-xs px-2 py-1 rounded ${
-                  nc.pageBreakAfter
+                className={`text-xs px-2 py-1 rounded ${nc.pageBreakAfter
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-700'
-                }`}
+                  }`}
                 title="Nová stránka po"
               >
                 ⬇ Break
@@ -658,7 +659,7 @@ const PreviewMode: React.FC<{
   };
 
   return (
-    <div className="bg-white font-sans text-sm print:p-0" style={{ 
+    <div className="bg-white font-sans text-sm print:p-0" style={{
       width: '100%',  /* Plná šířka obrazovky */
       maxWidth: 'none',  /* Žádné omezení */
       padding: '40px 3%',  /* Horní/dolní 40px, levý/pravý 3% */
@@ -668,9 +669,9 @@ const PreviewMode: React.FC<{
       <h1 className="text-2xl font-bold text-center mb-4">{auditStructure.audit_title}</h1>
       <div className="text-center mb-8 text-base">
         <p><strong>Datum auditu:</strong> {formatDate(audit.completedAt)}</p>
-        <p><strong>Za provozovatele:</strong> {audit.headerValues.operator_name || 'Neuvedeno'}</p>
+        <p><strong>Za provozovatele přítomen:</strong> {(headerValues as any).present_person || 'Neuvedeno'}</p>
       </div>
-      
+
       {/* Zpracovatel Auditu */}
       <div className="mb-8 print:break-inside-avoid border-y-2 border-black py-2">
         <h2 className="text-sm font-bold uppercase text-center mb-2">Zpracovatel Auditu</h2>
@@ -685,7 +686,7 @@ const PreviewMode: React.FC<{
           <tbody>
             <tr>
               {auditStructure.header_data.auditor.fields.map(field => (
-                <td key={field.id} className="p-1">{(audit.headerValues as any)[field.id] || '-'}</td>
+                <td key={field.id} className="p-1">{(headerValues as any)[field.id] || '-'}</td>
               ))}
             </tr>
           </tbody>
@@ -694,18 +695,18 @@ const PreviewMode: React.FC<{
 
       {/* Auditovaná provozovna a Provozovatel */}
       <div className="grid grid-cols-2 gap-x-12 mb-8">
-        <HeaderSection 
+        <HeaderSection
           title={auditStructure.header_data.audited_premise.title}
           fields={auditStructure.header_data.audited_premise.fields}
-          values={audit.headerValues}
+          values={headerValues}
         />
-        <HeaderSection 
+        <HeaderSection
           title={auditStructure.header_data.operator.title}
           fields={auditStructure.header_data.operator.fields}
-          values={audit.headerValues}
+          values={headerValues}
         />
       </div>
-      
+
       {/* AI Souhrnné hodnocení */}
       <SummaryReportContent reportData={report.reportData} />
 
@@ -726,7 +727,7 @@ const PreviewMode: React.FC<{
                   <td colSpan={2} className="border border-gray-300 p-2 font-bold">{section.title}</td>
                 </tr>
                 {section.items.filter(i => i.active).map(item => {
-                  const status = getAnswerStatus(audit.answers[item.id]);
+                  const status = getAnswerStatus(answersToUse[item.id]);
                   return (
                     <tr key={item.id} className="print:break-inside-avoid">
                       <td className="border border-gray-300 p-2">{item.title}</td>
@@ -744,13 +745,12 @@ const PreviewMode: React.FC<{
       {data.length > 0 && (
         <div className="print:break-before-page mt-8">
           <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESHOD</h2>
-          
+
           {data.map((nc, index) => (
             <div
               key={nc.id}
-              className={`mb-6 pt-4 border-t ${
-                nc.pageBreakBefore ? 'print:break-before-page' : ''
-              } ${nc.pageBreakAfter ? 'print:break-after-page' : ''} print:break-inside-avoid`}
+              className={`mb-6 pt-4 border-t ${nc.pageBreakBefore ? 'print:break-before-page' : ''
+                } ${nc.pageBreakAfter ? 'print:break-after-page' : ''} print:break-inside-avoid`}
             >
               <h3 className="font-bold text-md">{index + 1}. {nc.itemTitle}</h3>
               <p className="text-xs text-gray-500 mb-2">Sekce: {nc.sectionTitle}</p>
@@ -788,7 +788,7 @@ const PreviewMode: React.FC<{
 };
 
 // Helper komponenta pro sekce (stejná jako v ReportView)
-const HeaderSection: React.FC<{ title: string; fields: {id: string, label: string}[]; values: any }> = ({ title, fields, values }) => (
+const HeaderSection: React.FC<{ title: string; fields: { id: string, label: string }[]; values: any }> = ({ title, fields, values }) => (
   <div className="mb-4 print:break-inside-avoid">
     <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{title}</h2>
     <table className="w-full text-sm">

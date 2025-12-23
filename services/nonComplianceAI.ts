@@ -17,11 +17,14 @@ interface AIContext {
  * Nahradí placeholder proměnné v promptu skutečnými hodnotami
  */
 function replacePlaceholders(template: string, context: AIContext, finding: string): string {
-  return template
-    .replace(/\{sectionTitle\}/g, context.sectionTitle || '')
-    .replace(/\{itemTitle\}/g, context.itemTitle || '')
-    .replace(/\{itemDescription\}/g, context.itemDescription || '')
-    .replace(/\{finding\}/g, finding || '');
+  const out = template
+    // podporujeme obě varianty placeholderů: {var} i {{var}}
+    .replace(/\{\{sectionTitle\}\}|\{sectionTitle\}/g, context.sectionTitle || '')
+    .replace(/\{\{itemTitle\}\}|\{itemTitle\}/g, context.itemTitle || '')
+    .replace(/\{\{itemDescription\}\}|\{itemDescription\}/g, context.itemDescription || '')
+    .replace(/\{\{finding\}\}|\{finding\}/g, finding || '');
+
+  return out;
 }
 
 /**
@@ -34,7 +37,7 @@ export async function rewriteFinding(
 ): Promise<string> {
   const promptsConfig = await fetchAIPromptsConfig();
   const promptTemplate = promptsConfig.prompts?.['rewrite-finding']?.template;
-  
+
   if (!promptTemplate) {
     throw new Error('Prompt pro přepis neshody nebyl nalezen v konfiguraci');
   }
@@ -44,16 +47,16 @@ export async function rewriteFinding(
   const modelName = modelsConfig.models?.['text-generation'] || 'gemini-2.5-flash';
 
   const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
-  
+
   await addAIUsageLog(
-    modelName,
+    response.modelUsed || modelName,
     'text-generation',
     response.usageMetadata.promptTokenCount,
     response.usageMetadata.candidatesTokenCount,
     response.usageMetadata.totalTokenCount,
     'sdk'
   );
-  
+
   return response.text || finding;
 }
 
@@ -67,7 +70,7 @@ export async function generateRecommendation(
 ): Promise<string> {
   const promptsConfig = await fetchAIPromptsConfig();
   const promptTemplate = promptsConfig.prompts?.['generate-recommendation']?.template;
-  
+
   if (!promptTemplate) {
     throw new Error('Prompt pro generování doporučení nebyl nalezen v konfiguraci');
   }
@@ -77,16 +80,16 @@ export async function generateRecommendation(
   const modelName = modelsConfig.models?.['text-generation'] || 'gemini-2.5-flash';
 
   const response: AIGenerateContentResponse = await generateContentWithSDK(modelName, prompt);
-  
+
   await addAIUsageLog(
-    modelName,
+    response.modelUsed || modelName,
     'text-generation',
     response.usageMetadata.promptTokenCount,
     response.usageMetadata.candidatesTokenCount,
     response.usageMetadata.totalTokenCount,
     'sdk'
   );
-  
+
   return response.text || '';
 }
 

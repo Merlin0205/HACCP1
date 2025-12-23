@@ -44,6 +44,8 @@ export interface AuditType {
   name: string;
   active: boolean;
   auditStructure: AuditStructure;
+  reportTextNoNonCompliances?: string; // HTML text když nejsou neshody
+  reportTextWithNonCompliances?: string; // HTML text když jsou neshody
   createdAt: Date | string;
   updatedAt: Date | string;
 }
@@ -56,6 +58,8 @@ export interface PhotoWithAnalysis {
   analysis?: string;
   isAnalyzing?: boolean;
   isUploading?: boolean; // Nový flag pro upload state
+  widthRatio?: number; // Custom width ratio (0-1) for report editor
+  colSpan?: 1 | 2 | 3; // Legacy grid span, kept for backward compatibility or defaults
 }
 
 export interface NonComplianceData {
@@ -78,6 +82,7 @@ export interface Tab {
   id: string; // unique ID tabu
   type: 'audit' | 'report' | 'audit_list';
   auditId?: string; // pouze pro audit a report
+  reportId?: string; // pouze pro report (kanonická routa /reports/:reportId)
   premiseId: string;
   operatorName: string; // název provozovatele pro zobrazení
   premiseName?: string; // název pracoviště pro zobrazení (pro audit_list)
@@ -110,7 +115,7 @@ export enum AppState {
   AI_USAGE_STATS = 'ai_usage_stats',
   AI_PRICING_CONFIG = 'ai_pricing_config',
   AI_PROMPTS = 'ai_prompts',
-  SMART_TEMPLATE_SETTINGS = 'smart_template_settings',
+
   PRICING = 'pricing',
   BILLING_SETTINGS = 'billing_settings',
   SUPPLIER_MANAGEMENT = 'supplier_management',
@@ -138,7 +143,7 @@ export interface ReportData {
 }
 
 export interface Operator {
-  id: string; 
+  id: string;
   operator_name: string;
   operator_address?: string; // DEPRECATED - použít operator_street, operator_city, operator_zip
   operator_street: string;
@@ -260,6 +265,9 @@ export interface AuditorInfo {
   phone: string;
   email: string;
   web: string;
+  stampUrl?: string; // URL razítka v Firebase Storage
+  stampAlignment?: 'left' | 'center' | 'right'; // Zarovnání razítka (výchozí: 'left')
+  stampWidthRatio?: number; // Šířka razítka jako ratio 0.1-1.0 (výchozí: 0.333 = 1/3 šířky)
 }
 
 export enum UserRole {
@@ -288,6 +296,8 @@ export interface Report {
   error?: string;
   usage?: any;
   auditorSnapshot?: AuditorInfo; // Údaje auditora v době generování reportu
+  headerValuesSnapshot?: AuditHeaderValues; // Snapshot headerValues v době generování reportu
+  answersSnapshot?: Record<string, AuditAnswer>; // Snapshot audit.answers v době generování reportu
   // Historie verzí reportů
   versionNumber?: number; // Číslo verze (1, 2, 3, ...)
   createdBy?: string; // userId uživatele, který vytvořil report
@@ -306,7 +316,12 @@ export interface Report {
       createdBy: string;
       createdByName?: string;
     }>;
-  };
+    // Editor State - pro nový ReportEditorV2
+    editorState?: any; // ReportEditorState (any kvůli circular dependency, ale v kódu přetypujeme)
+    editorStateV3?: string; // Syncfusion SFDT JSON string
+    // V4 Tiptap Document (JSONContent format)
+    tiptapDocument?: any; // TiptapDocumentState from types/reportEditor.ts
+  }
 }
 
 /**

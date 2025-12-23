@@ -3,7 +3,7 @@ import { AppState, Tab } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateAIUsageStats } from '../services/firestore';
 import { APP_VERSION, BUILD_DATE } from '../constants';
-import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon, InProgressIcon, ReceiptIcon } from './icons/index';
+import { ClockIcon, ChecklistIcon, HomeIcon, SettingsIcon, InProgressIcon, ReceiptIcon, UserIcon } from './icons/index';
 import { MobileMenu } from './MobileMenu';
 import { TabBar } from './TabBar';
 import { getSectionTheme, SECTION_THEMES } from '../constants/designSystem';
@@ -53,6 +53,27 @@ export const Layout: React.FC<LayoutProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  // Responsive sidebar handler
+  useEffect(() => {
+    const handleResize = () => {
+      // Tablet/Small Desktop range: 1024px <= width < 1280px
+      if (window.innerWidth >= 1024 && window.innerWidth < 1280) {
+        setIsSidebarCollapsed(true);
+      }
+      // PC/Large Desktop: width >= 1280px
+      else if (window.innerWidth >= 1280) {
+        setIsSidebarCollapsed(false);
+      }
+      // Mobile (< 1024px) is handled by CSS (hidden lg:flex), so no state change needed here
+    };
+
+    // Set initial state
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (!showSidebar) {
     return <div className="min-h-screen bg-gray-50">{children}</div>;
   }
@@ -82,12 +103,12 @@ export const Layout: React.FC<LayoutProps> = ({
     {
       id: AppState.OPERATOR_DASHBOARD,
       label: 'Zákazníci',
-      icon: HomeIcon,
-      active: currentView === AppState.OPERATOR_DASHBOARD || 
-              currentView === AppState.ADD_OPERATOR || 
-              currentView === AppState.EDIT_OPERATOR ||
-              currentView === AppState.ADD_PREMISE ||
-              currentView === AppState.EDIT_PREMISE,
+      icon: UserIcon,
+      active: currentView === AppState.OPERATOR_DASHBOARD ||
+        currentView === AppState.ADD_OPERATOR ||
+        currentView === AppState.EDIT_OPERATOR ||
+        currentView === AppState.ADD_PREMISE ||
+        currentView === AppState.EDIT_PREMISE,
       theme: SECTION_THEMES[AppState.OPERATOR_DASHBOARD],
     },
     {
@@ -95,28 +116,26 @@ export const Layout: React.FC<LayoutProps> = ({
       label: 'Faktury',
       icon: ReceiptIcon,
       active: currentView === AppState.INVOICES ||
-              currentView === AppState.INVOICE_DETAIL ||
-              currentView === AppState.INVOICE_CREATE ||
-              currentView === AppState.INVOICE_EDIT,
+        currentView === AppState.INVOICE_DETAIL ||
+        currentView === AppState.INVOICE_CREATE ||
+        currentView === AppState.INVOICE_EDIT,
       theme: SECTION_THEMES[AppState.INVOICES],
     },
     {
       id: AppState.SETTINGS,
       label: 'Nastavení',
       icon: SettingsIcon,
-      active: currentView === AppState.SETTINGS || 
-              currentView === AppState.USER_MANAGEMENT ||
-              currentView === AppState.AUDITOR_SETTINGS ||
-              currentView === AppState.AI_REPORT_SETTINGS ||
-              currentView === AppState.AI_USAGE_STATS ||
-              currentView === AppState.AI_PRICING_CONFIG ||
-              currentView === AppState.AI_PROMPTS ||
-              currentView === AppState.ADMIN,
+      active: currentView === AppState.SETTINGS ||
+        currentView === AppState.USER_MANAGEMENT ||
+        currentView === AppState.AUDITOR_SETTINGS ||
+        currentView === AppState.AI_REPORT_SETTINGS ||
+        currentView === AppState.AI_USAGE_STATS ||
+        currentView === AppState.AI_PRICING_CONFIG ||
+        currentView === AppState.AI_PROMPTS ||
+        currentView === AppState.ADMIN,
       theme: SECTION_THEMES[AppState.SETTINGS],
     },
   ];
-
-  const visibleMenuItems = menuItems.filter(item => item.show !== false);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -124,7 +143,7 @@ export const Layout: React.FC<LayoutProps> = ({
       <MobileMenu
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
-        menuItems={visibleMenuItems}
+        menuItems={menuItems}
         currentView={currentView}
         onNavigate={(state) => {
           onNavigate(state);
@@ -145,10 +164,10 @@ export const Layout: React.FC<LayoutProps> = ({
             </div>
             <h1 className="text-base md:text-base font-bold text-primary-dark hidden sm:block">HACCP</h1>
           </div>
-          
+
           {/* Navigation Icons - Mobile: vertical layout with labels, Tablet: horizontal icons only */}
           <div className="flex items-center gap-1 md:gap-2 flex-1 justify-center">
-            {visibleMenuItems.map((item) => {
+            {menuItems.map((item) => {
               const isActive = item.active;
               const theme = item.theme;
               return (
@@ -162,8 +181,8 @@ export const Layout: React.FC<LayoutProps> = ({
                     rounded-xl md:rounded-lg 
                     transition-all duration-200
                     active:scale-95
-                    ${isActive 
-                      ? 'text-white shadow-lg' 
+                    ${isActive
+                      ? 'text-white shadow-lg'
                       : 'text-gray-600 active:bg-gray-100'
                     }
                   `}
@@ -184,7 +203,7 @@ export const Layout: React.FC<LayoutProps> = ({
               );
             })}
           </div>
-          
+
           {/* User Avatar */}
           <div className="w-9 h-9 md:w-8 md:h-8 bg-primary text-white rounded-full flex items-center justify-center font-semibold text-sm md:text-sm cursor-pointer hover:opacity-90 active:scale-95 transition-all">
             {currentUser?.displayName?.charAt(0).toUpperCase() || currentUser?.email?.charAt(0).toUpperCase() || 'U'}
@@ -207,18 +226,18 @@ export const Layout: React.FC<LayoutProps> = ({
 
         {/* Menu Items */}
         <nav className={`flex-1 py-4 space-y-1 overflow-y-auto min-h-0 ${isSidebarCollapsed ? 'px-2' : 'px-4'}`}>
-          {visibleMenuItems.map((item) => {
+          {menuItems.map((item) => {
             const isActive = item.active;
             const theme = item.theme;
-            
+
             return (
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
                 className={`
                   w-full flex items-center rounded-lg transition-all duration-200
-                  ${isActive 
-                    ? 'text-white shadow-md' 
+                  ${isActive
+                    ? 'text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100'
                   }
                   ${isSidebarCollapsed ? 'justify-center p-2' : 'gap-3 px-4 py-3'}
@@ -242,7 +261,11 @@ export const Layout: React.FC<LayoutProps> = ({
           {/* AI Cost Indicator - vždy viditelné */}
           {isSidebarCollapsed ? (
             <div className="px-2 py-2.5">
-              <div className="bg-gray-50 rounded-lg p-2 flex flex-col items-center gap-1">
+              <button
+                onClick={() => onNavigate(AppState.AI_USAGE_STATS)}
+                className="w-full bg-gray-50 hover:bg-gray-100 rounded-lg p-2 flex flex-col items-center gap-1 transition-colors cursor-pointer"
+                title="Zobrazit statistiky AI nákladů"
+              >
                 <svg className="h-6 w-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -250,16 +273,20 @@ export const Layout: React.FC<LayoutProps> = ({
                   {totalCost.czk.toFixed(2)}
                 </div>
                 <div className="text-[10px] text-gray-500 leading-tight">Kč</div>
-              </div>
+              </button>
             </div>
           ) : (
             <div className="px-4 py-3">
-              <div className="bg-gray-50 rounded-lg p-3">
+              <button
+                onClick={() => onNavigate(AppState.AI_USAGE_STATS)}
+                className="w-full bg-gray-50 hover:bg-gray-100 rounded-lg p-3 transition-colors cursor-pointer text-left"
+                title="Zobrazit statistiky AI nákladů"
+              >
                 <div className="text-xs text-gray-500 mb-1">💰 AI Náklady</div>
                 <div className="text-sm font-semibold text-gray-900">
                   {totalCost.czk.toFixed(2)} Kč
                 </div>
-              </div>
+              </button>
             </div>
           )}
 

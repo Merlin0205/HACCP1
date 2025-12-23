@@ -7,8 +7,9 @@
 
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image, pdf } from '@react-pdf/renderer';
-import { Audit, AuditStructure, Report } from '../types';
+import { Audit, AuditStructure, Report, AuditorInfo } from '../types';
 import { EditableNonCompliance } from '../types/reportEditor';
+import { fetchAuditorInfo } from '../services/firestore/settings';
 
 // PDF Styly
 const styles = StyleSheet.create({
@@ -100,6 +101,7 @@ interface PDFDocumentProps {
   auditStructure: AuditStructure;
   report: Report;
   nonCompliances: EditableNonCompliance[];
+  auditorInfo?: AuditorInfo | null;
 }
 
 // PDF Dokument komponenta
@@ -108,12 +110,18 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
   auditStructure,
   report,
   nonCompliances,
+  auditorInfo,
 }) => {
   const formatDate = (dateString?: string): string => {
     if (!dateString) return 'Neuvedeno';
     const date = new Date(dateString);
     return isNaN(date.getTime()) ? 'Neplatné datum' : date.toLocaleDateString('cs-CZ');
   };
+
+  // Použít snapshot headerValues z reportu pokud existuje, jinak použít audit.headerValues
+  const headerValues = report.headerValuesSnapshot || audit.headerValues;
+  // Použít snapshot answers z reportu pokud existuje, jinak fallback na aktuální audit
+  const answersToUse = report.answersSnapshot || audit.answers;
 
   return (
     <Document>
@@ -124,7 +132,7 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
           Datum auditu: {formatDate(audit.completedAt)}
         </Text>
         <Text style={styles.subtitle}>
-          Za provozovatele: {audit.headerValues.operator_name || 'Neuvedeno'}
+          Za provozovatele přítomen: {(headerValues as any).present_person || 'Neuvedeno'}
         </Text>
 
         {/* Zpracovatel auditu */}
@@ -140,7 +148,7 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
           <View style={styles.tableRow}>
             {auditStructure.header_data.auditor.fields.map(field => (
               <Text key={field.id} style={{ ...styles.tableCell, flex: 1 }}>
-                {(audit.headerValues as any)[field.id] || '-'}
+                {(headerValues as any)[field.id] || '-'}
               </Text>
             ))}
           </View>
@@ -152,7 +160,7 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
           {auditStructure.header_data.audited_premise.fields.map(field => (
             <View key={field.id} style={styles.tableRow}>
               <Text style={styles.tableCellBold}>{field.label}</Text>
-              <Text style={styles.tableCell}>{(audit.headerValues as any)[field.id] || '-'}</Text>
+              <Text style={styles.tableCell}>{(headerValues as any)[field.id] || '-'}</Text>
             </View>
           ))}
         </View>
@@ -163,7 +171,7 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
           {auditStructure.header_data.operator.fields.map(field => (
             <View key={field.id} style={styles.tableRow}>
               <Text style={styles.tableCellBold}>{field.label}</Text>
-              <Text style={styles.tableCell}>{(audit.headerValues as any)[field.id] || '-'}</Text>
+              <Text style={styles.tableCell}>{(headerValues as any)[field.id] || '-'}</Text>
             </View>
           ))}
         </View>
@@ -191,13 +199,13 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
                 </Text>
               </View>
               {section.items.filter(i => i.active).map(item => {
-                const answer = audit.answers[item.id];
-                const status = answer && !answer.compliant ? 'NEVYHOVUJE' : 'Vyhovuje';
-                const color = answer && !answer.compliant ? '#dc2626' : '#16a34a';
+                const answer = answersToUse[item.id];
+                const status = answer && !answer.compliant ? 'NEVYHOVUJE' : 'VYHOVUJE';
+                const color = answer && !answer.compliant ? '#dc2626' : '#000000';
                 return (
                   <View key={item.id} style={styles.tableRow}>
                     <Text style={{ ...styles.tableCell, flex: 3 }}>{item.title}</Text>
-                    <Text style={{ ...styles.tableCell, flex: 1, color, fontWeight: 'bold' }}>
+                    <Text style={{ ...styles.tableCell, flex: 1, color, fontWeight: 'bold' }} wrap={false}>
                       {status}
                     </Text>
                   </View>
@@ -273,6 +281,23 @@ const ReportPDFDocument: React.FC<PDFDocumentProps> = ({
                 )}
               </View>
             ))}
+            
+            {/* Razítko auditora na konci poslední stránky s neshodami */}
+            {auditorInfo?.stampUrl && (
+              <View style={{ 
+                marginTop: 20,
+                alignItems: auditorInfo.stampAlignment === 'center' ? 'center' : auditorInfo.stampAlignment === 'right' ? 'flex-end' : 'flex-start'
+              }}>
+                <Image
+                  src={auditorInfo.stampUrl}
+                  style={{
+                    width: `${auditorInfo.stampWidth || 30}%`,
+                    maxWidth: '515pt', // A4 width minus padding
+                    height: 'auto',
+                  }}
+                />
+              </View>
+            )}
           </Page>
         </>
       )}
@@ -289,12 +314,22 @@ export async function exportReportToPDF(
   report: Report,
   nonCompliances: EditableNonCompliance[]
 ): Promise<Blob> {
+  // Načíst aktuální auditorInfo včetně razítka (globální)
+  let auditorInfo: AuditorInfo | null = null;
+  try {
+    auditorInfo = await fetchAuditorInfo();
+  } catch (error) {
+    console.error('[pdfExportService] Error loading auditor info:', error);
+    // Pokračovat bez razítka pokud se nepodařilo načíst
+  }
+
   const pdfDoc = (
     <ReportPDFDocument
       audit={audit}
       auditStructure={auditStructure}
       report={report}
       nonCompliances={nonCompliances}
+      auditorInfo={auditorInfo}
     />
   );
 

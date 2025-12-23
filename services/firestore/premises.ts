@@ -16,7 +16,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { Premise } from '../../types';
-import { fetchUserMetadata } from './users';
 import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'premises';
@@ -33,19 +32,6 @@ function getCurrentUserId(): string {
 }
 
 /**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Převede Firestore dokument na Premise objekt
  */
 function docToPremise(docSnapshot: any): Premise {
@@ -57,27 +43,13 @@ function docToPremise(docSnapshot: any): Premise {
 }
 
 /**
- * Načte všechna pracoviště (všechna pro admina, jen své pro běžného uživatele)
+ * Načte všechna pracoviště (sdílený režim)
  */
 export async function fetchPremises(): Promise<Premise[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechna pracoviště
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('premise_name', 'asc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('premise_name', 'asc')
-    );
-  }
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('premise_name', 'asc')
+  );
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToPremise);
@@ -87,26 +59,11 @@ export async function fetchPremises(): Promise<Premise[]> {
  * Načte pracoviště pro konkrétního provozovatele
  */
 export async function fetchPremisesByOperator(operatorId: string): Promise<Premise[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechna pracoviště pro daného provozovatele
-    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('operatorId', '==', operatorId)
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      where('operatorId', '==', operatorId)
-    );
-  }
+  // Odstraněno orderBy, aby se předešlo požadavku na kompozitní index
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    where('operatorId', '==', operatorId)
+  );
   
   const snapshot = await getDocs(q);
   const premises = snapshot.docs.map(docToPremise);
@@ -162,12 +119,9 @@ export async function updatePremise(premiseId: string, premiseData: Partial<Prem
   
   // Odstranit id z dat
   const { id, userId, ...dataToUpdate } = premiseData as any;
-  
-  const finalUserId = userId || getCurrentUserId();
-  
+
   await updateDoc(docRef, {
     ...dataToUpdate,
-    userId: finalUserId,
     updatedAt: new Date().toISOString()
   });
 }

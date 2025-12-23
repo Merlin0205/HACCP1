@@ -76,9 +76,9 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
       // PRIORITA 2: Automatické stránkování podle výšky (pouze pokud není pageBreak)
       // Ale NEaplikovat pokud je stránka prázdná (položka musí někam jít)
       const hasAnyPageBreaks = items.some(i => i.pageBreakBefore);
-      if (!hasAnyPageBreaks && 
-          currentPage.estimatedHeight + itemHeight > AVAILABLE_HEIGHT && 
-          currentPage.items.length > 0) {
+      if (!hasAnyPageBreaks &&
+        currentPage.estimatedHeight + itemHeight > AVAILABLE_HEIGHT &&
+        currentPage.items.length > 0) {
         // Přidáme novou stránku kvůli přetékání
         pagesArray.push(currentPage);
         currentPage = {
@@ -104,28 +104,28 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
   // Odhad výšky neshody - VYLEPŠENÝ (synchronizovaný s PDF)
   const estimateItemHeight = (item: EditableNonCompliance): number => {
     let height = 0;
-    
+
     // Nadpis neshody: ~40px
     height += 40;
-    
+
     // Text pole - přesnější výpočet
     // Místo: ~2 řádky minimum
     const locationLines = Math.max(2, Math.ceil((item.location?.length || 0) / 80));
     height += locationLines * 18 + 25; // 18px per line + label
-    
+
     // Zjištění: ~3 řádky minimum
     const findingLines = Math.max(3, Math.ceil((item.finding?.length || 0) / 80));
     height += findingLines * 18 + 25;
-    
+
     // Doporučení: ~3 řádky minimum  
     const recommendationLines = Math.max(3, Math.ceil((item.recommendation?.length || 0) / 80));
     height += recommendationLines * 18 + 25;
-    
+
     // Fotografie - OPRAVENÝ výpočet výšky
     if (item.photos.length > 0) {
       // Label "Fotografie (X):"
       height += 30;
-      
+
       if (photoLayoutMode === 'grid' && item.photos.length > 1) {
         // Grid layout - 2 sloupce
         const rows = Math.ceil(item.photos.length / 2);
@@ -145,7 +145,7 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
         });
       }
     }
-    
+
     // Extra spacing
     height += 30;
 
@@ -155,19 +155,19 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
   // Drag & Drop handler - ZJEDNODUŠENO podle best practices
   const handleDragEnd = (result: DropResult) => {
     const { source, destination } = result;
-    
+
     // Dropped outside the list or same position
-    if (!destination || 
-        (source.droppableId === destination.droppableId && source.index === destination.index)) {
+    if (!destination ||
+      (source.droppableId === destination.droppableId && source.index === destination.index)) {
       return;
     }
 
     // Přepočítat globální indexy z lokálních indexů na stránkách
     const sourcePage = pages.find(p => `page-${p.pageNumber}` === source.droppableId);
     const destPage = pages.find(p => `page-${p.pageNumber}` === destination.droppableId);
-    
+
     if (!sourcePage || !destPage) return;
-    
+
     // Globální index source itemu
     const sourceItem = sourcePage.items[source.index];
     if (!sourceItem) {
@@ -175,10 +175,10 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
       return;
     }
     const sourceGlobalIndex = data.findIndex(d => d.id === sourceItem.id);
-    
+
     // Globální index pro destination
     let destGlobalIndex: number;
-    
+
     if (destination.index === 0 && destPage.items.length === 0) {
       // Prázdná stránka - přidat na konec
       destGlobalIndex = data.length;
@@ -194,25 +194,25 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
       const beforeItem = destPage.items[destination.index];
       destGlobalIndex = data.findIndex(d => d.id === beforeItem.id);
     }
-    
+
     // Provést přesun
     const newData = Array.from(data);
     const [movedItem] = newData.splice(sourceGlobalIndex, 1);
-    
+
     // Upravit destGlobalIndex pokud je vyšší než sourceGlobalIndex
     // (protože jsme už odstranili item z původní pozice)
-    const finalDestIndex = destGlobalIndex > sourceGlobalIndex 
-      ? destGlobalIndex - 1 
+    const finalDestIndex = destGlobalIndex > sourceGlobalIndex
+      ? destGlobalIndex - 1
       : destGlobalIndex;
-    
+
     newData.splice(finalDestIndex, 0, movedItem);
-    
+
     console.log('Drag result:', {
       from: { page: sourcePage.pageNumber, localIndex: source.index, globalIndex: sourceGlobalIndex },
       to: { page: destPage.pageNumber, localIndex: destination.index, globalIndex: finalDestIndex },
       item: sourceItem.itemTitle
     });
-    
+
     // AKTUALIZOVAT pageBreakBefore podle nové struktury stránek
     // Přepočítat kde by měly být page breaks po této změně
     const updatedData = newData.map((item, index) => {
@@ -220,7 +220,7 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
       if (index === 0) {
         return { ...item, pageBreakBefore: false };
       }
-      
+
       // Zachovat existující page breaks, ale odstranit z přesunutého itemu
       // (bude mít nový page break podle nové pozice)
       if (item.id === movedItem.id) {
@@ -228,10 +228,10 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
         const isFirstOnDestPage = destination.index === 0 && destPage.pageNumber > 1;
         return { ...item, pageBreakBefore: isFirstOnDestPage };
       }
-      
+
       return item;
     });
-    
+
     onDataChange(updatedData);
   };
 
@@ -245,11 +245,10 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
             <button
               key={page.pageNumber}
               onClick={() => setSelectedPage(page.pageNumber)}
-              className={`w-full text-left p-3 rounded-lg transition-colors ${
-                selectedPage === page.pageNumber
+              className={`w-full text-left p-3 rounded-lg transition-colors ${selectedPage === page.pageNumber
                   ? 'bg-blue-600 text-white'
                   : 'bg-white hover:bg-gray-50 border border-gray-200'
-              }`}
+                }`}
             >
               <div className="font-semibold text-sm">Stránka {page.pageNumber}</div>
               <div className="text-xs mt-1 opacity-80">
@@ -284,9 +283,8 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
           {pages.map((page) => (
             <div
               key={page.pageNumber}
-              className={`mx-auto mb-8 bg-white shadow-2xl relative flex flex-col ${
-                selectedPage === page.pageNumber ? 'ring-4 ring-blue-500' : ''
-              }`}
+              className={`mx-auto mb-8 bg-white shadow-2xl relative flex flex-col ${selectedPage === page.pageNumber ? 'ring-4 ring-blue-500' : ''
+                }`}
               style={{
                 width: `${A4_WIDTH_PX}px`,
                 height: `${A4_HEIGHT_PX}px`,  /* Pevná výška - ne minHeight! */
@@ -304,9 +302,8 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`flex-1 ${
-                      snapshot.isDraggingOver ? 'bg-blue-50 border-2 border-dashed border-blue-400 rounded-lg' : ''
-                    }`}
+                    className={`flex-1 ${snapshot.isDraggingOver ? 'bg-blue-50 border-2 border-dashed border-blue-400 rounded-lg' : ''
+                      }`}
                     style={{ minHeight: '200px' }}  /* Minimální výška i pro prázdné stránky */
                   >
                     {page.items.map((item, index) => {
@@ -317,13 +314,12 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
                             <div
                               ref={provided.innerRef}
                               {...provided.draggableProps}
-                              className={`mb-6 pt-4 border-t ${
-                                snapshot.isDragging ? 'bg-blue-50 shadow-xl' : ''
-                              }`}
+                              className={`mb-6 pt-4 border-t ${snapshot.isDragging ? 'bg-blue-50 shadow-xl' : ''
+                                }`}
                             >
                               {/* Drag Handle a Nadpis - kompaktní jako preview */}
                               <div className="flex items-center gap-2 mb-2">
-                                <span 
+                                <span
                                   {...provided.dragHandleProps}
                                   className="text-gray-400 text-sm cursor-move hover:text-blue-500"
                                   title="Přetáhnout"
@@ -379,29 +375,27 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
                                     <div className="flex gap-1">
                                       <button
                                         onClick={() => setPhotoLayoutMode('stack')}
-                                        className={`text-xs px-2 py-1 rounded ${
-                                          photoLayoutMode === 'stack'
+                                        className={`text-xs px-2 py-1 rounded ${photoLayoutMode === 'stack'
                                             ? 'bg-blue-600 text-white'
                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                        }`}
+                                          }`}
                                         title="Pod sebou"
                                       >
                                         ☰
                                       </button>
                                       <button
                                         onClick={() => setPhotoLayoutMode('grid')}
-                                        className={`text-xs px-2 py-1 rounded ${
-                                          photoLayoutMode === 'grid'
+                                        className={`text-xs px-2 py-1 rounded ${photoLayoutMode === 'grid'
                                             ? 'bg-blue-600 text-white'
                                             : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                        }`}
+                                          }`}
                                         title="2 sloupce"
                                       >
                                         ☷
                                       </button>
                                     </div>
                                   </div>
-                                  
+
                                   {/* Stack Layout (pod sebou) */}
                                   {photoLayoutMode === 'stack' && (
                                     <div className="space-y-3">
@@ -437,7 +431,7 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
                                       ))}
                                     </div>
                                   )}
-                                  
+
                                   {/* Grid Layout (2 sloupce) */}
                                   {photoLayoutMode === 'grid' && (
                                     <div className="grid grid-cols-2 gap-3">
@@ -484,9 +478,9 @@ const PagedEditorView: React.FC<PagedEditorViewProps> = ({
                     {provided.placeholder}
 
                     {/* VIZUÁLNÍ INDIKÁTOR zbývajícího místa */}
-                    <div 
+                    <div
                       className="mt-3 border-2 border-dashed rounded-lg flex items-center justify-center transition-all"
-                      style={{ 
+                      style={{
                         height: `${Math.max(80, AVAILABLE_HEIGHT - page.estimatedHeight)}px`,
                         backgroundColor: snapshot.isDraggingOver ? '#dbeafe' : '#f3f4f6',
                         borderColor: snapshot.isDraggingOver ? '#3b82f6' : '#d1d5db',

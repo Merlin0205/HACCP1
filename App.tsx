@@ -20,19 +20,20 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { AppState, Audit, Operator, Premise, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues, Tab } from './types';
+import { useNavigate, useLocation, matchPath } from 'react-router-dom';
+import { AppState, Audit, Operator, Premise, AuditStatus, Report, ReportStatus, AuditStructure, AuditHeaderValues, Tab, AuditAnswer } from './types';
 import { DEFAULT_AUDIT_STRUCTURE } from './constants';
 import { Layout } from './components/Layout';
 import AuditChecklistWrapper from './components/AuditChecklistWrapper';
 import AdminScreen from './components/AdminScreen';
-import SettingsScreen from './components/SettingsScreen';
+import { SettingsScreen } from './components/SettingsScreen';
 import UserManagementScreen from './components/UserManagementScreen';
 import AuditorSettingsScreen from './components/AuditorSettingsScreen';
 import AIReportSettingsScreen from './components/AIReportSettingsScreen';
 import AIUsageStatsScreen from './components/AIUsageStatsScreen';
 import AIPricingConfigScreen from './components/AIPricingConfigScreen';
-import AIPromptsScreen from './components/AIPromptsScreen';
-import SmartTemplateSettingsScreen from './components/SmartTemplateSettingsScreen';
+
+
 import { PricingScreen } from './components/PricingScreen';
 import { BillingSettingsScreen } from './components/BillingSettingsScreen';
 import { SupplierManagementScreen } from './components/SupplierManagementScreen';
@@ -49,10 +50,12 @@ import { InvoiceForm } from './components/invoices/InvoiceForm';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastContainer } from './components/ToastContainer';
 import { Modal } from './components/ui/Modal';
+import { uploadReportPdf, deleteAllAuditPhotos } from './services/storage';
 import { toast } from './utils/toast';
 import { useAppData } from './hooks/useAppData';
 import { useReportGenerator } from './hooks/useReportGenerator';
 import { useAuth } from './contexts/AuthContext';
+import { useUnsavedChanges } from './contexts/UnsavedChangesContext';
 import { SECTION_THEMES } from './constants/designSystem';
 import {
   createOperator,
@@ -71,6 +74,9 @@ import {
   deleteReportByAudit,
   deleteReportsByAuditIds,
   fetchReportsByAudit,
+  fetchReportByAudit,
+  fetchReport,
+  fetchAudit,
   deleteReport,
   fetchAuditorInfo,
   fetchPremisesByOperator
@@ -94,7 +100,10 @@ const App: React.FC = () => {
     setReports,
     isLoading,
     error,
+    reload,
   } = useAppData();
+
+  const { checkUnsavedChanges } = useUnsavedChanges();
 
   // --- SDK INITIALIZATION ---
   useEffect(() => {
@@ -124,6 +133,259 @@ const App: React.FC = () => {
   const [invoiceCreateCustomerId, setInvoiceCreateCustomerId] = useState<string | undefined>(undefined);
   const [invoiceRefreshTrigger, setInvoiceRefreshTrigger] = useState(0);
 
+  // --- ROUTING SYNC ---
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Sync URL -> State
+  useEffect(() => {
+    const path = location.pathname;
+    let cancelled = false;
+
+    const ensureReportContextById = async (reportId: string) => {
+      // 1) Načíst report (lokálně nebo z DB)
+      let report = reports.find(r => r.id === reportId) || null;
+      if (!report) {
+        report = await fetchReport(reportId);
+        if (!report || cancelled) return;
+        setReports(prev => {
+          const filtered = prev.filter(r => r.id !== reportId);
+          return [...filtered, report!];
+        });
+      }
+
+      // 2) Nastavit audit kontext z reportu
+      setActiveAuditId(report.auditId);
+
+      // 3) Načíst audit, pokud není v lokálním state (typicky po refreshi / multi-user)
+      let audit = audits.find(a => a.id === report!.auditId) || null;
+      if (!audit) {
+        audit = await fetchAudit(report!.auditId);
+        if (!audit || cancelled) return;
+        setAudits(prev => {
+          const filtered = prev.filter(a => a.id !== audit!.id);
+          return [...filtered, audit!];
+        });
+      }
+
+      setActivePremiseId(audit.premiseId);
+      const premise = premises.find(p => p.id === audit!.premiseId);
+      if (premise) {
+        setActiveOperatorId(premise.operatorId);
+      }
+    };
+
+    // 1. Operators & Premises
+    if (path === '/') {
+      navigate('/operators', { replace: true });
+      return;
+    } else if (path === '/operators' || path === '/dashboard') {
+      setAppState(AppState.OPERATOR_DASHBOARD);
+      setActiveOperatorId(null);
+      setActivePremiseId(null);
+      setActiveAuditId(null);
+      setActiveReportId(null);
+      setActiveTabId(null);
+    } else if (path === '/operators/new') {
+      setAppState(AppState.ADD_OPERATOR);
+      setActiveOperatorId(null);
+      setActiveTabId(null);
+    } else if (matchPath('/operators/:operatorId', path)) {
+      const match = matchPath('/operators/:operatorId', path);
+      if (match?.params.operatorId) {
+        setAppState(AppState.EDIT_OPERATOR);
+        setActiveOperatorId(match.params.operatorId);
+        setActiveTabId(null);
+      }
+    } else if (matchPath('/operators/:operatorId/premises/new', path)) {
+      const match = matchPath('/operators/:operatorId/premises/new', path);
+      if (match?.params.operatorId) {
+        setAppState(AppState.ADD_PREMISE);
+        setActiveOperatorId(match.params.operatorId);
+        setActivePremiseId(null);
+        setActiveTabId(null);
+      }
+    } else if (matchPath('/premises/:premiseId', path)) {
+      const match = matchPath('/premises/:premiseId', path);
+      if (match?.params.premiseId) {
+        setAppState(AppState.EDIT_PREMISE);
+        setActivePremiseId(match.params.premiseId);
+        setActiveTabId(null);
+        // Find operator for this premise to set activeOperatorId
+        const premise = premises.find(p => p.id === match.params.premiseId);
+        if (premise) setActiveOperatorId(premise.operatorId);
+      }
+    } else if (matchPath('/premises/:premiseId/audits', path)) {
+      const match = matchPath('/premises/:premiseId/audits', path);
+      if (match?.params.premiseId) {
+        setAppState(AppState.AUDIT_LIST);
+        setActivePremiseId(match.params.premiseId);
+        const premise = premises.find(p => p.id === match.params.premiseId);
+        if (premise) setActiveOperatorId(premise.operatorId);
+      }
+    } else if (matchPath('/premises/:premiseId/audits/new', path)) {
+      const match = matchPath('/premises/:premiseId/audits/new', path);
+      if (match?.params.premiseId) {
+        setAppState(AppState.HEADER_FORM);
+        setActivePremiseId(match.params.premiseId);
+        const premise = premises.find(p => p.id === match.params.premiseId);
+        if (premise) setActiveOperatorId(premise.operatorId);
+      }
+    }
+    // 2. Audits
+    else if (path === '/audits') {
+      setAppState(AppState.ALL_AUDITS);
+      setActiveTabId(null);
+    } else if (path === '/audits/incomplete') {
+      setAppState(AppState.INCOMPLETE_AUDITS);
+      setActiveTabId(null);
+    } else if (path === '/audits/in-progress') {
+      setAppState(AppState.IN_PROGRESS_AUDITS);
+      setActiveTabId(null);
+    }
+    // 2b. Reports (kanonická routa)
+    else if (matchPath('/reports/:reportId', path)) {
+      const match = matchPath('/reports/:reportId', path);
+      const reportId = match?.params.reportId;
+      if (reportId) {
+        setAppState(AppState.REPORT_VIEW);
+        setActiveReportId(reportId);
+        void ensureReportContextById(reportId);
+      }
+    }
+    // 2c. Backward kompatibilita: /audits/:auditId/report -> redirect na nejnovější report
+    else if (matchPath('/audits/:auditId/report', path)) {
+      const match = matchPath('/audits/:auditId/report', path);
+      const auditId = match?.params.auditId;
+      if (auditId) {
+        const localLatest =
+          reports.find(r => r.auditId === auditId && r.isLatest) ||
+          reports
+            .filter(r => r.auditId === auditId)
+            .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))[0] ||
+          null;
+
+        if (localLatest?.id) {
+          navigate(`/reports/${localLatest.id}`, { replace: true });
+          return;
+        }
+
+        void (async () => {
+          try {
+            const latestFromDb = await fetchReportByAudit(auditId);
+            if (!latestFromDb || cancelled) {
+              navigate(`/audits/${auditId}`, { replace: true });
+              return;
+            }
+            setReports(prev => {
+              const filtered = prev.filter(r => r.id !== latestFromDb.id);
+              return [...filtered, latestFromDb];
+            });
+            navigate(`/reports/${latestFromDb.id}`, { replace: true });
+          } catch {
+            navigate(`/audits/${auditId}`, { replace: true });
+          }
+        })();
+      }
+    }
+    // 2d. Audits (pozor na pořadí - musí být až po /audits/:auditId/report)
+    else if (matchPath('/audits/:auditId', path)) {
+      const match = matchPath('/audits/:auditId', path);
+      if (match?.params.auditId) {
+        setAppState(AppState.AUDIT_IN_PROGRESS);
+        const auditId = match.params.auditId;
+        setActiveAuditId(auditId);
+        // Find premise and operator
+        const audit = audits.find(a => a.id === auditId);
+        if (audit) {
+          setActivePremiseId(audit.premiseId);
+          const premise = premises.find(p => p.id === audit.premiseId);
+          if (premise) {
+            setActiveOperatorId(premise.operatorId);
+
+            // Create/Open Tab for Deep Link
+            const operator = operators.find(o => o.id === premise.operatorId);
+            if (operator) {
+              const auditDate = audit.createdAt ? new Date(audit.createdAt).toISOString().split('T')[0] : undefined;
+              openOrActivateTab(
+                auditId,
+                'audit',
+                undefined,
+                premise.id,
+                operator.operator_name,
+                premise.premise_name,
+                auditDate,
+                audit.status
+              );
+            }
+          }
+        }
+      }
+    }
+    // 3. Invoices
+    else if (path === '/invoices') {
+      setAppState(AppState.INVOICES);
+      setActiveTabId(null);
+    } else if (path === '/invoices/new') {
+      setAppState(AppState.INVOICE_CREATE);
+      setActiveTabId(null);
+    } else if (matchPath('/invoices/:invoiceId', path)) {
+      const match = matchPath('/invoices/:invoiceId', path);
+      if (match?.params.invoiceId) {
+        setAppState(AppState.INVOICE_DETAIL);
+        setActiveInvoiceId(match.params.invoiceId);
+        setActiveTabId(null);
+      }
+    }
+    // 4. Settings & Admin
+    else if (path === '/settings') {
+      setAppState(AppState.SETTINGS);
+      setActiveTabId(null);
+    } else if (path === '/settings/auditor') {
+      console.log('[App] Matched /settings/auditor -> AUDITOR_SETTINGS');
+      setAppState(AppState.AUDITOR_SETTINGS);
+      setActiveTabId(null);
+    } else if (path === '/settings/ai-config') {
+      console.log('[App] Matched /settings/ai-config -> AI_REPORT_SETTINGS');
+      setAppState(AppState.AI_REPORT_SETTINGS);
+      setActiveTabId(null);
+    } else if (path === '/settings/pricing') {
+      setAppState(AppState.PRICING);
+      setActiveTabId(null);
+    } else if (path === '/settings/billing') {
+      setAppState(AppState.BILLING_SETTINGS);
+      setActiveTabId(null);
+    } else if (path === '/settings/suppliers') {
+      console.log('[App] Matched /settings/suppliers -> SUPPLIER_MANAGEMENT');
+      setAppState(AppState.SUPPLIER_MANAGEMENT);
+      setActiveTabId(null);
+    } else if (path === '/settings/ai-stats') {
+      setAppState(AppState.AI_USAGE_STATS);
+      setActiveTabId(null);
+    } else if (path === '/settings/ai-pricing') {
+      setAppState(AppState.AI_PRICING_CONFIG);
+      setActiveTabId(null);
+    } else if (path === '/settings/user-management') {
+      console.log('[App] Matched /settings/user-management -> USER_MANAGEMENT');
+      setAppState(AppState.USER_MANAGEMENT);
+      setActiveTabId(null);
+    } else if (path === '/settings/audit-structure') {
+      setAppState(AppState.ADMIN);
+      setActiveTabId(null);
+    } else if (path === '/admin') {
+      // Redirect old /admin URL to new location
+      navigate('/settings/audit-structure', { replace: true });
+      return;
+    }
+    // Default fallback (only if no state is set yet, to avoid overriding on initial load if logic differs)
+    // But here we rely on URL as source of truth.
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, audits, premises, operators, reports]); // Dependencies need to be correct to re-run when data loads
+
+
+
   // Načíst audit structure z Firestore při startu nebo podle typu auditu
   useEffect(() => {
     const loadAuditStructure = async () => {
@@ -133,10 +395,33 @@ const App: React.FC = () => {
           const audit = audits.find(a => a.id === activeAuditId);
           if (audit?.auditTypeId) {
             try {
-              const { fetchAuditType } = await import('./services/firestore/auditTypes');
+              const { fetchAuditType, updateAuditType } = await import('./services/firestore/auditTypes');
               const auditType = await fetchAuditType(audit.auditTypeId);
               if (auditType) {
-                setAuditStructureState(auditType.auditStructure);
+                // Migrace: Aktualizovat "Mobil" na "Telefon" pokud existuje
+                let needsUpdate = false;
+                const migratedStructure = JSON.parse(JSON.stringify(auditType.auditStructure)); // Deep copy
+                
+                // Aktualizovat labely v header_data
+                ['auditor', 'audited_premise', 'operator'].forEach(sectionKey => {
+                  if (migratedStructure.header_data?.[sectionKey]?.fields) {
+                    migratedStructure.header_data[sectionKey].fields.forEach((field: any) => {
+                      if (field.label === 'Mobil') {
+                        field.label = 'Telefon';
+                        needsUpdate = true;
+                      }
+                    });
+                  }
+                });
+                
+                if (needsUpdate) {
+                  await updateAuditType(audit.auditTypeId, {
+                    auditStructure: migratedStructure
+                  });
+                  setAuditStructureState(migratedStructure);
+                } else {
+                  setAuditStructureState(auditType.auditStructure);
+                }
                 setLoadingAuditStructure(false);
                 return;
               }
@@ -146,11 +431,33 @@ const App: React.FC = () => {
             }
           }
         }
-        
+
         // Jinak načíst výchozí strukturu z settings
         const savedStructure = await fetchAuditStructure();
         if (savedStructure) {
-          setAuditStructureState(savedStructure);
+          // Migrace: Aktualizovat "Mobil" na "Telefon" pokud existuje
+          let needsUpdate = false;
+          const migratedStructure = JSON.parse(JSON.stringify(savedStructure)); // Deep copy
+          
+          // Aktualizovat labely v header_data
+          ['auditor', 'audited_premise', 'operator'].forEach(sectionKey => {
+            if (migratedStructure.header_data?.[sectionKey]?.fields) {
+              migratedStructure.header_data[sectionKey].fields.forEach((field: any) => {
+                if (field.label === 'Mobil') {
+                  field.label = 'Telefon';
+                  needsUpdate = true;
+                }
+              });
+            }
+          });
+          
+          if (needsUpdate) {
+            const { saveAuditStructure } = await import('./services/firestore/settings');
+            await saveAuditStructure(migratedStructure);
+            setAuditStructureState(migratedStructure);
+          } else {
+            setAuditStructureState(savedStructure);
+          }
         } else {
           // Pokud není v databázi, uložit výchozí
           const { saveAuditStructure } = await import('./services/firestore/settings');
@@ -184,7 +491,7 @@ const App: React.FC = () => {
       setReports(prev =>
         prev.map(r => (r.id === reportId ? { ...r, ...updates } : r))
       );
-      
+
       // Uložit změny do Firestore
       try {
         await updateReport(reportId, updates);
@@ -211,23 +518,26 @@ const App: React.FC = () => {
   const premiseToEdit = useMemo(() => premises.find(p => p.id === activePremiseId), [premises, activePremiseId]);
 
   // --- NAVIGATION & ACTIONS ---
+  const safeNavigate = (action: () => void) => {
+    checkUnsavedChanges(action);
+  };
+
   const handleBackToDashboard = () => {
-    setAppState(AppState.OPERATOR_DASHBOARD);
-    setActiveOperatorId(null);
-    setActivePremiseId(null);
-    setActiveAuditId(null);
-    setActiveReportId(null);
-    setPendingHeader(null);
+    safeNavigate(() => {
+      navigate('/operators');
+    });
   };
 
   const handleAddNewOperator = () => {
-    setActiveOperatorId(null);
-    setAppState(AppState.ADD_OPERATOR);
+    safeNavigate(() => {
+      navigate('/operators/new');
+    });
   };
 
   const handleEditOperator = (operatorId: string) => {
-    setActiveOperatorId(operatorId);
-    setAppState(AppState.EDIT_OPERATOR);
+    safeNavigate(() => {
+      navigate(`/operators/${operatorId}`);
+    });
   };
 
   const handleSaveOperator = async (operatorData: Omit<Operator, 'id'>) => {
@@ -240,7 +550,8 @@ const App: React.FC = () => {
         const newOperator: Operator = { id: newId, ...operatorData };
         setOperators(prev => [...prev, newOperator]);
       }
-      handleBackToDashboard();
+      // Navigovat přímo bez kontroly neuložených změn (protože jsme právě uložili)
+      navigate('/');
     } catch (error) {
       console.error('[handleSaveOperator] Error:', error);
     }
@@ -251,27 +562,27 @@ const App: React.FC = () => {
       // Najít všechna pracoviště pro tohoto provozovatele
       const operatorPremises = premises.filter(p => p.operatorId === operatorId);
       const premiseIds = operatorPremises.map(p => p.id);
-      
+
       // Najít všechny audity pro tato pracoviště
       const auditsToDelete = audits.filter(a => premiseIds.includes(a.premiseId));
       const auditIds = auditsToDelete.map(a => a.id);
-      
+
       // Smazat reporty
       if (auditIds.length > 0) {
         await deleteReportsByAuditIds(auditIds);
       }
-      
+
       // Smazat audity
       for (const premiseId of premiseIds) {
         await deleteAuditsByPremise(premiseId);
       }
-      
+
       // Smazat všechna pracoviště
       await deletePremisesByOperator(operatorId);
-      
+
       // Smazat provozovatele
       await deleteOperator(operatorId);
-      
+
       // Aktualizovat lokální state
       setOperators(prev => prev.filter(o => o.id !== operatorId));
       setPremises(prev => prev.filter(p => p.operatorId !== operatorId));
@@ -283,18 +594,15 @@ const App: React.FC = () => {
   };
 
   const handleAddPremise = (operatorId: string) => {
-    setActiveOperatorId(operatorId);
-    setActivePremiseId(null);
-    setAppState(AppState.ADD_PREMISE);
+    safeNavigate(() => {
+      navigate(`/operators/${operatorId}/premises/new`);
+    });
   };
 
   const handleEditPremise = (premiseId: string) => {
-    const premise = premises.find(p => p.id === premiseId);
-    if (premise) {
-      setActiveOperatorId(premise.operatorId);
-      setActivePremiseId(premiseId);
-      setAppState(AppState.EDIT_PREMISE);
-    }
+    safeNavigate(() => {
+      navigate(`/premises/${premiseId}`);
+    });
   };
 
   const handleSavePremise = async (premiseData: Omit<Premise, 'id'>) => {
@@ -307,7 +615,8 @@ const App: React.FC = () => {
         const newPremise: Premise = { id: newId, ...premiseData };
         setPremises(prev => [...prev, newPremise]);
       }
-      handleBackToDashboard();
+      // Navigovat přímo bez kontroly neuložených změn (protože jsme právě uložili)
+      navigate('/operators');
     } catch (error) {
       console.error('[handleSavePremise] Error:', error);
     }
@@ -318,18 +627,18 @@ const App: React.FC = () => {
       // Nejprve smazat všechny audity a reporty
       const auditsToDelete = audits.filter(a => a.premiseId === premiseId);
       const auditIds = auditsToDelete.map(a => a.id);
-      
+
       // Smazat reporty
       if (auditIds.length > 0) {
         await deleteReportsByAuditIds(auditIds);
       }
-      
+
       // Smazat audity
       await deleteAuditsByPremise(premiseId);
-      
+
       // Smazat pracoviště
       await deletePremise(premiseId);
-      
+
       // Aktualizovat lokální state
       setPremises(prev => prev.filter(p => p.id !== premiseId));
       setAudits(prev => prev.filter(a => a.premiseId !== premiseId));
@@ -343,6 +652,7 @@ const App: React.FC = () => {
   const openOrActivateTab = (
     auditId: string | undefined,
     tabType: 'audit' | 'report' | 'audit_list',
+    reportId: string | undefined,
     premiseId: string,
     operatorName: string,
     premiseName?: string,
@@ -351,7 +661,7 @@ const App: React.FC = () => {
   ): string => {
     // 1. Najít existující tab
     let existingTab: Tab | undefined;
-    
+
     if (tabType === 'audit_list') {
       // Pro audit_list hledat podle premiseId
       existingTab = tabs.find(t => t.type === 'audit_list' && t.premiseId === premiseId);
@@ -359,13 +669,14 @@ const App: React.FC = () => {
       // Pro audit/report hledat podle auditId (jakéhokoliv typu)
       existingTab = tabs.find(t => t.auditId === auditId);
     }
-    
+
     if (existingTab) {
       // Pokud existuje tab s jiným typem, aktualizovat typ a metadata
       if (existingTab.type !== tabType) {
         const updatedTab: Tab = {
           ...existingTab,
           type: tabType,
+          reportId: tabType === 'report' ? (reportId || existingTab.reportId) : undefined,
           operatorName: operatorName,
           premiseName: premiseName,
           auditDate: auditDate,
@@ -376,13 +687,14 @@ const App: React.FC = () => {
         return existingTab.id;
       }
       // Pokud je typ stejný, pouze aktualizovat metadata pokud je poskytnuto
-      if (auditDate || status || premiseName) {
+      if (auditDate || status || premiseName || (tabType === 'report' && reportId)) {
         const updatedTab: Tab = {
           ...existingTab,
           operatorName: operatorName,
           premiseName: premiseName || existingTab.premiseName,
           auditDate: auditDate || existingTab.auditDate,
           status: status || existingTab.status,
+          reportId: tabType === 'report' ? (reportId || existingTab.reportId) : existingTab.reportId,
         };
         setTabs(prev => prev.map(t => t.id === existingTab!.id ? updatedTab : t));
       }
@@ -390,12 +702,13 @@ const App: React.FC = () => {
       setActiveTabId(existingTab.id);
       return existingTab.id;
     }
-    
+
     // 2. Vytvořit nový tab pouze pokud neexistuje
     const newTab: Tab = {
       id: `tab_${Date.now()}_${auditId || premiseId}`,
       type: tabType,
       auditId: auditId,
+      reportId: tabType === 'report' ? reportId : undefined,
       premiseId: premiseId,
       operatorName: operatorName,
       premiseName: premiseName,
@@ -403,7 +716,7 @@ const App: React.FC = () => {
       status: status,
       createdAt: new Date().toISOString(),
     };
-    
+
     setTabs(prev => {
       const newTabs = [...prev, newTab];
       if (prev.length === 0) {
@@ -412,163 +725,138 @@ const App: React.FC = () => {
       return newTabs;
     });
     setActiveTabId(newTab.id);
-    
+
     return newTab.id;
   };
 
   const handleSelectPremiseForAudits = (premiseId: string) => {
-    const premise = premises.find(p => p.id === premiseId);
-    const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-    const operatorName = operator?.operator_name || 'Neznámý';
-    const premiseName = premise?.premise_name || 'Neznámé';
-
-    setActivePremiseId(premiseId);
-
-    // Použít centrální funkci pro vytvoření/aktivaci tabu
-    openOrActivateTab(
-      undefined, // auditId není potřeba pro audit_list
-      'audit_list',
-      premiseId,
-      operatorName,
-      premiseName
-    );
-
-    setAppState(AppState.AUDIT_LIST);
+    safeNavigate(() => {
+      navigate(`/premises/${premiseId}/audits`);
+    });
   };
 
   const handleBackToAuditList = () => {
-    // Pokud existují taby, pouze vrátit na předchozí view, ale tab ponechat otevřený v TabBar
-    if (activeTabId && tabs.length > 0) {
-      const activeTab = tabs.find(t => t.id === activeTabId);
-      // Pokud je to audit_list tab, vrátit se na předchozí view (např. OPERATOR_DASHBOARD)
-      // Pokud je to audit/report tab, vrátit se na audit_list nebo předchozí view
-      if (activeTab?.type === 'audit_list') {
-        // Pro audit_list vrátit se na předchozí view (OPERATOR_DASHBOARD)
-        setActiveTabId(null);
-        setActivePremiseId(null);
-        setAppState(previousAppState);
-        setActiveReportId(null); // Reset report ID
-        return;
-      } else if (activeTab?.type === 'report' || activeTab?.type === 'audit') {
-        // Pro report/audit tab vrátit se na audit_list
-        const premise = premises.find(p => p.id === activeTab.premiseId);
-        if (premise) {
-          setAppState(AppState.AUDIT_LIST);
-          setActivePremiseId(premise.id);
-          setActiveAuditId(null);
-          setActiveReportId(null); // Reset report ID
-          setActiveTabId(null);
-          return;
-        }
-      }
-    }
-
-    // Pokud nejsou taby, nebo je to jiný případ, použít standardní logiku
-    setActiveAuditId(null);
-    setActiveReportId(null); // Reset report ID
-    setAppState(previousAppState);
+    safeNavigate(() => {
+      // Vždy navigovat na Přehled všech auditů
+      navigate('/audits');
+    });
   };
 
   const handleStartNewAudit = async (premiseId: string) => {
-    try {
-      const premise = premises.find(p => p.id === premiseId);
-      const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-      
-      if (!premise || !operator) {
-        toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
-        return;
-      }
+    safeNavigate(async () => {
+      try {
+        const premise = premises.find(p => p.id === premiseId);
+        const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
 
-      // Načíst strukturu podle typu auditu z premise
-      let structureToUse = auditStructure;
-      let auditTypeIdToUse: string | undefined = premise.auditTypeId;
-      
-      if (auditTypeIdToUse) {
-        try {
-          const { fetchAuditType } = await import('./services/firestore/auditTypes');
-          const auditType = await fetchAuditType(auditTypeIdToUse);
-          if (auditType) {
-            structureToUse = auditType.auditStructure;
-          }
-        } catch (error) {
-          console.error('[handleStartNewAudit] Error loading audit type:', error);
-          toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
+        if (!premise || !operator) {
+          toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
+          return;
         }
+
+        // Načíst strukturu podle typu auditu z premise
+        let structureToUse = auditStructure;
+        let auditTypeIdToUse: string | undefined = premise.auditTypeId;
+
+        if (auditTypeIdToUse) {
+          try {
+            const { fetchAuditType } = await import('./services/firestore/auditTypes');
+            const auditType = await fetchAuditType(auditTypeIdToUse);
+            if (auditType) {
+              structureToUse = auditType.auditStructure;
+            }
+          } catch (error) {
+            console.error('[handleStartNewAudit] Error loading audit type:', error);
+            toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
+          }
+        }
+
+        // Načíst aktuální údaje auditora z Firestore
+        const auditorInfo = await fetchAuditorInfo();
+
+        // Kombinovat adresu provozovatele
+        const operatorAddressParts = [
+          operator.operator_street,
+          operator.operator_zip,
+          operator.operator_city
+        ].filter(Boolean);
+        const operator_address = operatorAddressParts.length > 0 
+          ? operatorAddressParts.join(', ')
+          : '';
+
+        const prefilledHeaderValues: AuditHeaderValues = {
+          premise_name: premise.premise_name || '',
+          premise_address: premise.premise_address || '',
+          premise_responsible_person: premise.premise_responsible_person || '',
+          premise_phone: premise.premise_phone || '',
+          premise_email: premise.premise_email || '',
+          operator_name: operator.operator_name || '',
+          operator_address: operator_address,
+          operator_street: operator.operator_street || '',
+          operator_city: operator.operator_city || '',
+          operator_zip: operator.operator_zip || '',
+          operator_ico: operator.operator_ico || '',
+          operator_statutory_body: operator.operator_statutory_body || '',
+          operator_phone: operator.operator_phone || '',
+          operator_email: operator.operator_email || '',
+          auditor_name: auditorInfo.name,
+          auditor_phone: auditorInfo.phone,
+          auditor_email: auditorInfo.email,
+          auditor_web: auditorInfo.web,
+        };
+
+        // Vytvořit audit s statusem IN_PROGRESS
+        const newAuditData: Omit<Audit, 'id'> = {
+          premiseId: premiseId,
+          status: AuditStatus.IN_PROGRESS,
+          createdAt: new Date().toISOString(),
+          headerValues: prefilledHeaderValues,
+          answers: {},
+          auditTypeId: auditTypeIdToUse,
+        };
+
+        // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
+        const auditId = await createAudit({ ...newAuditData, id: await generateHumanReadableId('A', 'audits') });
+        const newAudit: Audit = { ...newAuditData, id: auditId };
+
+        // Aktualizovat lokální state
+        setAudits(prev => [...prev, newAudit]);
+
+        // Nastavit aktivní audit a premise
+        setActiveAuditId(auditId);
+        setActivePremiseId(premiseId);
+
+        // Nastavit strukturu pro AuditChecklist
+        setAuditStructureState(structureToUse);
+
+        // Použít centrální funkci pro vytvoření/aktivaci tabu
+        openOrActivateTab(
+          auditId,
+          'audit',
+          undefined,
+          premiseId,
+          operator.operator_name,
+          premise.premise_name,
+          new Date().toISOString().split('T')[0], // auditDate
+          AuditStatus.IN_PROGRESS
+        );
+
+        // Přeskočit HEADER_FORM a jít rovnou do AUDIT_IN_PROGRESS
+        setAppState(AppState.AUDIT_IN_PROGRESS);
+
+        toast.success('Audit byl vytvořen a můžete začít vyplňovat.');
+        navigate(`/audits/${auditId}`);
+      } catch (error) {
+        console.error('[handleStartNewAudit] Error:', error);
+        toast.error('Chyba při vytváření auditu.');
       }
-
-      // Načíst aktuální údaje auditora z Firestore
-      const auditorInfo = await fetchAuditorInfo();
-
-      const prefilledHeaderValues: AuditHeaderValues = {
-        premise_name: premise.premise_name || '',
-        premise_address: premise.premise_address || '',
-        premise_responsible_person: premise.premise_responsible_person || '',
-        premise_phone: premise.premise_phone || '',
-        premise_email: premise.premise_email || '',
-        operator_name: operator.operator_name || '',
-        operator_street: operator.operator_street || '',
-        operator_city: operator.operator_city || '',
-        operator_zip: operator.operator_zip || '',
-        operator_ico: operator.operator_ico || '',
-        operator_statutory_body: operator.operator_statutory_body || '',
-        operator_phone: operator.operator_phone || '',
-        operator_email: operator.operator_email || '',
-        auditor_name: auditorInfo.name,
-        auditor_phone: auditorInfo.phone,
-        auditor_email: auditorInfo.email,
-        auditor_web: auditorInfo.web,
-      };
-
-      // Vytvořit audit s statusem IN_PROGRESS
-      const newAuditData: Omit<Audit, 'id'> = {
-        premiseId: premiseId,
-        status: AuditStatus.IN_PROGRESS,
-        createdAt: new Date().toISOString(),
-        headerValues: prefilledHeaderValues,
-        answers: {},
-        auditTypeId: auditTypeIdToUse,
-      };
-
-      // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
-      const auditId = await createAudit({ ...newAuditData, id: await generateHumanReadableId('A', 'audits') });
-      const newAudit: Audit = { ...newAuditData, id: auditId };
-      
-      // Aktualizovat lokální state
-      setAudits(prev => [...prev, newAudit]);
-      
-      // Nastavit aktivní audit a premise
-      setActiveAuditId(auditId);
-      setActivePremiseId(premiseId);
-      
-      // Nastavit strukturu pro AuditChecklist
-      setAuditStructureState(structureToUse);
-      
-      // Použít centrální funkci pro vytvoření/aktivaci tabu
-      openOrActivateTab(
-        auditId,
-        'audit',
-        premiseId,
-        operator.operator_name,
-        premise.premise_name,
-        new Date().toISOString().split('T')[0], // auditDate
-        AuditStatus.IN_PROGRESS
-      );
-      
-      // Přeskočit HEADER_FORM a jít rovnou do AUDIT_IN_PROGRESS
-      setAppState(AppState.AUDIT_IN_PROGRESS);
-      
-      toast.success('Audit byl vytvořen a můžete začít vyplňovat.');
-    } catch (error) {
-      console.error('[handleStartNewAudit] Error:', error);
-      toast.error('Chyba při vytváření auditu.');
-    }
+    });
   };
 
   const handlePrepareAudit = async (premiseId: string) => {
     try {
       const premise = premises.find(p => p.id === premiseId);
       const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-      
+
       if (!premise || !operator) {
         toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
         return;
@@ -577,7 +865,7 @@ const App: React.FC = () => {
       // Načíst strukturu podle typu auditu z premise
       let structureToUse = auditStructure;
       let auditTypeIdToUse: string | undefined = premise.auditTypeId;
-      
+
       if (auditTypeIdToUse) {
         try {
           const { fetchAuditType } = await import('./services/firestore/auditTypes');
@@ -594,6 +882,16 @@ const App: React.FC = () => {
       // Načíst aktuální údaje auditora z Firestore
       const auditorInfo = await fetchAuditorInfo();
 
+      // Kombinovat adresu provozovatele
+      const operatorAddressParts = [
+        operator.operator_street,
+        operator.operator_zip,
+        operator.operator_city
+      ].filter(Boolean);
+      const operator_address = operatorAddressParts.length > 0 
+        ? operatorAddressParts.join(', ')
+        : '';
+
       const prefilledHeaderValues: AuditHeaderValues = {
         premise_name: premise.premise_name || '',
         premise_address: premise.premise_address || '',
@@ -601,6 +899,7 @@ const App: React.FC = () => {
         premise_phone: premise.premise_phone || '',
         premise_email: premise.premise_email || '',
         operator_name: operator.operator_name || '',
+        operator_address: operator_address,
         operator_street: operator.operator_street || '',
         operator_city: operator.operator_city || '',
         operator_zip: operator.operator_zip || '',
@@ -627,11 +926,13 @@ const App: React.FC = () => {
       // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
       const auditId = await createAudit({ ...newAuditData, id: await generateHumanReadableId('A', 'audits') });
       const newAudit: Audit = { ...newAuditData, id: auditId };
-      
+
       // Aktualizovat lokální state
       setAudits(prev => [...prev, newAudit]);
-      
+
       toast.success('Audit byl předpřipraven a je k dispozici v seznamu nezapočatých auditů.');
+      // Zůstat na seznamu auditů (nebo navigovat na incomplete?)
+      // navigate('/audits/incomplete'); // Optional
     } catch (error) {
       console.error('[handlePrepareAudit] Error:', error);
       toast.error('Chyba při předpřipravení auditu.');
@@ -639,88 +940,100 @@ const App: React.FC = () => {
   };
 
   const handlePrepareNewAudit = async (auditTypeId?: string) => {
-    // Pokud je aktivní tab typu audit_list, použít premiseId z tabu
-    let premiseIdToUse = activePremiseId;
-    
-    if (activeTabId && tabs.length > 0) {
-      const activeTab = tabs.find(t => t.id === activeTabId);
-      if (activeTab?.type === 'audit_list') {
-        premiseIdToUse = activeTab.premiseId;
-      }
-    }
-    
-    if (!premiseIdToUse) {
-      toast.error('Chyba: Nebylo vybráno pracoviště pro nový audit.');
-      return;
-    }
-    
-    const activePremise = premises.find(p => p.id === premiseIdToUse);
-    const activeOperator = activePremise ? operators.find(o => o.id === activePremise.operatorId) : null;
-    if (!activePremise || !activeOperator) {
-      toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
-      return;
-    }
+    safeNavigate(async () => {
+      // Pokud je aktivní tab typu audit_list, použít premiseId z tabu
+      let premiseIdToUse = activePremiseId;
 
-    // Načíst strukturu podle typu auditu - použít auditTypeId z premise pokud existuje, jinak použít předaný parametr
-    let structureToUse = auditStructure;
-    const auditTypeIdToUse = activePremise.auditTypeId || auditTypeId;
-    
-    if (auditTypeIdToUse) {
-      try {
-        const { fetchAuditType } = await import('./services/firestore/auditTypes');
-        const auditType = await fetchAuditType(auditTypeIdToUse);
-        if (auditType) {
-          structureToUse = auditType.auditStructure;
+      if (activeTabId && tabs.length > 0) {
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (activeTab?.type === 'audit_list') {
+          premiseIdToUse = activeTab.premiseId;
         }
-      } catch (error) {
-        console.error('[handlePrepareNewAudit] Error loading audit type:', error);
-        toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
       }
-    } else {
-      // Pokud premise nemá auditTypeId a není předán parametr, zobrazit modal pro výběr
-      // Toto se stane jen u starých premises bez auditTypeId
-      // Prozatím použijeme výchozí strukturu, ale v budoucnu můžeme zobrazit modal
-    }
 
-    // Načíst aktuální údaje auditora z Firestore
-    const auditorInfo = await fetchAuditorInfo();
+      if (!premiseIdToUse) {
+        toast.error('Chyba: Nebylo vybráno pracoviště pro nový audit.');
+        return;
+      }
 
-    const prefilledHeaderValues: AuditHeaderValues = {
-      premise_name: activePremise.premise_name || '',
-      premise_address: activePremise.premise_address || '',
-      premise_responsible_person: activePremise.premise_responsible_person || '',
-      premise_phone: activePremise.premise_phone || '',
-      premise_email: activePremise.premise_email || '',
-      operator_name: activeOperator.operator_name || '',
-      operator_address: activeOperator.operator_address || '',
-      operator_ico: activeOperator.operator_ico || '',
-      operator_statutory_body: activeOperator.operator_statutory_body || '',
-      operator_phone: activeOperator.operator_phone || '',
-      operator_email: activeOperator.operator_email || '',
-      auditor_name: auditorInfo.name,
-      auditor_phone: auditorInfo.phone,
-      auditor_email: auditorInfo.email,
-      auditor_web: auditorInfo.web,
-    };
+      const activePremise = premises.find(p => p.id === premiseIdToUse);
+      const activeOperator = activePremise ? operators.find(o => o.id === activePremise.operatorId) : null;
+      if (!activePremise || !activeOperator) {
+        toast.error('Chyba: Nepodařilo se načíst data o pracovišti nebo provozovateli.');
+        return;
+      }
 
-    setActiveAuditId(null);
-    setPendingHeader(prefilledHeaderValues);
-    // Uložit auditTypeId do state pro pozdější vytvoření auditu
-    if (auditTypeIdToUse) {
-      // Uložit do sessionStorage nebo do state
-      sessionStorage.setItem('pendingAuditTypeId', auditTypeIdToUse);
-    }
-    // Pokud je aktivní tab, nastavit také activePremiseId pro HEADER_FORM
-    if (premiseIdToUse) {
-      setActivePremiseId(premiseIdToUse);
-    }
-    // Deaktivovat aktivní tab, aby se zobrazil HEADER_FORM
-    if (activeTabId) {
-      setActiveTabId(null);
-    }
-    // Nastavit strukturu pro HeaderForm
-    setAuditStructureState(structureToUse);
-    setAppState(AppState.HEADER_FORM);
+      // ... (rest of logic remains same until navigation)
+
+      // Místo nastavování state přímo, navigujeme na URL
+      // Ale HEADER_FORM je trochu specifický, protože potřebuje předvyplněná data.
+      // Buď je předáme přes state (location.state) nebo je uložíme do dočasného úložiště.
+      // Pro jednoduchost zatím navigujeme na URL a data necháme v App state (pendingHeader),
+      // protože useEffect pro routing sync jen nastaví AppState.HEADER_FORM, ale pendingHeader zůstane.
+
+      // Načíst strukturu podle typu auditu - použít auditTypeId z premise pokud existuje, jinak použít předaný parametr
+      let structureToUse = auditStructure;
+      const auditTypeIdToUse = activePremise.auditTypeId || auditTypeId;
+
+      if (auditTypeIdToUse) {
+        try {
+          const { fetchAuditType } = await import('./services/firestore/auditTypes');
+          const auditType = await fetchAuditType(auditTypeIdToUse);
+          if (auditType) {
+            structureToUse = auditType.auditStructure;
+          }
+        } catch (error) {
+          console.error('[handlePrepareNewAudit] Error loading audit type:', error);
+          toast.error('Chyba při načítání typu auditu. Použita výchozí struktura.');
+        }
+      }
+
+      // Načíst aktuální údaje auditora z Firestore
+      const auditorInfo = await fetchAuditorInfo();
+
+      // Kombinovat adresu provozovatele
+      const operatorAddressParts = [
+        activeOperator.operator_street,
+        activeOperator.operator_zip,
+        activeOperator.operator_city
+      ].filter(Boolean);
+      const operator_address = operatorAddressParts.length > 0 
+        ? operatorAddressParts.join(', ')
+        : '';
+
+      const prefilledHeaderValues: AuditHeaderValues = {
+        premise_name: activePremise.premise_name || '',
+        premise_address: activePremise.premise_address || '',
+        premise_responsible_person: activePremise.premise_responsible_person || '',
+        premise_phone: activePremise.premise_phone || '',
+        premise_email: activePremise.premise_email || '',
+        operator_name: activeOperator.operator_name || '',
+        operator_address: operator_address,
+        operator_street: activeOperator.operator_street || '',
+        operator_city: activeOperator.operator_city || '',
+        operator_zip: activeOperator.operator_zip || '',
+        operator_ico: activeOperator.operator_ico || '',
+        operator_statutory_body: activeOperator.operator_statutory_body || '',
+        operator_phone: activeOperator.operator_phone || '',
+        operator_email: activeOperator.operator_email || '',
+        auditor_name: auditorInfo.name,
+        auditor_phone: auditorInfo.phone,
+        auditor_email: auditorInfo.email,
+        auditor_web: auditorInfo.web,
+      };
+
+      setActiveAuditId(null);
+      setPendingHeader(prefilledHeaderValues);
+      // Uložit auditTypeId do state pro pozdější vytvoření auditu
+      if (auditTypeIdToUse) {
+        sessionStorage.setItem('pendingAuditTypeId', auditTypeIdToUse);
+      }
+
+      // Nastavit strukturu pro HeaderForm
+      setAuditStructureState(structureToUse);
+
+      navigate(`/premises/${premiseIdToUse}/audits/new`);
+    });
   };
 
   const handleDeleteAudit = async (auditId: string) => {
@@ -731,7 +1044,15 @@ const App: React.FC = () => {
       } catch (reportError: any) {
         // Pokud report neexistuje, ignorovat chybu
       }
-      
+
+      // Smaže všechny fotky z auditu (včetně orphaned souborů)
+      try {
+        await deleteAllAuditPhotos(auditId);
+      } catch (photoError: any) {
+        console.error('[handleDeleteAudit] Error deleting photos:', photoError);
+        // Pokračujeme dál, i když se nepodaří smazat fotky (aby se smazal aspoň audit)
+      }
+
       // Smazat audit
       try {
         await deleteAudit(auditId);
@@ -741,11 +1062,11 @@ const App: React.FC = () => {
           throw auditError; // Jiné chyby znovu vyhodit
         }
       }
-      
+
       // Aktualizovat lokální state
       setAudits(prev => prev.filter(a => a.id !== auditId));
       setReports(prev => prev.filter(r => r.auditId !== auditId));
-      
+
       toast.success('Audit byl úspěšně smazán');
     } catch (error: any) {
       console.error('[handleDeleteAudit] Error:', error);
@@ -763,168 +1084,146 @@ const App: React.FC = () => {
       }
 
       // Odemknout audit - změnit status pouze pokud je DRAFT na IN_PROGRESS
-      // Pokud je COMPLETED/LOCKED, neměnit status - změní se až při skutečných změnách v handleAnswerUpdate
-      const newStatus = audit.status === AuditStatus.DRAFT || audit.status === AuditStatus.NOT_STARTED
-        ? AuditStatus.IN_PROGRESS
-        : audit.status; // Zachovat původní status pro COMPLETED/LOCKED audity
+      // Nebo pokud je COMPLETED na REVISED
+      if (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.LOCKED) {
+        await updateAudit(auditId, { status: AuditStatus.REVISED });
+        setAudits(prev => prev.map(a => (a.id === auditId ? { ...a, status: AuditStatus.REVISED } : a)));
 
-      // Aktualizovat status
-      await updateAudit(auditId, { 
-        status: newStatus
-      });
-      
-      setAudits(prev => prev.map(a => a.id === auditId ? { ...a, status: newStatus } : a));
-      setActiveAuditId(auditId);
-      
-      // Použít centrální funkci pro vytvoření/aktivaci tabu
-      const premise = premises.find(p => p.id === audit.premiseId);
-      const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-      const operatorName = operator?.operator_name || 'Neznámý';
-      const premiseName = premise?.premise_name;
-      
-      openOrActivateTab(
-        auditId,
-        'audit',
-        audit.premiseId,
-        operatorName,
-        premiseName,
-        audit.createdAt ? new Date(audit.createdAt).toISOString().split('T')[0] : undefined,
-        newStatus
-      );
-      
-      // Aktualizovat tab - změnit typ na 'audit' pokud existuje report tab
-      // (to už dělá openOrActivateTab, takže můžeme odstranit starou logiku)
+        // Otevřít audit
+        navigate(`/audits/${auditId}`);
+      } else if (audit.status === AuditStatus.DRAFT || audit.status === AuditStatus.NOT_STARTED) {
+        await updateAudit(auditId, { status: AuditStatus.IN_PROGRESS });
+        setAudits(prev => prev.map(a => (a.id === auditId ? { ...a, status: AuditStatus.IN_PROGRESS } : a)));
+
+        // Otevřít audit
+        navigate(`/audits/${auditId}`);
+      } else {
+        // Pokud je už IN_PROGRESS nebo REVISED, jen otevřít
+        navigate(`/audits/${auditId}`);
+      }
     } catch (error) {
       console.error('[handleUnlockAudit] Error:', error);
-      toast.error('Chyba při odemčení auditu. Zkuste to znovu.');
+      toast.error('Chyba při odemykání auditu');
     }
   };
 
   const handleSelectAudit = (auditId: string, reportId?: string) => {
-    const selectedAudit = audits.find(a => a.id === auditId);
-    if (!selectedAudit) return;
+    safeNavigate(() => {
+      const selectedAudit = audits.find(a => a.id === auditId);
+      if (!selectedAudit) return;
 
-    const premise = premises.find(p => p.id === selectedAudit.premiseId);
-    const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
-    const operatorName = operator?.operator_name || 'Neznámý';
-
-    setActiveAuditId(auditId);
-    setActivePremiseId(selectedAudit.premiseId);
-    // Pokud je předán reportId, použít konkrétní verzi reportu
-    if (reportId) {
-      setActiveReportId(reportId);
-    } else {
-      setActiveReportId(null); // Reset na nejnovější verzi
-    }
-
-    // Určit typ tabu podle statusu auditu
-    const isCompleted = selectedAudit.status === AuditStatus.COMPLETED || selectedAudit.status === AuditStatus.LOCKED;
-    const tabType: 'audit' | 'report' = isCompleted ? 'report' : 'audit';
-
-    // Použít centrální funkci pro vytvoření/aktivaci tabu
-    const premiseName = premise?.premise_name;
-    const auditDate = selectedAudit.createdAt ? new Date(selectedAudit.createdAt).toISOString().split('T')[0] : undefined;
-    
-    openOrActivateTab(
-      auditId,
-      tabType,
-      selectedAudit.premiseId,
-      operatorName,
-      premiseName,
-      auditDate,
-      selectedAudit.status
-    );
-
-    // Nastavit appState podle typu tabu
-    if (tabType === 'report') {
-      setAppState(AppState.REPORT_VIEW);
-    } else {
-      setAppState(AppState.AUDIT_IN_PROGRESS);
-    }
+      if (reportId) {
+        navigate(`/reports/${reportId}`);
+      } else {
+        const isCompleted = selectedAudit.status === AuditStatus.COMPLETED;
+        if (isCompleted) {
+          const latest =
+            reports.find(r => r.auditId === auditId && r.isLatest) ||
+            reports
+              .filter(r => r.auditId === auditId)
+              .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0))[0] ||
+            null;
+          if (latest?.id) {
+            navigate(`/reports/${latest.id}`);
+          } else {
+            // fallback – route sync udělá redirect po načtení
+            navigate(`/audits/${auditId}/report`);
+          }
+        } else {
+          navigate(`/audits/${auditId}`);
+        }
+      }
+    });
   };
 
   const handleTabClick = (tabId: string) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (!tab) return;
+    safeNavigate(() => {
+      const tab = tabs.find(t => t.id === tabId);
+      if (tab) {
+        setActiveTabId(tabId);
 
-    setActiveTabId(tabId);
-    
-    if (tab.type === 'audit_list') {
-      // Pro audit_list nastavíme premiseId
-      setActivePremiseId(tab.premiseId);
-      setActiveAuditId(null);
-      setActiveReportId(null); // Reset report ID
-      setAppState(AppState.AUDIT_LIST);
-    } else {
-      // Pro audit a report nastavíme auditId a premiseId
-      if (tab.auditId) {
-        setActiveAuditId(tab.auditId);
-        // Reset report ID na null, aby se použil nejnovější report
-        setActiveReportId(null);
+        // Navigovat na URL podle typu tabu
+        if (tab.type === 'audit_list') {
+          navigate(`/premises/${tab.premiseId}/audits`);
+        } else if (tab.type === 'audit') {
+          if (tab.auditId) {
+            navigate(`/audits/${tab.auditId}`);
+          }
+        } else if (tab.type === 'report') {
+          if (tab.reportId) {
+            navigate(`/reports/${tab.reportId}`);
+          } else if (tab.auditId) {
+            // fallback pro starší taby bez reportId
+            navigate(`/audits/${tab.auditId}/report`);
+          }
+        }
       }
-      setActivePremiseId(tab.premiseId);
-      
-      // Nastavit appState podle typu tabu
-      if (tab.type === 'report') {
-        setAppState(AppState.REPORT_VIEW);
-      } else {
-        setAppState(AppState.AUDIT_IN_PROGRESS);
-      }
-    }
+    });
   };
 
   const handleTabClose = (tabId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
 
-    const tabIndex = tabs.findIndex(t => t.id === tabId);
-    if (tabIndex === -1) return;
-
+    // Zavření tabu je specifická akce - pokud zavíráme aktivní tab, chceme zkontrolovat změny
+    // Pokud zavíráme neaktivní tab, změny nás nezajímají (protože v něm nemůžeme mít neuložené změny, ty jsou jen v aktivním)
     const isActiveTab = tabId === activeTabId;
-    const newTabs = tabs.filter(t => t.id !== tabId);
 
-    setTabs(newTabs);
+    const closeAction = () => {
+      const tabIndex = tabs.findIndex(t => t.id === tabId);
+      if (tabIndex === -1) return;
+
+      const newTabs = tabs.filter(t => t.id !== tabId);
+      setTabs(newTabs);
+
+      if (isActiveTab) {
+        // Pokud zavíráme aktivní tab, aktivovat jiný
+        if (newTabs.length > 0) {
+          // Aktivovat předchozí tab nebo první dostupný
+          const newActiveTab = tabIndex > 0 ? newTabs[tabIndex - 1] : newTabs[0];
+          setActiveTabId(newActiveTab.id);
+
+          if (newActiveTab.type === 'audit_list') {
+            setActivePremiseId(newActiveTab.premiseId);
+            setActiveAuditId(null);
+            setActiveReportId(null); // Reset report ID
+            setAppState(AppState.AUDIT_LIST);
+          } else {
+            if (newActiveTab.auditId) {
+              setActiveAuditId(newActiveTab.auditId);
+            }
+            setActivePremiseId(newActiveTab.premiseId);
+            // Nastavit appState podle typu tabu
+            if (newActiveTab.type === 'report') {
+              setAppState(AppState.REPORT_VIEW);
+            } else {
+              setAppState(AppState.AUDIT_IN_PROGRESS);
+            }
+          }
+        } else {
+          // Všechny taby zavřené, vrátit se na předchozí view
+          setActiveTabId(null);
+          setActiveAuditId(null);
+          setActivePremiseId(null);
+          setActiveReportId(null);
+          setAppState(previousAppState);
+        }
+      }
+    };
 
     if (isActiveTab) {
-      // Pokud zavíráme aktivní tab, aktivovat jiný
-      if (newTabs.length > 0) {
-        // Aktivovat předchozí tab nebo první dostupný
-        const newActiveTab = tabIndex > 0 ? newTabs[tabIndex - 1] : newTabs[0];
-        setActiveTabId(newActiveTab.id);
-        
-        if (newActiveTab.type === 'audit_list') {
-          setActivePremiseId(newActiveTab.premiseId);
-          setActiveAuditId(null);
-          setAppState(AppState.AUDIT_LIST);
-        } else {
-          if (newActiveTab.auditId) {
-            setActiveAuditId(newActiveTab.auditId);
-          }
-          setActivePremiseId(newActiveTab.premiseId);
-          // Nastavit appState podle typu tabu
-          if (newActiveTab.type === 'report') {
-            setAppState(AppState.REPORT_VIEW);
-          } else {
-            setAppState(AppState.AUDIT_IN_PROGRESS);
-          }
-        }
-      } else {
-        // Všechny taby zavřené, vrátit se na předchozí view
-        setActiveTabId(null);
-        setActiveAuditId(null);
-        setActivePremiseId(null);
-        setActiveReportId(null);
-        setAppState(previousAppState);
-      }
+      safeNavigate(closeAction);
+    } else {
+      closeAction();
     }
   };
 
   const createNewAudit = async (headerValues: AuditHeaderValues, status: AuditStatus): Promise<Audit> => {
     if (!activePremiseId) throw new Error("Premise ID is missing");
-    
+
     // Získat auditTypeId z premise pokud existuje, jinak z sessionStorage
     const premise = premises.find(p => p.id === activePremiseId);
     let auditTypeId: string | undefined = premise?.auditTypeId;
-    
+
     if (!auditTypeId) {
       // Fallback na sessionStorage pro staré flow
       auditTypeId = sessionStorage.getItem('pendingAuditTypeId') || undefined;
@@ -932,10 +1231,10 @@ const App: React.FC = () => {
         sessionStorage.removeItem('pendingAuditTypeId');
       }
     }
-    
+
     // Generovat human-readable ID (formát: A{YYYYMMDD}_{COUNTER})
     const auditId = await generateHumanReadableId('A', 'audits');
-    
+
     return {
       id: auditId,
       premiseId: activePremiseId,
@@ -976,7 +1275,7 @@ const App: React.FC = () => {
         const newStatus = (audit?.status === AuditStatus.DRAFT || audit?.status === AuditStatus.NOT_STARTED)
           ? AuditStatus.IN_PROGRESS
           : audit?.status || AuditStatus.IN_PROGRESS;
-        
+
         await updateAudit(auditIdToContinue, { headerValues, status: newStatus });
         setAudits(prev => prev.map(a => (a.id === auditIdToContinue ? { ...a, headerValues, status: newStatus } : a)));
       } else {
@@ -988,9 +1287,9 @@ const App: React.FC = () => {
         const newAudit = { ...newAuditData, id: newId };
         setAudits(prev => [...prev, newAudit]);
       }
-      
+
       setActiveAuditId(auditIdToContinue);
-      
+
       // Použít centrální funkci pro vytvoření/aktivaci tabu
       const premise = premises.find(p => p.id === activePremiseId);
       const operator = premise ? operators.find(o => o.id === premise.operatorId) : null;
@@ -998,17 +1297,18 @@ const App: React.FC = () => {
       const premiseName = premise?.premise_name;
       const audit = audits.find(a => a.id === auditIdToContinue);
       const auditDate = audit?.createdAt ? new Date(audit.createdAt).toISOString().split('T')[0] : undefined;
-      
+
       openOrActivateTab(
         auditIdToContinue,
         'audit',
+        undefined,
         activePremiseId || '',
         operatorName,
         premiseName,
         auditDate,
         AuditStatus.IN_PROGRESS
       );
-      
+
       setPendingHeader(null);
     } catch (error) {
       console.error('[handleHeaderUpdateAndContinue] Error:', error);
@@ -1018,25 +1318,25 @@ const App: React.FC = () => {
 
   const handleSaveProgress = useCallback(async () => {
     if (!activeAuditId) return;
-    
+
     const audit = audits.find(a => a.id === activeAuditId);
     if (!audit) return;
-    
+
     // Pokud je audit dokončen (COMPLETED nebo starý LOCKED), změnit na REVISED
     const shouldChangeToRevised = audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.LOCKED;
     const newStatus = shouldChangeToRevised ? AuditStatus.REVISED : audit.status;
-    
+
     // Pokud je status DRAFT a má nějaké odpovědi, změnit na IN_PROGRESS
     const finalStatus = (audit.status === AuditStatus.DRAFT && Object.keys(audit.answers).length > 0)
       ? AuditStatus.IN_PROGRESS
       : newStatus;
-    
+
     try {
       // Sanitizovat všechny answers - odstranit File objekty před uložením do Firestore
       const sanitizedAnswers = sanitizeAnswersForFirestore(audit.answers);
-      await updateAudit(activeAuditId, { 
+      await updateAudit(activeAuditId, {
         answers: sanitizedAnswers,
-        status: finalStatus 
+        status: finalStatus
       });
       setAudits(prev => prev.map(a => a.id === activeAuditId ? { ...a, status: finalStatus } : a));
       toast.success('Průběh byl uložen');
@@ -1049,16 +1349,20 @@ const App: React.FC = () => {
   // Pomocná funkce pro odstranění File objektů z photos před uložením do Firestore
   const sanitizeAnswerForFirestore = (answer: AuditAnswer): AuditAnswer => {
     if (!answer.nonComplianceData) return answer;
-    
+
     return {
       ...answer,
       nonComplianceData: answer.nonComplianceData.map(nc => ({
         ...nc,
-        photos: nc.photos.map(photo => {
-          // Odstranit File objekt - nelze ukládat do Firestore
-          const { file, ...photoWithoutFile } = photo;
-          return photoWithoutFile;
-        })
+        photos: nc.photos
+          // Filtrovat fotky, které se stále nahrávají - nechceme ukládat placeholdery bez storagePath
+          .filter(photo => !photo.isUploading)
+          .map(photo => {
+            // Odstranit File objekt a base64 - nelze ukládat do Firestore (limit 1MB)
+            // Base64 slouží jen pro lokální preview, po uploadu máme URL
+            const { file, base64, ...photoSanitized } = photo;
+            return photoSanitized;
+          })
       }))
     };
   };
@@ -1074,13 +1378,13 @@ const App: React.FC = () => {
 
   const handleAnswerUpdate = useCallback(async (itemId: string, answer: any) => {
     if (!activeAuditId) return;
-    
+
     const audit = audits.find(a => a.id === activeAuditId);
     if (!audit) return;
-    
+
     // Vypočítat nový status
     let finalStatus = audit.status;
-    
+
     // Pokud je audit dokončen a uživatel dělá změny, změnit na REVISED
     if (audit.status === AuditStatus.COMPLETED || audit.status === AuditStatus.LOCKED) {
       finalStatus = AuditStatus.REVISED;
@@ -1093,7 +1397,7 @@ const App: React.FC = () => {
         finalStatus = AuditStatus.IN_PROGRESS;
       }
     }
-    
+
     // Optimisticky aktualizovat UI
     setAudits(prev => prev.map(audit => {
       if (audit.id === activeAuditId) {
@@ -1102,15 +1406,15 @@ const App: React.FC = () => {
       }
       return audit;
     }));
-    
+
     // Uložit do Firestore
     try {
       // Sanitizovat všechny answers - odstranit File objekty před uložením do Firestore
       const newAnswers = { ...audit.answers, [itemId]: answer };
       const sanitizedAnswers = sanitizeAnswersForFirestore(newAnswers);
-      await updateAudit(activeAuditId, { 
+      await updateAudit(activeAuditId, {
         answers: sanitizedAnswers,
-        status: finalStatus 
+        status: finalStatus
       });
     } catch (error) {
       console.error('[handleAnswerUpdate] Error:', error);
@@ -1119,7 +1423,7 @@ const App: React.FC = () => {
 
   const handleCompletedAtUpdate = useCallback(async (completedAt: string) => {
     if (!activeAuditId) return;
-    
+
     try {
       // Optimisticky aktualizovat UI
       setAudits(prev => prev.map(audit => {
@@ -1128,7 +1432,7 @@ const App: React.FC = () => {
         }
         return audit;
       }));
-      
+
       // Uložit do Firestore
       await updateAudit(activeAuditId, { completedAt });
     } catch (error) {
@@ -1138,7 +1442,7 @@ const App: React.FC = () => {
 
   const handleNoteUpdate = useCallback(async (note: string) => {
     if (!activeAuditId) return;
-    
+
     try {
       // Optimisticky aktualizovat UI
       setAudits(prev => prev.map(audit => {
@@ -1147,13 +1451,44 @@ const App: React.FC = () => {
         }
         return audit;
       }));
-      
+
       // Uložit do Firestore
       await updateAudit(activeAuditId, { note });
     } catch (error) {
       console.error('[handleNoteUpdate] Error:', error);
     }
   }, [activeAuditId]);
+
+  const handlePresentPersonUpdate = useCallback(async (presentPerson: string) => {
+    if (!activeAuditId) return;
+
+    try {
+      // Optimisticky aktualizovat UI (uložit do headerValues)
+      setAudits(prev => prev.map(audit => {
+        if (audit.id === activeAuditId) {
+          return {
+            ...audit,
+            headerValues: {
+              ...audit.headerValues,
+              present_person: presentPerson
+            }
+          };
+        }
+        return audit;
+      }));
+
+      const audit = audits.find(a => a.id === activeAuditId);
+      const nextHeaderValues = {
+        ...(audit?.headerValues || {}),
+        present_person: presentPerson
+      };
+
+      // Uložit do Firestore
+      await updateAudit(activeAuditId, { headerValues: nextHeaderValues });
+    } catch (error) {
+      console.error('[handlePresentPersonUpdate] Error:', error);
+    }
+  }, [activeAuditId, audits]);
 
   const handleFinishAudit = async () => {
     if (!activeAuditId) return;
@@ -1163,13 +1498,13 @@ const App: React.FC = () => {
       const currentAudit = audits.find(a => a.id === activeAuditId);
       // Použít existující completedAt, pokud existuje, jinak aktuální datum
       const completedAt = currentAudit?.completedAt || new Date().toISOString();
-      
+
       // Aktualizovat audit status
       await updateAudit(activeAuditId, {
         status: AuditStatus.COMPLETED,
         completedAt
       });
-      
+
       setAudits(prev => prev.map(a => a.id === activeAuditId
         ? { ...a, status: AuditStatus.COMPLETED, completedAt }
         : a
@@ -1185,10 +1520,14 @@ const App: React.FC = () => {
         status: ReportStatus.PENDING,
         createdAt: new Date().toISOString(),
       };
-      
+
       const newId = await createReport(newReportData);
       const newReport: Report = { ...newReportData, id: newId };
-      
+      // Po vytvoření nové verze vždy zobrazit právě vytvořený (nejnovější) report.
+      // Jinak může zůstat "připnutá" předchozí verze přes activeReportId.
+      setActiveReportId(newId);
+      navigate(`/reports/${newId}`, { replace: true });
+
       // Načíst všechny verze reportů pro aktualizaci state (včetně nového)
       const allReports = await fetchReportsByAudit(activeAuditId);
       setReports(prev => {
@@ -1205,17 +1544,18 @@ const App: React.FC = () => {
         const operatorName = operator?.operator_name || 'Neznámý';
         const premiseName = premise?.premise_name;
         const auditDate = activeAudit.createdAt ? new Date(activeAudit.createdAt).toISOString().split('T')[0] : undefined;
-        
+
         openOrActivateTab(
           activeAuditId,
           'report',
+          newId,
           activeAudit.premiseId,
           operatorName,
           premiseName,
           auditDate,
           AuditStatus.COMPLETED
         );
-        
+
         setAppState(AppState.REPORT_VIEW);
       }
     } catch (error) {
@@ -1226,10 +1566,10 @@ const App: React.FC = () => {
   const handleDeleteReportVersion = async (reportId: string, auditId: string) => {
     try {
       await deleteReport(reportId);
-      
+
       // Aktualizovat lokální state
       setReports(prev => prev.filter(r => r.id !== reportId));
-      
+
       toast.success('Verze reportu byla smazána');
     } catch (error) {
       console.error('[handleDeleteReportVersion] Error:', error);
@@ -1241,28 +1581,28 @@ const App: React.FC = () => {
     try {
       // Načíst všechny verze pro tento audit
       const allVersions = await fetchReportsByAudit(auditId);
-      
+
       // Použít batch pro atomickou aktualizaci
       const batch = writeBatch(db);
-      
+
       // Označit všechny verze jako isLatest: false
       allVersions.forEach(report => {
         const reportRef = doc(db, 'reports', report.id);
         batch.update(reportRef, { isLatest: false });
       });
-      
+
       // Nastavit vybranou verzi jako isLatest: true
       const selectedReportRef = doc(db, 'reports', reportId);
       batch.update(selectedReportRef, { isLatest: true });
-      
+
       await batch.commit();
-      
+
       // Aktualizovat lokální state
       setReports(prev => prev.map(r => ({
         ...r,
         isLatest: r.id === reportId
       })));
-      
+
       toast.success('Verze byla nastavena jako aktuální');
     } catch (error) {
       console.error('[handleSetReportAsLatest] Error:', error);
@@ -1277,13 +1617,13 @@ const App: React.FC = () => {
         status: ReportStatus.ERROR,
         error: 'Generování bylo zrušeno uživatelem'
       });
-      
-      setReports(prev => prev.map(r => 
-        r.id === reportId 
+
+      setReports(prev => prev.map(r =>
+        r.id === reportId
           ? { ...r, status: ReportStatus.ERROR, error: 'Generování bylo zrušeno uživatelem' }
           : r
       ));
-      
+
       toast.success('Generování reportu bylo zrušeno');
     } catch (error) {
       console.error('[handleCancelReportGeneration] Error:', error);
@@ -1292,101 +1632,131 @@ const App: React.FC = () => {
   };
 
   const handleToggleAdmin = () => {
-    setAppState(prev => prev === AppState.SETTINGS || prev === AppState.ADMIN ? AppState.OPERATOR_DASHBOARD : AppState.SETTINGS);
+    safeNavigate(() => {
+      // Toggle logic requires reading current URL or state, simpler to just go to valid route
+      // If in settings -> go to operators. If elsewhere -> go to settings.
+      if (location.pathname.startsWith('/settings') || location.pathname.startsWith('/admin')) {
+        navigate('/operators');
+      } else {
+        navigate('/settings');
+      }
+    });
   };
 
   const handleNavigateToAdmin = () => {
-    setAppState(AppState.ADMIN);
+    safeNavigate(() => {
+      navigate('/settings/audit-structure');
+    });
   };
 
   const handleNavigateToUserManagement = () => {
-    setAppState(AppState.USER_MANAGEMENT);
+    safeNavigate(() => {
+      navigate('/settings/user-management');
+    });
   };
 
   const handleBackFromAdmin = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
+  };
+
+  const handleBackFromUserManagement = () => {
+    navigate('/settings');
+  };
+
+  const handleNavigateToSettings = () => {
+    safeNavigate(() => {
+      setAppState(AppState.SETTINGS);
+    });
   };
 
   const handleBackFromSettings = () => {
-    setAppState(AppState.INCOMPLETE_AUDITS);
+    navigate('/settings');
   };
 
   const handleNavigateToAuditorSettings = () => {
-    setAppState(AppState.AUDITOR_SETTINGS);
+    safeNavigate(() => {
+      navigate('/settings/auditor');
+    });
   };
 
   const handleBackFromAuditorSettings = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   const handleNavigateToAIReportSettings = () => {
-    setAppState(AppState.AI_REPORT_SETTINGS);
+    safeNavigate(() => {
+      navigate('/settings/ai-config');
+    });
   };
 
   const handleBackFromAIReportSettings = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   const handleNavigateToAIUsageStats = () => {
-    setAppState(AppState.AI_USAGE_STATS);
+    safeNavigate(() => {
+      navigate('/settings/ai-stats');
+    });
   };
 
   const handleBackFromAIUsageStats = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   const handleNavigateToAIPricingConfig = () => {
-    setAppState(AppState.AI_PRICING_CONFIG);
+    safeNavigate(() => {
+      navigate('/settings/ai-pricing');
+    });
   };
 
   const handleBackFromAIPricingConfig = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   const handleNavigateToAIPrompts = () => {
     setAppState(AppState.AI_PROMPTS);
   };
 
-  const handleBackFromAIPrompts = () => {
-    setAppState(AppState.SETTINGS);
-  };
 
-  const handleNavigateToSmartTemplateSettings = () => {
-    setAppState(AppState.SMART_TEMPLATE_SETTINGS);
-  };
 
-  const handleBackFromSmartTemplateSettings = () => {
-    setAppState(AppState.SETTINGS);
-  };
+
 
   const handleNavigateToBillingSettings = () => {
-    setAppState(AppState.BILLING_SETTINGS);
+    safeNavigate(() => {
+      navigate('/settings/billing');
+    });
   };
 
   const handleNavigateToSupplierManagement = () => {
-    setAppState(AppState.SUPPLIER_MANAGEMENT);
+    safeNavigate(() => {
+      navigate('/settings/suppliers');
+    });
   };
 
   const handleNavigateToPricing = () => {
-    setAppState(AppState.PRICING);
+    safeNavigate(() => {
+      navigate('/settings/pricing');
+    });
   };
 
   const handleBackFromBillingSettings = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   const handleBackFromSupplierManagement = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   const handleBackFromPricing = () => {
-    setAppState(AppState.SETTINGS);
+    navigate('/settings');
   };
 
   // Invoice handlers
   const handleNavigateToInvoices = () => {
-    setAppState(AppState.INVOICES);
-    setActiveInvoiceId(null);
+    safeNavigate(() => {
+      setAppState(AppState.INVOICES);
+      setActiveInvoiceId(null);
+    });
   };
 
   const handleSelectInvoice = (invoiceId: string) => {
@@ -1403,8 +1773,10 @@ const App: React.FC = () => {
   };
 
   const handleEditInvoice = (invoiceId: string) => {
-    setActiveInvoiceId(invoiceId);
-    setAppState(AppState.INVOICE_EDIT);
+    safeNavigate(() => {
+      setActiveInvoiceId(invoiceId);
+      setAppState(AppState.INVOICE_EDIT);
+    });
   };
 
   const handleBackFromInvoice = () => {
@@ -1488,7 +1860,7 @@ const App: React.FC = () => {
       try {
         await updateAudit(invoiceCreateAuditId, { invoiceId });
         // Aktualizovat lokální state
-        setAudits(prev => prev.map(a => 
+        setAudits(prev => prev.map(a =>
           a.id === invoiceCreateAuditId ? { ...a, invoiceId } : a
         ));
       } catch (error: any) {
@@ -1496,39 +1868,80 @@ const App: React.FC = () => {
         toast.error('Chyba při aktualizaci auditu: ' + error.message);
       }
     }
-    
+
     setActiveInvoiceId(invoiceId);
     setAppState(AppState.INVOICE_DETAIL);
     setInvoiceCreateAuditId(undefined);
     setInvoiceCreateCustomerId(undefined);
+    setInvoiceCreateAuditId(undefined);
+    setInvoiceCreateCustomerId(undefined);
   };
 
-  const handleNavigate = (newState: AppState) => {
-    // Pokud jsou otevřené taby a navigujeme na jinou obrazovku, deaktivujeme taby
-    if (tabs.length > 0 && activeTabId) {
-      // Pokud navigujeme na obrazovku, která není v tabu, deaktivujeme aktivní tab
-      const isTabView = newState === AppState.AUDIT_LIST || 
-                       newState === AppState.AUDIT_IN_PROGRESS || 
-                       newState === AppState.REPORT_VIEW;
-      
-      if (!isTabView) {
-        // Deaktivovat aktuální tab, ale ponechat ho v tabs array
-        setActiveTabId(null);
-        setActiveAuditId(null);
-        // Pokud navigujeme z audit_list tabu, také resetovat activePremiseId
-        const activeTab = tabs.find(t => t.id === activeTabId);
-        if (activeTab?.type === 'audit_list') {
-          setActivePremiseId(null);
-        }
+  const handleNavigate = (state: AppState) => {
+    safeNavigate(() => {
+      // Mapování AppState na URL
+      switch (state) {
+        case AppState.OPERATOR_DASHBOARD:
+          navigate('/operators');
+          break;
+        case AppState.ADD_OPERATOR:
+          navigate('/operators/new');
+          break;
+        case AppState.ALL_AUDITS:
+          navigate('/audits');
+          break;
+        case AppState.INCOMPLETE_AUDITS:
+          navigate('/audits/incomplete');
+          break;
+        case AppState.IN_PROGRESS_AUDITS:
+          navigate('/audits/in-progress');
+          break;
+        case AppState.INVOICES:
+          navigate('/invoices');
+          break;
+        case AppState.INVOICE_CREATE:
+          navigate('/invoices/new');
+          break;
+        case AppState.SETTINGS:
+          navigate('/settings');
+          break;
+        case AppState.AUDITOR_SETTINGS:
+          navigate('/settings/auditor');
+          break;
+        case AppState.AI_REPORT_SETTINGS:
+          navigate('/settings/ai-config');
+          break;
+        case AppState.AI_USAGE_STATS:
+          navigate('/settings/ai-stats');
+          break;
+        case AppState.AI_PRICING_CONFIG:
+          navigate('/settings/ai-pricing');
+          break;
+        case AppState.BILLING_SETTINGS:
+          navigate('/settings/billing');
+          break;
+        case AppState.SUPPLIER_MANAGEMENT:
+          navigate('/settings/suppliers');
+          break;
+        case AppState.PRICING:
+          navigate('/settings/pricing');
+          break;
+        case AppState.ADMIN:
+          navigate('/settings/audit-structure');
+          break;
+        case AppState.USER_MANAGEMENT:
+          navigate('/settings/user-management');
+          break;
+        default:
+          // Fallback pro stavy, které nemají přímou URL (nebo jsou modální)
+          setAppState(state);
       }
-    }
-    
-    // Nastavit nový stav
-    setAppState(newState);
+    });
   };
 
   // --- RENDER LOGIC ---
   const renderContent = () => {
+    console.log('[App] renderContent called. AppState:', appState, 'ActiveTab:', activeTabId);
     if (isLoading) return <div className="text-center"><p>Načítání dat ze serveru...</p></div>;
     if (error) return <div className="text-center text-red-600"><p>{error}</p></div>;
 
@@ -1563,19 +1976,26 @@ const App: React.FC = () => {
           const allVersions = reports.filter(r => r.auditId === activeAudit.id)
             .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
           return (
-            <ReportView 
-              report={activeReport} 
-              audit={activeAudit} 
+            <ReportView
+              report={activeReport}
+              audit={activeAudit}
               auditStructure={auditStructure}
               reportVersions={allVersions}
-              onSelectVersion={(reportId) => {
+              onCancelReportGeneration={handleCancelReportGeneration}
+              onSelectVersion={async (reportId) => {
+                // Check if report exists in current state
+                const reportExists = reports.some(r => r.id === reportId);
+                if (!reportExists) {
+                  // If not found (e.g. newly created), reload data first
+                  await reload();
+                }
                 setActiveReportId(reportId);
               }}
-              onBack={handleBackToAuditList} 
+              onBack={handleBackToAuditList}
             />
           );
         } else if (activeTab.type === 'audit' && activeAudit) {
-          return <AuditChecklistWrapper auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onCompletedAtUpdate={handleCompletedAtUpdate} onNoteUpdate={handleNoteUpdate} onBack={handleBackToAuditList} log={log} />;
+          return <AuditChecklistWrapper auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onCompletedAtUpdate={handleCompletedAtUpdate} onNoteUpdate={handleNoteUpdate} onPresentPersonUpdate={handlePresentPersonUpdate} onBack={handleBackToAuditList} log={log} />;
         }
       }
     }
@@ -1589,47 +2009,46 @@ const App: React.FC = () => {
     // Standardní render podle appState
     switch (appState) {
       case AppState.OPERATOR_DASHBOARD:
-        return <OperatorDashboard 
-          operators={operators} 
+        return <OperatorDashboard
+          operators={operators}
           premises={premises}
           audits={audits}
-          onSelectPremise={handleSelectPremiseForAudits} 
-          onAddNewOperator={handleAddNewOperator} 
-          onEditOperator={handleEditOperator} 
+          onSelectPremise={handleSelectPremiseForAudits}
+          onAddNewOperator={handleAddNewOperator}
+          onEditOperator={handleEditOperator}
           onDeleteOperator={handleDeleteOperator}
           onAddPremise={handleAddPremise}
           onEditPremise={handleEditPremise}
           onDeletePremise={handleDeletePremise}
           onStartNewAudit={handleStartNewAudit}
           onPrepareAudit={handlePrepareAudit}
+          onOperatorAdded={(newOperator) => {
+            setOperators(prev => [...prev, newOperator]);
+          }}
+          onPremiseAdded={(newPremise) => {
+            setPremises(prev => [...prev, newPremise]);
+          }}
         />;
       case AppState.ADD_OPERATOR:
       case AppState.EDIT_OPERATOR:
         return (
-          <Modal
-            isOpen={true}
-            onClose={handleBackToDashboard}
-            title={appState === AppState.EDIT_OPERATOR ? 'Upravit provozovatele' : 'Nový provozovatel'}
-            size="xl"
-            closeOnBackdropClick={false}
-          >
-            <OperatorForm 
-              initialData={appState === AppState.EDIT_OPERATOR ? operatorToEdit || null : null} 
-              onSave={(data) => {
-                handleSaveOperator(data);
-                handleBackToDashboard();
-              }} 
-              onBack={handleBackToDashboard} 
-            />
-          </Modal>
+          <OperatorForm
+            initialData={appState === AppState.EDIT_OPERATOR ? operatorToEdit || null : null}
+            operators={operators}
+            onSave={(data) => {
+              handleSaveOperator(data);
+            }}
+            onBack={handleBackToDashboard}
+          />
         );
       case AppState.ADD_PREMISE:
       case AppState.EDIT_PREMISE:
-        return <PremiseForm 
-          initialData={appState === AppState.EDIT_PREMISE ? premiseToEdit || null : null} 
+        return <PremiseForm
+          initialData={appState === AppState.EDIT_PREMISE ? premiseToEdit || null : null}
           operatorId={activeOperatorId || ''}
-          onSave={handleSavePremise} 
-          onBack={handleBackToDashboard} 
+          premises={premises}
+          onSave={handleSavePremise}
+          onBack={handleBackToDashboard}
         />;
       case AppState.AUDIT_LIST: {
         const activePremise = premises.find(p => p.id === activePremiseId);
@@ -1681,18 +2100,18 @@ const App: React.FC = () => {
                 const { getInvoice } = await import('./services/firestore/invoices');
                 const invoice = await getInvoice(audit.invoiceId);
                 if (invoice) {
-                  return { id: invoice.id, invoiceNumber: invoice.invoiceNumber };
+                  return { id: invoice.id, invoiceNumber: invoice.invoiceNumber, status: invoice.status };
                 }
                 // Pokud faktura neexistuje, odstranit invoiceId z auditu
                 const { updateAudit } = await import('./services/firestore');
-                await updateAudit(auditId, { invoiceId: undefined });
+                await updateAudit(auditId, { invoiceId: null });
                 // Aktualizovat lokální state
                 setAudits(prev => prev.map(a => a.id === auditId ? { ...a, invoiceId: undefined } : a));
               } catch (error) {
                 console.error('[getInvoiceByAuditId] Error loading invoice:', error);
                 // Pokud faktura neexistuje, odstranit invoiceId z auditu
                 const { updateAudit } = await import('./services/firestore');
-                await updateAudit(auditId, { invoiceId: undefined });
+                await updateAudit(auditId, { invoiceId: null });
                 // Aktualizovat lokální state
                 setAudits(prev => prev.map(a => a.id === auditId ? { ...a, invoiceId: undefined } : a));
               }
@@ -1702,8 +2121,8 @@ const App: React.FC = () => {
         />;
       case AppState.INCOMPLETE_AUDITS:
         // Filtrovat pouze nezapočaté audity (DRAFT)
-        const incompleteAudits = audits.filter(a => 
-          a.status === AuditStatus.DRAFT || 
+        const incompleteAudits = audits.filter(a =>
+          a.status === AuditStatus.DRAFT ||
           a.status === AuditStatus.NOT_STARTED // zpětná kompatibilita
         );
         return <AllAuditsScreen
@@ -1739,7 +2158,7 @@ const App: React.FC = () => {
         />;
       case AppState.IN_PROGRESS_AUDITS:
         // Filtrovat pouze probíhající audity (IN_PROGRESS)
-        const inProgressAudits = audits.filter(a => 
+        const inProgressAudits = audits.filter(a =>
           a.status === AuditStatus.IN_PROGRESS
         );
         return <AllAuditsScreen
@@ -1783,7 +2202,7 @@ const App: React.FC = () => {
         if (!activeAudit) {
           return <p>Chyba: Aktivní audit nebyl nalezen při pokusu o zobrazení checklistu.</p>;
         }
-        return <AuditChecklistWrapper auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onCompletedAtUpdate={handleCompletedAtUpdate} onNoteUpdate={handleNoteUpdate} onBack={handleBackToAuditList} log={log} />;
+        return <AuditChecklistWrapper auditData={activeAudit} auditStructure={auditStructure} onAnswerUpdate={handleAnswerUpdate} onComplete={handleFinishAudit} onSaveProgress={handleSaveProgress} onCompletedAtUpdate={handleCompletedAtUpdate} onNoteUpdate={handleNoteUpdate} onPresentPersonUpdate={handlePresentPersonUpdate} onBack={handleBackToAuditList} log={log} />;
       }
       case AppState.REPORT_VIEW: {
         // Tento case se už nepoužívá když jsou taby, ale zůstává pro zpětnou kompatibilitu
@@ -1792,22 +2211,23 @@ const App: React.FC = () => {
         const allVersions = reports.filter(r => r.auditId === activeAudit.id)
           .sort((a, b) => (b.versionNumber || 0) - (a.versionNumber || 0));
         return (
-          <ReportView 
-            report={activeReport} 
-            audit={activeAudit} 
+          <ReportView
+            report={activeReport}
+            audit={activeAudit}
             auditStructure={auditStructure}
             reportVersions={allVersions}
+            onCancelReportGeneration={handleCancelReportGeneration}
             onSelectVersion={(reportId) => {
-              setActiveReportId(reportId);
+              navigate(`/reports/${reportId}`);
             }}
-            onBack={handleBackToAuditList} 
+            onBack={handleBackToAuditList}
           />
         );
       }
       case AppState.SETTINGS:
-        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToAIPrompts={handleNavigateToAIPrompts} onNavigateToSmartTemplateSettings={handleNavigateToSmartTemplateSettings} onNavigateToBillingSettings={handleNavigateToBillingSettings} onNavigateToPricing={handleNavigateToPricing} onBack={handleBackFromSettings} />;
+        return <SettingsScreen onNavigateToAdmin={handleNavigateToAdmin} onNavigateToUserManagement={handleNavigateToUserManagement} onNavigateToAuditorSettings={handleNavigateToAuditorSettings} onNavigateToAIReportSettings={handleNavigateToAIReportSettings} onNavigateToAIUsageStats={handleNavigateToAIUsageStats} onNavigateToAIPricingConfig={handleNavigateToAIPricingConfig} onNavigateToBillingSettings={handleNavigateToBillingSettings} onNavigateToSupplierManagement={handleNavigateToSupplierManagement} />;
       case AppState.USER_MANAGEMENT:
-        return <UserManagementScreen onBack={handleBackFromSettings} />;
+        return <UserManagementScreen onBack={handleBackFromUserManagement} />;
       case AppState.AUDITOR_SETTINGS:
         return <AuditorSettingsScreen onBack={handleBackFromAuditorSettings} />;
       case AppState.AI_REPORT_SETTINGS:
@@ -1816,10 +2236,8 @@ const App: React.FC = () => {
         return <AIUsageStatsScreen onBack={handleBackFromAIUsageStats} />;
       case AppState.AI_PRICING_CONFIG:
         return <AIPricingConfigScreen onBack={handleBackFromAIPricingConfig} />;
-      case AppState.AI_PROMPTS:
-        return <AIPromptsScreen onBack={handleBackFromAIPrompts} />;
-      case AppState.SMART_TEMPLATE_SETTINGS:
-        return <SmartTemplateSettingsScreen onBack={handleBackFromSmartTemplateSettings} />;
+
+
       case AppState.BILLING_SETTINGS:
         return <BillingSettingsScreen onBack={handleBackFromBillingSettings} onNavigateToPricing={handleNavigateToPricing} />;
       case AppState.SUPPLIER_MANAGEMENT:
@@ -1881,27 +2299,15 @@ const App: React.FC = () => {
           />
         );
       case AppState.ADMIN:
-        return (
-          <div>
-            <div className="p-4 bg-white shadow-md mb-4">
-              <button
-                onClick={handleBackFromAdmin}
-                className="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                ← Zpět na Nastavení
-              </button>
-            </div>
-            <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructureState} />
-          </div>
-        );
+        return <AdminScreen auditStructure={auditStructure} setAuditStructure={setAuditStructureState} onBack={handleBackFromAdmin} />;
       default:
-        return <OperatorDashboard 
-          operators={operators} 
+        return <OperatorDashboard
+          operators={operators}
           premises={premises}
           audits={audits}
-          onSelectPremise={handleSelectPremiseForAudits} 
-          onAddNewOperator={handleAddNewOperator} 
-          onEditOperator={handleEditOperator} 
+          onSelectPremise={handleSelectPremiseForAudits}
+          onAddNewOperator={handleAddNewOperator}
+          onEditOperator={handleEditOperator}
           onDeleteOperator={handleDeleteOperator}
           onAddPremise={handleAddPremise}
           onEditPremise={handleEditPremise}
@@ -1914,11 +2320,7 @@ const App: React.FC = () => {
 
   // Determine if sidebar should be shown (hide for forms and specific screens)
   const shouldShowSidebar = ![
-    AppState.ADD_OPERATOR,
-    AppState.EDIT_OPERATOR,
-    AppState.ADD_PREMISE,
-    AppState.EDIT_PREMISE,
-    // INVOICE_CREATE a INVOICE_EDIT mají sidebar viditelný, aby uživatel viděl menu
+    // Sidebar should be visible for most editing screens now
   ].includes(appState);
 
   return (

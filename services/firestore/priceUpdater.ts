@@ -349,7 +349,8 @@ export async function updateGeminiPricesWithLLM(
     
     // Načíst konfiguraci modelu pro LLM
     const modelsConfig = await fetchAIModelsConfig();
-    const llmModel = modelsConfig.models?.priceUpdateModel || 'gemini-2.5-flash';
+    // Default na stabilnější/lehčí model – parsing HTML je těžký prompt a gemini-2.5-flash bývá často přetížený (429)
+    const llmModel = modelsConfig.models?.priceUpdateModel || 'gemini-2.0-flash-exp';
     
     progressCallback?.('LLM parsing', 'Načítám ceny z oficiální stránky pomocí LLM...');
     
@@ -508,7 +509,7 @@ KRITICKÉ PRAVIDLA:
     
     // Zalogovat AI usage
     await addAIUsageLog(
-      llmModel,
+      response.modelUsed || llmModel,
       'price-update-llm',
       response.usageMetadata?.promptTokenCount || 0,
       response.usageMetadata?.candidatesTokenCount || 0,

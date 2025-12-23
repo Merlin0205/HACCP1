@@ -71,7 +71,6 @@ const LocationDropdownWithMic: React.FC<{
                 setOnlyInCollection(result.onlyInCollection);
                 setUsedInAudits(result.usedInAudits);
             } catch (error) {
-                console.error('[LocationDropdownWithMic] Error loading locations:', error);
                 toast.error('Nepodařilo se načíst existující místa');
             } finally {
                 setIsLoadingLocations(false);
@@ -87,7 +86,7 @@ const LocationDropdownWithMic: React.FC<{
 
         // Najít nejbližší shodu v existujících místech
         const bestMatch = findBestMatchLocation(formatted, locations);
-        
+
         if (bestMatch) {
             // Pokud najdeme shodu, použít existující místo
             onChange(bestMatch);
@@ -111,7 +110,7 @@ const LocationDropdownWithMic: React.FC<{
     }, [isRecording, isTranscribing, onRecordingStateChange]);
 
     const isLoading = isRecording || isTranscribing;
-    const buttonIcon = isLoading ? (isRecording ? <StopIcon/> : <Spinner small/>) : <MicrophoneIcon/>;
+    const buttonIcon = isLoading ? (isRecording ? <StopIcon /> : <Spinner small />) : <MicrophoneIcon />;
     const buttonClass = isRecording ? 'bg-red-500' : 'bg-blue-500';
 
     // Resetovat flag nového místa, pokud se hodnota změní ručně nebo se vybere z dropdownu
@@ -129,16 +128,16 @@ const LocationDropdownWithMic: React.FC<{
     const handleDeleteLocation = async (locationName: string, e: React.MouseEvent) => {
         e.stopPropagation();
         e.preventDefault();
-        
+
         // Zkontrolovat, jestli je místo použito v auditech
         const isUsedInAudits = usedInAudits.some(loc => loc.toLowerCase() === locationName.toLowerCase());
-        
+
         if (isUsedInAudits) {
             // Místo je použito v auditech - zobrazit potvrzovací dialog
             setConfirmDeleteLocation(locationName);
             return;
         }
-        
+
         // Místo není použito v auditech - smazat přímo
         await performDeleteLocation(locationName);
     };
@@ -147,7 +146,7 @@ const LocationDropdownWithMic: React.FC<{
         try {
             // Zkontrolovat, jestli je místo použito v auditech
             const isUsedInAudits = usedInAudits.some(loc => loc.toLowerCase() === locationName.toLowerCase());
-            
+
             if (isUsedInAudits) {
                 // Místo je použito v auditech - přidat do blacklistu
                 await addToBlacklist(locationName);
@@ -155,22 +154,21 @@ const LocationDropdownWithMic: React.FC<{
                 // Místo není použito v auditech - smazat z kolekce
                 await deleteNonComplianceLocation(locationName);
             }
-            
+
             // Aktualizovat seznam míst
             const result = await getNonComplianceLocations();
             setLocations(result.available);
             setOnlyInCollection(result.onlyInCollection);
             setUsedInAudits(result.usedInAudits);
-            
+
             // Pokud bylo smazáno aktuálně vybrané místo, vymazat hodnotu
             if (value.toLowerCase() === locationName.toLowerCase()) {
                 onChange('');
             }
-            
+
             toast.success(`Místo "${locationName}" bylo smazáno ze seznamu`);
             log(`Místo "${locationName}" bylo smazáno ze seznamu`);
         } catch (error: any) {
-            console.error('[LocationDropdownWithMic] Error deleting location:', error);
             toast.error(error.message || 'Nepodařilo se smazat místo');
         }
     };
@@ -185,9 +183,9 @@ const LocationDropdownWithMic: React.FC<{
                         id={id}
                         value={value}
                         onChange={e => {
-                            const formatted = formatLocationName(e.target.value);
-                            onChange(formatted);
-                            setFilterText(formatted); // Uložit text pro filtrování
+                            const val = e.target.value;
+                            onChange(val);
+                            setFilterText(val); // Uložit text pro filtrování
                             setShowDropdown(true); // Vždy zobrazit dropdown při změně
                             setIsNewLocation(false); // Resetovat flag nového místa při ručním psaní
                         }}
@@ -196,6 +194,12 @@ const LocationDropdownWithMic: React.FC<{
                             setFilterText(''); // Resetovat filtr při kliknutí - zobrazit všechny možnosti
                         }}
                         onBlur={(e) => {
+                            // Formátovat při opuštění pole
+                            const formatted = formatLocationName(value);
+                            if (formatted !== value) {
+                                onChange(formatted);
+                            }
+
                             // Nezavřít dropdown pokud klikne na dropdown nebo jeho obsah
                             const relatedTarget = e.relatedTarget as HTMLElement;
                             if (!relatedTarget || !e.currentTarget.parentElement?.contains(relatedTarget)) {
@@ -209,7 +213,7 @@ const LocationDropdownWithMic: React.FC<{
                         placeholder="-- Vyberte místo --"
                         disabled={isLoading || isOtherFieldRecording}
                     />
-                    <button 
+                    <button
                         onClick={toggleRecording}
                         disabled={isOtherFieldRecording || (isTranscribing && !isRecording)}
                         className={`absolute top-1/2 -translate-y-1/2 right-2 md:right-3 p-2 md:p-2.5 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed z-10`}
@@ -218,17 +222,17 @@ const LocationDropdownWithMic: React.FC<{
                         <MicrophoneIcon className="h-5 w-5 md:h-6 md:w-6" />
                     </button>
                 </div>
-                
+
                 {/* Zobrazit "nové" malým písmem pod dropdownem, pokud je nové místo */}
                 {isNewLocation && value && (
                     <p className="text-xs text-gray-400 mt-1 italic">
                         nové
                     </p>
                 )}
-                
+
                 {showDropdown && (
-                    <div 
-                        className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
+                    <div
+                        className="absolute z-[2000] w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
                         onMouseDown={(e) => {
                             // Zabránit onBlur na inputu
                             e.preventDefault();
@@ -238,7 +242,7 @@ const LocationDropdownWithMic: React.FC<{
                             filteredLocations.map(loc => {
                                 const canDelete = onlyInCollection.some(l => l.toLowerCase() === loc.toLowerCase());
                                 const isUsedInAudits = usedInAudits.some(l => l.toLowerCase() === loc.toLowerCase());
-                                
+
                                 return (
                                     <div
                                         key={loc}
@@ -263,11 +267,10 @@ const LocationDropdownWithMic: React.FC<{
                                                     e.stopPropagation();
                                                     e.preventDefault();
                                                 }}
-                                                className={`ml-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
-                                                    isUsedInAudits 
-                                                        ? 'text-red-500 hover:text-red-700 hover:bg-red-50' 
-                                                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                                                }`}
+                                                className={`ml-2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity ${isUsedInAudits
+                                                    ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                                                    : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                                                    }`}
                                                 title={isUsedInAudits ? "Odstranit ze seznamu (místo zůstane v existujících auditech)" : "Smazat místo ze seznamu"}
                                                 aria-label="Smazat místo"
                                             >
@@ -284,7 +287,7 @@ const LocationDropdownWithMic: React.FC<{
                 )}
             </div>
             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-            
+
             {/* Potvrzovací dialog pro smazání místa používaného v auditech */}
             <ConfirmationModal
                 isOpen={confirmDeleteLocation !== null}
@@ -309,6 +312,7 @@ const LocationDropdownWithMic: React.FC<{
 const TextAreaWithMic: React.FC<{
     value: string;
     onChange: (value: string) => void;
+    onBlur?: () => void;
     label: string;
     id: string;
     log: (message: string) => void;
@@ -319,8 +323,8 @@ const TextAreaWithMic: React.FC<{
     onGenerate?: () => Promise<void>;
     isAIRewriting?: boolean;
     isAIGenerating?: boolean;
-}> = ({ value, onChange, label, id, log, isOtherFieldRecording, onRecordingStateChange, showAIIcons, onRewrite, onGenerate, isAIRewriting, isAIGenerating }) => {
-    
+}> = ({ value, onChange, onBlur, label, id, log, isOtherFieldRecording, onRecordingStateChange, showAIIcons, onRewrite, onGenerate, isAIRewriting, isAIGenerating }) => {
+
     const handleTranscription = useCallback((transcribedText: string) => {
         // Odstranit tečku na konci
         const cleaned = transcribedText.trim().replace(/\.+$/, '');
@@ -336,7 +340,7 @@ const TextAreaWithMic: React.FC<{
     }, [isRecording, isTranscribing, onRecordingStateChange]);
 
     const isLoading = isRecording || isTranscribing;
-    const buttonIcon = isLoading ? (isRecording ? <StopIcon/> : <Spinner small/>) : <MicrophoneIcon/>;
+    const buttonIcon = isLoading ? (isRecording ? <StopIcon /> : <Spinner small />) : <MicrophoneIcon />;
     const buttonClass = isRecording ? 'bg-red-500' : 'bg-blue-500';
 
     // Počet ikon: mikrofon (1) + AI ikony (2 pokud jsou zobrazeny)
@@ -351,13 +355,14 @@ const TextAreaWithMic: React.FC<{
                 rows={4}
                 value={value}
                 onChange={e => onChange(e.target.value)}
+                onBlur={onBlur}
                 className="w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base bg-white border border-gray-300 rounded-md resize-y"
                 style={{ paddingRight: `${rightPadding}px` }}
                 placeholder={isRecording ? "Nahrávám..." : (isTranscribing ? "Přepisuji..." : "")}
                 readOnly={isLoading || isAIRewriting || isAIGenerating}
             />
             <div className="absolute top-10 md:top-11 right-2 md:right-3 flex items-center gap-1.5 md:gap-2" style={{ zIndex: 1000 }}>
-                <button 
+                <button
                     onClick={toggleRecording}
                     disabled={isOtherFieldRecording || isAIRewriting || isAIGenerating}
                     className={`p-2 md:p-2.5 rounded-full text-white ${buttonClass} disabled:bg-gray-400 disabled:cursor-not-allowed`}
@@ -401,12 +406,12 @@ const TextAreaWithMic: React.FC<{
     );
 };
 
-const NonComplianceForm: React.FC<NonComplianceFormProps> = ({ 
-    data, 
-    onChange, 
-    onRemove, 
-    index, 
-    log, 
+const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
+    data,
+    onChange,
+    onRemove,
+    index,
+    log,
     onLocationSave,
     itemTitle,
     itemDescription,
@@ -419,29 +424,45 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
     const [pendingLocation, setPendingLocation] = useState<string | null>(null); // Nové místo čekající na uložení
     const [isAIRewriting, setIsAIRewriting] = useState(false);
     const [isAIGenerating, setIsAIGenerating] = useState(false);
-    
+    const [findingDraft, setFindingDraft] = useState<string>(data.finding || '');
+    const [recommendationDraft, setRecommendationDraft] = useState<string>(data.recommendation || '');
+    const [aiFindingError, setAiFindingError] = useState<string | null>(null);
+    const [aiRecommendationError, setAiRecommendationError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setFindingDraft(data.finding || '');
+    }, [data.finding]);
+
+    useEffect(() => {
+        setRecommendationDraft(data.recommendation || '');
+    }, [data.recommendation]);
+
     // Refs pro file inputy
     const galleryInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
 
     const handleRewriteFinding = async () => {
-        if (!data.finding || !itemTitle || !sectionTitle) {
+        if (!findingDraft || !itemTitle || !sectionTitle) {
             toast.error('Pro použití AI je potřeba vyplnit popis neshody');
             return;
         }
 
+        setAiFindingError(null);
         setIsAIRewriting(true);
         try {
-            const rewritten = await rewriteFinding(data.finding, {
+            const rewritten = await rewriteFinding(findingDraft, {
                 itemTitle,
                 itemDescription: itemDescription || '',
                 sectionTitle
             });
-            onChange('finding', rewritten);
+            setFindingDraft(rewritten);
+            onChange('finding', rewritten); // AI akce ukládáme hned
             log('Text přepsán pomocí AI');
             toast.success('Text byl úspěšně přepsán');
         } catch (error: any) {
-            toast.error(error.message || 'Chyba při přepisování textu');
+            const msg = error?.message || 'Chyba při přepisování textu';
+            setAiFindingError(msg);
+            toast.error(msg);
             log(`Chyba při přepisování: ${error.message}`);
         } finally {
             setIsAIRewriting(false);
@@ -449,24 +470,27 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
     };
 
     const handleGenerateRecommendation = async () => {
-        if (!data.finding || !itemTitle || !sectionTitle) {
+        if (!findingDraft || !itemTitle || !sectionTitle) {
             toast.error('Pro generování doporučení je potřeba vyplnit popis neshody');
             return;
         }
 
+        setAiRecommendationError(null);
         setIsAIGenerating(true);
         try {
-            const recommendation = await generateRecommendation(data.finding, {
+            const recommendation = await generateRecommendation(findingDraft, {
                 itemTitle,
                 itemDescription: itemDescription || '',
                 sectionTitle
             });
-            onChange('recommendation', recommendation);
+            setRecommendationDraft(recommendation);
+            onChange('recommendation', recommendation); // AI akce ukládáme hned
             log('Doporučení vygenerováno pomocí AI');
             toast.success('Doporučení bylo úspěšně vygenerováno');
         } catch (error: any) {
-            console.error('[NonComplianceForm] Error generating recommendation:', error);
-            toast.error(error.message || 'Chyba při generování doporučení');
+            const msg = error?.message || 'Chyba při generování doporučení';
+            setAiRecommendationError(msg);
+            toast.error(msg);
             log(`Chyba při generování: ${error.message}`);
         } finally {
             setIsAIGenerating(false);
@@ -475,81 +499,123 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
 
     const handlePhotoChange = async (files: FileList | null, source: 'gallery' | 'camera') => {
         if (!files || files.length === 0) return;
-        
+
         if (!auditId) {
             toast.error('Chybí ID auditu pro upload fotek');
             return;
         }
 
         const fileArray = Array.from(files);
-        
-        for (let i = 0; i < fileArray.length; i++) {
-            const file = fileArray[i];
-            const photoIndex = data.photos.length + i;
-            
+
+        // 1. Vytvořit placeholdery pro všechny fotky najednou
+        const newPlaceholders: PhotoWithAnalysis[] = fileArray.map(file => ({
+            file,
+            isUploading: true
+        }));
+
+        // Přidat placeholdery do state
+        const currentPhotos = [...data.photos, ...newPlaceholders];
+        onChange('photos', currentPhotos);
+
+        // 2. Spustit upload pro všechny fotky paralelně
+        const uploadPromises = fileArray.map(async (file, index) => {
+            const photoIndex = data.photos.length + index; // Index v celkovém poli (původní + nové)
+
             try {
-                // Vytvořit placeholder pro loading state
-                const placeholderPhoto: PhotoWithAnalysis = {
-                    file,
-                    isUploading: true
-                };
-                const currentPhotos = data.photos;
-                onChange('photos', [...currentPhotos, placeholderPhoto]);
-                
                 // Komprimovat obrázek
-                log(`Komprimuji fotku ${i + 1}/${fileArray.length}...`);
+                // log(`Komprimuji fotku ${index + 1}/${fileArray.length}...`);
                 const compressedFile = await compressImage(file);
-                
+
                 // Upload na Storage
-                log(`Nahrávám fotku ${i + 1}/${fileArray.length} na Storage...`);
+                // log(`Nahrávám fotku ${index + 1}/${fileArray.length} na Storage...`);
                 const { url, storagePath } = await uploadAuditPhoto(auditId, compressedFile, photoIndex);
-                
-                // Vytvořit base64 pro preview (volitelné, pro rychlejší zobrazení)
+
+                // Vytvořit base64 pro preview
                 const base64 = await fileToBase64(compressedFile);
-                
-                // Aktualizovat placeholder s reálnými daty
+
+                // Vytvořit finální objekt fotky
                 const uploadedPhoto: PhotoWithAnalysis = {
                     storagePath,
                     url,
-                    base64: base64.split(',')[1], // Odstranit data:image/jpeg;base64, prefix
+                    base64: base64.split(',')[1],
                     isUploading: false
-                    // file je odstraněn - nelze ukládat do Firestore
                 };
-                
-                // Najít a nahradit placeholder v aktuálních fotkách
-                const updatedPhotos = [...data.photos];
-                const placeholderIndex = updatedPhotos.findIndex(p => p.isUploading && p.file === file);
-                if (placeholderIndex !== -1) {
-                    updatedPhotos[placeholderIndex] = uploadedPhoto;
-                } else {
-                    updatedPhotos.push(uploadedPhoto);
-                }
-                
-                onChange('photos', updatedPhotos);
-                log(`Fotka ${i + 1}/${fileArray.length} úspěšně nahrána`);
-            } catch (error: any) {
-                console.error(`Error processing photo ${i + 1}:`, error);
-                toast.error(`Chyba při nahrávání fotky ${i + 1}: ${error.message || 'Neznámá chyba'}`);
-                log(`Chyba při nahrávání fotky ${i + 1}: ${error.message}`);
-                
-                // Odstranit placeholder při chybě
-                const updatedPhotos = data.photos.filter(p => !(p.isUploading && p.file === file));
-                onChange('photos', updatedPhotos);
+
+                return { success: true, file, photo: uploadedPhoto };
+            } catch (error) {
+                toast.error(`Nepodařilo se nahrát fotku ${file.name}`);
+                return { success: false, file };
             }
+        });
+
+        // 3. Čekat na dokončení všech uploadů a průběžně aktualizovat state
+        // Místo čekání na všechny najednou můžeme aktualizovat state po každém úspěšném uploadu,
+        // ale pro jednoduchost a konzistenci počkáme na všechny a pak aktualizujeme ty úspěšné.
+        // Lepší UX je aktualizovat průběžně, aby uživatel viděl progress.
+
+        // Implementace s průběžnou aktualizací:
+        uploadPromises.forEach(async (promise) => {
+            const result = await promise;
+
+            // Získat aktuální stav fotek (protože se mohl změnit jiným uploadem)
+            // V Reactu bychom použili functional update, ale zde máme jen onChange prop.
+            // Musíme doufat, že parent component (AuditItemModal) nám vrátí aktuální data při dalším renderu,
+            // ale tady v async funkci máme jen 'data' z closure, které je staré.
+            // TO JE PROBLÉM: 'data.photos' je stale closure.
+
+            // Řešení: V tomto případě je bezpečnější aktualizovat state až na konci, 
+            // NEBO (pokud chceme průběžně) musíme spoléhat na to, že onChange vyvolá re-render 
+            // a my bychom museli mít logiku mimo tuto funkci.
+
+            // Ale pozor: 'onChange' volá setState v rodiči. Pokud zavoláme onChange 5x rychle za sebou,
+            // může dojít k race condition, pokud rodič nepoužívá functional update správně.
+            // Proto je bezpečnější počkat na všechny a aktualizovat najednou, NEBO
+            // (a to je nejlepší) aktualizovat lokální kopii pole a tu posílat.
+        });
+
+        // Počkáme na všechny promisy
+        const results = await Promise.all(uploadPromises);
+
+        // 4. Aktualizovat state s výsledky
+        // Vezmeme aktuální fotky (z closure - pozor, pokud se mezitím něco změnilo, přepíšeme to!)
+        // Ale v rámci jednoho batch uploadu by uživatel neměl dělat jiné změny.
+
+        // Vytvoříme nové pole fotek
+        // Začneme s původními fotkami (ty co tam byly před tímto uploadem)
+        const originalPhotos = data.photos;
+
+        // A přidáme k nim výsledky
+        // Pro každou novou fotku: pokud se nahrála, dáme tam výsledek. Pokud ne, nedáme tam nic (placeholder zmizí).
+        const newPhotos: PhotoWithAnalysis[] = [];
+
+        results.forEach(result => {
+            if (result.success && result.photo) {
+                newPhotos.push(result.photo);
+            }
+            // Pokud success === false, fotku nepřidáváme (placeholder zmizí, uživatel viděl error toast)
+        });
+
+        // Výsledné pole = původní fotky + nové úspěšně nahrané
+        const finalPhotos = [...originalPhotos, ...newPhotos];
+
+        onChange('photos', finalPhotos);
+
+        if (newPhotos.length > 0) {
+            toast.success(`Úspěšně nahráno ${newPhotos.length} fotek`);
         }
     };
-    
+
     const handleGalleryClick = () => {
         galleryInputRef.current?.click();
     };
-    
+
     const handleCameraClick = () => {
         cameraInputRef.current?.click();
     };
-    
+
     const removePhoto = async (photoIndex: number) => {
         const photo = data.photos[photoIndex];
-        
+
         // Pokud má fotka storagePath, smazat ji ze Storage
         if (photo.storagePath) {
             try {
@@ -557,18 +623,17 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
                 await deleteAuditPhoto(photo.storagePath);
                 log(`Fotka smazána ze Storage`);
             } catch (error: any) {
-                console.error('[NonComplianceForm] Error deleting photo from Storage:', error);
                 toast.error('Chyba při mazání fotky ze Storage');
             }
         }
-        
+
         onChange('photos', data.photos.filter((_, i) => i !== photoIndex));
     };
 
     const handleAnalyzePhoto = async (photoIndex: number) => {
         // ... (kód pro analýzu fotek)
     };
-    
+
     return (
         <div className="w-full space-y-4 md:space-y-5 relative">
             <LocationDropdownWithMic
@@ -580,12 +645,17 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
                 isOtherFieldRecording={isFindingRecording || isRecommendationRecording}
                 onRecordingStateChange={setIsLocationRecording}
             />
-            
+
             <TextAreaWithMic
                 id={`finding-${index}`}
                 label="Popis zjištěné neshody"
-                value={data.finding}
-                onChange={(value) => onChange('finding', value)}
+                value={findingDraft}
+                onChange={(value) => setFindingDraft(value)}
+                onBlur={() => {
+                    if (findingDraft !== (data.finding || '')) {
+                        onChange('finding', findingDraft);
+                    }
+                }}
                 log={log}
                 isOtherFieldRecording={isLocationRecording || isRecommendationRecording}
                 onRecordingStateChange={setIsFindingRecording}
@@ -595,16 +665,31 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
                 isAIRewriting={isAIRewriting}
                 isAIGenerating={isAIGenerating}
             />
-            
+            {aiFindingError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <strong>AI přepis selhal:</strong> {aiFindingError}
+                </div>
+            )}
+
             <TextAreaWithMic
                 id={`recommendation-${index}`}
                 label="Doporučené nápravné opatření"
-                value={data.recommendation}
-                onChange={(value) => onChange('recommendation', value)}
+                value={recommendationDraft}
+                onChange={(value) => setRecommendationDraft(value)}
+                onBlur={() => {
+                    if (recommendationDraft !== (data.recommendation || '')) {
+                        onChange('recommendation', recommendationDraft);
+                    }
+                }}
                 log={log}
                 isOtherFieldRecording={isLocationRecording || isFindingRecording}
                 onRecordingStateChange={setIsRecommendationRecording}
             />
+            {aiRecommendationError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <strong>AI doporučení selhalo:</strong> {aiRecommendationError}
+                </div>
+            )}
 
             <div>
                 <label className="block text-sm md:text-base font-medium text-gray-700 mb-2 md:mb-3">Fotky</label>
@@ -626,7 +711,7 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
                         onChange={(e) => handlePhotoChange(e.target.files, 'gallery')}
                         className="hidden"
                     />
-                    
+
                     {/* Tlačítko pro fotoaparát */}
                     <button
                         type="button"
@@ -646,6 +731,27 @@ const NonComplianceForm: React.FC<NonComplianceFormProps> = ({
                     />
                 </div>
                 <ImagePreview photos={data.photos} onRemove={removePhoto} onAnalyze={handleAnalyzePhoto} />
+
+                {/* Progress bar pro nahrávání */}
+                {data.photos.some(p => p.isUploading) && (
+                    <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-medium text-blue-700">
+                                Nahrávám fotky ({data.photos.filter(p => p.isUploading).length} zbývá)
+                            </span>
+                            <Spinner small />
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-2.5">
+                            <div
+                                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                                style={{ width: `${(data.photos.filter(p => !p.isUploading).length / data.photos.length) * 100}%` }}
+                            ></div>
+                        </div>
+                        <p className="text-xs text-blue-600 mt-1">
+                            Prosím neopouštějte toto okno, dokud se nahrávání nedokončí.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

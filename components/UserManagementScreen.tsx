@@ -11,8 +11,10 @@ import { toast } from '../utils/toast';
 import { PageHeader } from './PageHeader';
 import { SECTION_THEMES } from '../constants/designSystem';
 import { AppState } from '../types';
-import { BackButton } from './BackButton';
-import { Card, CardBody } from './ui/Card';
+import { Card, CardBody, CardHeader } from './ui/Card';
+import { Button } from './ui/Button';
+import { Badge } from './ui/Badge';
+import { Check, Shield, ShieldOff, User, Clock, Filter, ArrowLeft } from 'lucide-react';
 
 interface UserManagementScreenProps {
   onBack: () => void;
@@ -54,10 +56,10 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
     try {
       await approveUser(userId, currentUser.uid);
       toast.success('Uživatel byl schválen');
-      
+
       // Aktualizovat lokální state
-      setUsers(prev => prev.map(u => 
-        u.userId === userId 
+      setUsers(prev => prev.map(u =>
+        u.userId === userId
           ? { ...u, approved: true, approvedAt: new Date().toISOString(), approvedBy: currentUser.uid }
           : u
       ));
@@ -71,9 +73,9 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
     try {
       await updateUserRole(userId, newRole);
       toast.success(`Role byla změněna na ${newRole === UserRole.ADMIN ? 'admin' : 'uživatel'}`);
-      
+
       // Aktualizovat lokální state
-      setUsers(prev => prev.map(u => 
+      setUsers(prev => prev.map(u =>
         u.userId === userId ? { ...u, role: newRole } : u
       ));
     } catch (error) {
@@ -102,7 +104,9 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
           <CardBody>
             <p className="text-red-600">Nemáte oprávnění k přístupu k této sekci.</p>
             <div className="mt-4">
-              <BackButton onClick={onBack} />
+              <Button variant="secondary" onClick={onBack} leftIcon={<ArrowLeft className="w-4 h-4" />}>
+                Zpět
+              </Button>
             </div>
           </CardBody>
         </Card>
@@ -116,45 +120,45 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
         section={SECTION_THEMES[AppState.SETTINGS]}
         title="Správa uživatelů"
         description="Schvalování uživatelů a správa rolí"
-        action={<BackButton onClick={onBack} />}
+        onBack={onBack}
       />
 
       {/* Filters */}
       <Card className="mb-6">
         <CardBody>
+          <div className="flex items-center gap-2 mb-4 text-gray-700 font-medium">
+            <Filter className="w-5 h-5" />
+            Filtrovat uživatele:
+          </div>
           <div className="flex gap-2 flex-wrap">
-            <button
+            <Button
+              variant={filter === 'all' ? 'primary' : 'secondary'}
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
+              size="sm"
             >
               Všechny ({users.length})
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={filter === 'pending' ? 'primary' : 'secondary'}
               onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                filter === 'pending' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
+              size="sm"
             >
               Čekající ({users.filter(u => !u.approved).length})
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={filter === 'admins' ? 'primary' : 'secondary'}
               onClick={() => setFilter('admins')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                filter === 'admins' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
+              size="sm"
             >
               Admini ({users.filter(u => u.role === UserRole.ADMIN).length})
-            </button>
-            <button
+            </Button>
+            <Button
+              variant={filter === 'users' ? 'primary' : 'secondary'}
               onClick={() => setFilter('users')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                filter === 'users' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-              }`}
+              size="sm"
             >
               Uživatelé ({users.filter(u => u.role === UserRole.USER).length})
-            </button>
+            </Button>
           </div>
         </CardBody>
       </Card>
@@ -162,14 +166,19 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
       {/* Users List */}
       {loading ? (
         <Card>
-          <CardBody className="text-center">
+          <CardBody className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Načítání uživatelů...</p>
           </CardBody>
         </Card>
       ) : filteredUsers.length === 0 ? (
         <Card>
-          <CardBody className="text-center">
-            <p className="text-gray-600">Žádní uživatelé nenalezeni</p>
+          <CardBody className="text-center py-12">
+            <div className="text-gray-400 mb-4">
+              <User className="w-16 h-16 mx-auto" />
+            </div>
+            <p className="text-gray-600 text-lg">Žádní uživatelé nenalezeni</p>
+            <p className="text-gray-500 text-sm mt-2">Zkuste změnit filtr.</p>
           </CardBody>
         </Card>
       ) : (
@@ -177,51 +186,70 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({ onBa
           {filteredUsers.map(user => (
             <Card key={user.userId}>
               <CardBody>
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h3 className="text-lg font-bold text-gray-800">{user.displayName}</h3>
                       {user.role === UserRole.ADMIN && (
-                        <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-semibold rounded">
-                          ADMIN
-                        </span>
+                        <Badge color="purple">
+                          <span className="flex items-center gap-1">
+                            <Shield className="w-3 h-3" />
+                            ADMIN
+                          </span>
+                        </Badge>
                       )}
                       {!user.approved && (
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded">
-                          ČEKÁ NA SCHVÁLENÍ
-                        </span>
+                        <Badge color="warning">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            ČEKÁ NA SCHVÁLENÍ
+                          </span>
+                        </Badge>
+                      )}
+                      {user.role === UserRole.USER && user.approved && (
+                        <Badge color="gray">
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            UŽIVATEL
+                          </span>
+                        </Badge>
                       )}
                     </div>
                     <p className="text-gray-600 text-sm mb-1">Email: {user.email}</p>
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-gray-500 text-xs flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
                       Registrován: {new Date(user.createdAt).toLocaleDateString('cs-CZ')}
                       {user.approvedAt && ` • Schválen: ${new Date(user.approvedAt).toLocaleDateString('cs-CZ')}`}
                     </p>
                   </div>
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex gap-2 flex-wrap">
                     {!user.approved && (
-                      <button
+                      <Button
+                        variant="primary"
                         onClick={() => handleApprove(user.userId)}
-                        className="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                        leftIcon={<Check className="w-4 h-4" />}
+                        className="bg-green-600 hover:bg-green-700 text-white focus:ring-green-500"
                       >
                         Schválit
-                      </button>
+                      </Button>
                     )}
                     {user.role === UserRole.USER && (
-                      <button
+                      <Button
+                        variant="secondary"
                         onClick={() => handleRoleChange(user.userId, UserRole.ADMIN)}
-                        className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors"
+                        leftIcon={<Shield className="w-4 h-4" />}
                       >
                         Nastavit jako Admin
-                      </button>
+                      </Button>
                     )}
                     {user.role === UserRole.ADMIN && user.userId !== currentUser?.uid && (
-                      <button
+                      <Button
+                        variant="danger"
                         onClick={() => handleRoleChange(user.userId, UserRole.USER)}
-                        className="px-4 py-2 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+                        leftIcon={<ShieldOff className="w-4 h-4" />}
                       >
                         Odebrat Admin
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>

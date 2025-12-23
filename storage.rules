@@ -15,34 +15,61 @@ service firebase.storage {
       return request.resource.size < 10 * 1024 * 1024;
     }
     
+    // Helper funkce pro kontrolu admin role
+    function isAdmin() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // Fotky z auditů - uložené pod userId/audits/
     match /users/{userId}/audits/{auditId}/{allPaths=**} {
-      // Čtení: pouze vlastní soubory
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+      // ČTENÍ: Všichni autentizovaní uživatelé mohou číst všechny obrázky
+      // Důvod: Admin a ostatní uživatelé potřebují vidět obrázky z auditů ostatních
+      // bez performance penalty způsobené proxy voláními
+      allow read: if isAuthenticated();
       
-      // Zápis: pouze vlastní soubory, musí to být obrázek do 10MB
-      allow write: if isAuthenticated() && 
-                      request.auth.uid == userId &&
+      // ZÁPIS: Pouze vlastník nebo admin může nahrávat/upravovat
+      allow create, update: if isAuthenticated() && 
+                      (request.auth.uid == userId || isAdmin()) &&
                       isImage() &&
                       isUnder10MB();
+                      
+      // MAZÁNÍ: Pouze vlastník nebo admin
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
     }
     
     // PDF reporty - uložené pod userId/reports/
     match /users/{userId}/reports/{reportId}/{allPaths=**} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
     }
     
     // Logo a razítko dodavatelů - uložené pod userId/suppliers/
     match /users/{userId}/suppliers/{supplierId}/{allPaths=**} {
-      // Čtení: pouze vlastní soubory
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+      // Čtení: vlastní soubory nebo admin
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       
-      // Zápis: pouze vlastní soubory, musí to být obrázek do 10MB
+      // Zápis: vlastní soubory (nebo admin), musí to být obrázek do 10MB
       allow write: if isAuthenticated() && 
-                      request.auth.uid == userId &&
+                      (request.auth.uid == userId || isAdmin()) &&
                       isImage() &&
                       isUnder10MB();
+    }
+    // Vlastní ikony vygenerované AI
+    match /custom-icons/{userId}/{allPaths=**} {
+      // Čtení: Všichni autentizovaní uživatelé (pro sdílení v týmu atd.)
+      allow read: if isAuthenticated();
+      
+      // Zápis: Pouze vlastník
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Razítko auditora - globální (nezávislé na uživateli)
+    match /auditor/{allPaths=**} {
+      // Čtení: Všichni autentizovaní uživatelé
+      allow read: if isAuthenticated();
+      
+      // Zápis/Mazání: Pouze admin, musí to být obrázek do 10MB
+      allow write: if isAuthenticated() && isAdmin() && isImage() && isUnder10MB();
     }
   }
 }

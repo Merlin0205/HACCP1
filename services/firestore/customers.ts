@@ -19,6 +19,7 @@ import {
 import { db, auth } from '../../firebaseConfig';
 import { Customer } from '../../types';
 import { generateHumanReadableId } from '../../utils/idGenerator';
+import { fetchUserMetadata } from './users';
 
 const COLLECTION_NAME = 'customers';
 
@@ -34,6 +35,19 @@ function getCurrentUserId(): string {
 }
 
 /**
+ * Zkontroluje, jestli je aktuální uživatel admin
+ */
+async function isCurrentUserAdmin(): Promise<boolean> {
+  try {
+    const userId = getCurrentUserId();
+    const metadata = await fetchUserMetadata(userId);
+    return metadata?.role === 'admin' && metadata?.approved === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Převede Firestore dokument na Customer objekt
  */
 function docToCustomer(docSnapshot: any): Customer {
@@ -45,15 +59,27 @@ function docToCustomer(docSnapshot: any): Customer {
 }
 
 /**
- * Načte všechny zákazníky aktuálního uživatele
+ * Načte všechny zákazníky (všechny pro admina, jen své pro běžného uživatele)
  */
 export async function fetchCustomers(): Promise<Customer[]> {
   const userId = getCurrentUserId();
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where('userId', '==', userId),
-    orderBy('premise_name')
-  );
+  const isAdmin = await isCurrentUserAdmin();
+  
+  let q;
+  if (isAdmin) {
+    // Admin vidí všechny zákazníky
+    q = query(
+      collection(db, COLLECTION_NAME),
+      orderBy('premise_name')
+    );
+  } else {
+    // Běžný uživatel vidí jen své
+    q = query(
+      collection(db, COLLECTION_NAME),
+      where('userId', '==', userId),
+      orderBy('premise_name')
+    );
+  }
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToCustomer);

@@ -16,7 +16,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { Supplier } from '../../types';
-import { fetchUserMetadata } from './users';
 import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'suppliers';
@@ -33,19 +32,6 @@ function getCurrentUserId(): string {
 }
 
 /**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Převede Firestore dokument na Supplier objekt
  */
 function docToSupplier(docSnapshot: any): Supplier {
@@ -57,27 +43,13 @@ function docToSupplier(docSnapshot: any): Supplier {
 }
 
 /**
- * Načte všechny dodavatele (všechna pro admina, jen své pro běžného uživatele)
+ * Načte všechny dodavatele (sdílený režim)
  */
 export async function fetchSuppliers(): Promise<Supplier[]> {
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin) {
-    // Admin vidí všechny dodavatele
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('supplier_name', 'asc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      orderBy('supplier_name', 'asc')
-    );
-  }
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('supplier_name', 'asc')
+  );
   
   const snapshot = await getDocs(q);
   return snapshot.docs.map(docToSupplier);
@@ -176,17 +148,17 @@ export async function updateSupplier(supplierId: string, supplierData: Partial<S
   
   // Odstranit id z dat
   const { id, userId, ...dataToUpdate } = supplierData as any;
-  
-  const finalUserId = userId || getCurrentUserId();
-  
-  // Pokud je nastaven jako výchozí, zrušit výchozí u ostatních dodavatelů uživatele
+ 
+  // Pokud je nastaven jako výchozí, zrušit výchozí u ostatních dodavatelů STEJNÉHO vlastníka.
+  // V sdíleném režimu nesmíme přepisovat userId na editujícího uživatele.
   if (supplierData.isDefault) {
-    await unsetOtherDefaultSuppliers(finalUserId, supplierId);
+    const current = await fetchSupplier(supplierId);
+    const ownerUserId = (current as any)?.userId || userId || getCurrentUserId();
+    await unsetOtherDefaultSuppliers(ownerUserId, supplierId);
   }
   
   await updateDoc(docRef, {
     ...dataToUpdate,
-    userId: finalUserId,
     updatedAt: new Date().toISOString()
   });
 }

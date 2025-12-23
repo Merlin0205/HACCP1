@@ -81,7 +81,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave,
                 {renderField('premise_name', 'Provozovna')}
                 {renderField('premise_address', 'Adresa')}
                 {renderField('premise_responsible_person', 'Odpovědná osoba')}
-                {renderField('premise_phone', 'Mobil')}
+                {renderField('premise_phone', 'Telefon')}
                 {renderField('premise_email', 'E-mail')}
             </div>
         </fieldset>
@@ -93,7 +93,7 @@ export const CustomerForm: React.FC<CustomerFormProps> = ({ initialData, onSave,
                 {renderField('operator_address', 'Adresa sídla')}
                 {renderField('operator_ico', 'IČO')}
                 {renderField('operator_statutory_body', 'Statutární orgán')}
-                {renderField('operator_phone', 'Mobil')}
+                {renderField('operator_phone', 'Telefon')}
                 {renderField('operator_email', 'E-mail')}
             </div>
         </fieldset>

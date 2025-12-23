@@ -1,0 +1,44 @@
+# Project Context
+- Application: HACCP Audit Assistant (Web App)
+- Stack: React, Vite, TypeScript, Tailwind CSS, Firebase (Auth, Firestore, Functions, Storage)
+- Language: TypeScript (Strict), Czech (UI/Comments)
+
+# Coding Rules
+
+## General
+- Use functional components with Hooks.
+- Use TypeScript for all new code. Avoid `any` where possible.
+- Use `const` for definitions, `let` only when reassignment is needed.
+- Prefer `async/await` over `.then()`.
+
+## Styling
+- Use Tailwind CSS for all styling.
+- Avoid custom CSS files unless absolutely necessary (e.g., for print layouts).
+- Use `clsx` or template literals for conditional classes.
+
+## Firebase
+- Use `firebase/firestore` modular SDK.
+- Use `firebase-functions` v2 or v6+ (modular).
+- **DO NOT** use `functions.config()`. Use `process.env` and `.env` files for configuration.
+
+## PDF Generation
+- **Strategy**: "Full Page Control" (WYSIWYG).
+- **Editor**: Use `PageSheet` component (210mm x 297mm) to visualize pages.
+- **Generator**: Puppeteer with `margin: 0` and `displayHeaderFooter: false`.
+- **Pagination**: Handle pagination manually in React (calculate pages, render footers).
+
+## Naming Conventions
+- Components: PascalCase (e.g., `ReportEditor.tsx`)
+- Functions: camelCase (e.g., `generatePdf`)
+- Variables: camelCase
+- Constants: UPPER_SNAKE_CASE
+
+## Language
+- **UI Text**: Czech (Čeština).
+- **Comments**: Czech or English (consistent within file).
+- **Commit Messages**: Czech or English (consistent).
+
+## Specific Files
+- `components/report/ReportContent.tsx`: Core report rendering logic (shared between Editor and PDF).
+- `components/report/ReportEditorV2.tsx`: The main WYSIWYG editor.
+- `functions/src/generatePdf.ts`: Cloud function for PDF generation.

@@ -1,19 +1,20 @@
 <!DOCTYPE html>
 <html lang="cs" class="light">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes" />
-    <title>HACCP Audit Assistant</title>
-    <!-- Google Fonts - Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes" />
+  <title>HACCP Audit Assistant</title>
+  <!-- Google Fonts - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script type="importmap">
 {
   "imports": {
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react": "https://aistudiocdn.com/react@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.26.0"
   }
 }
@@ -22,17 +23,47 @@
     input[type="date"] {
       color-scheme: light;
     }
+
     @keyframes highlight {
-      from { background-color: rgba(254, 226, 226, 0.9); } /* light-red-100 */
-      to { background-color: transparent; }
+      from {
+        background-color: rgba(254, 226, 226, 0.9);
+      }
+
+      /* light-red-100 */
+      to {
+        background-color: transparent;
+      }
     }
+
     .highlight-item {
-        animation: highlight 2s ease-out;
+      animation: highlight 2s ease-out;
     }
   </style>
 </head>
-  <body class="bg-gray-100">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+
+<body class="bg-gray-100">
+  <div id="root"></div>
+  <!-- Polyfill for Buffer (required by @react-pdf/renderer) -->
+  <script>
+    // Minimal Buffer polyfill for browser environment
+    if (typeof Buffer === 'undefined') {
+      window.Buffer = {
+        from: function (data, encoding) {
+          if (typeof data === 'string') {
+            if (encoding === 'base64') {
+              return { data: atob(data), toString: function (enc) { return enc === 'base64' ? btoa(this.data) : this.data; } };
+            }
+            return { data: data, toString: function () { return this.data; } };
+          }
+          return { data: data, toString: function () { return String.fromCharCode.apply(null, this.data); } };
+        },
+        isBuffer: function (obj) {
+          return obj && obj.data !== undefined;
+        }
+      };
+    }
+  </script>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
 </html>

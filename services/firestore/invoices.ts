@@ -17,7 +17,6 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../../firebaseConfig';
 import { Invoice, InvoiceStatus } from '../../types/invoice';
-import { fetchUserMetadata } from './users';
 import { generateHumanReadableId } from '../../utils/idGenerator';
 
 const COLLECTION_NAME = 'invoices';
@@ -31,19 +30,6 @@ function getCurrentUserId(): string {
     throw new Error('User not authenticated');
   }
   return user.uid;
-}
-
-/**
- * Zkontroluje, jestli je aktuální uživatel admin
- */
-async function isCurrentUserAdmin(): Promise<boolean> {
-  try {
-    const userId = getCurrentUserId();
-    const metadata = await fetchUserMetadata(userId);
-    return metadata?.role === 'admin' && metadata?.approved === true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -140,27 +126,14 @@ function docToInvoice(docSnapshot: any): Invoice {
 }
 
 /**
- * Načte všechny faktury (všechny pro admina, jen své pro běžného uživatele)
+ * Načte všechny faktury (sdílený režim)
  */
 export async function listInvoicesByUser(userId?: string): Promise<Invoice[]> {
-  const currentUserId = userId || getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin && !userId) {
-    // Admin vidí všechny faktury (pokud není specifikován userId)
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('createdAt', 'desc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své, nebo admin vidí faktury konkrétního uživatele
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', currentUserId),
-      orderBy('createdAt', 'desc')
-    );
-  }
+  // Parametr userId ponechán pro kompatibilitu, ale v sdíleném režimu se ignoruje.
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('createdAt', 'desc')
+  );
   
   const snapshot = await getDocs(q);
   const invoices = snapshot.docs.map(docToInvoice);
@@ -173,24 +146,11 @@ export async function listInvoicesByUser(userId?: string): Promise<Invoice[]> {
  * POZNÁMKA: Firestore nepodporuje více než jeden != filtr, takže filtrujeme lokálně
  */
 export async function listUnpaidInvoicesByUser(userId?: string): Promise<Invoice[]> {
-  const currentUserId = userId || getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let q;
-  if (isAdmin && !userId) {
-    // Admin vidí všechny faktury - filtrujeme lokálně
-    q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy('createdAt', 'desc')
-    );
-  } else {
-    // Běžný uživatel vidí jen své faktury - filtrujeme lokálně
-    q = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', currentUserId),
-      orderBy('createdAt', 'desc')
-    );
-  }
+  // Parametr userId ponechán pro kompatibilitu, ale v sdíleném režimu se ignoruje.
+  const q = query(
+    collection(db, COLLECTION_NAME),
+    orderBy('createdAt', 'desc')
+  );
   
   const snapshot = await getDocs(q);
   const invoices = snapshot.docs.map(docToInvoice);
@@ -299,13 +259,9 @@ export async function updateInvoice(invoiceId: string, invoiceData: Partial<Invo
     updateData.paidAt = Timestamp.fromDate(new Date(dataToUpdate.paidAt));
   }
   
-  // Použít userId z invoiceData, nebo aktuálního uživatele
-  const finalUserId = userId || getCurrentUserId();
-  
   // Odstranit undefined hodnoty před uložením
   const cleanedData = removeUndefined({
-    ...updateData,
-    userId: finalUserId // Explicitně zachovat userId (security rules vyžadují)
+    ...updateData
   });
   
   await updateDoc(docRef, cleanedData);
@@ -415,26 +371,12 @@ async function checkAndDecrementInvoiceCounter(invoice: Invoice): Promise<void> 
   }
   
   // Najít všechny faktury s tímto prefixem (stejný typ číslování)
-  const userId = getCurrentUserId();
-  const isAdmin = await isCurrentUserAdmin();
-  
-  let invoicesQuery;
-  if (isAdmin) {
-    invoicesQuery = query(
-      collection(db, COLLECTION_NAME),
-      where('invoiceNumber', '>=', numberingType.prefix),
-      where('invoiceNumber', '<', numberingType.prefix + '\uf8ff'), // Unicode trick pro prefix search
-      orderBy('invoiceNumber', 'desc')
-    );
-  } else {
-    invoicesQuery = query(
-      collection(db, COLLECTION_NAME),
-      where('userId', '==', userId),
-      where('invoiceNumber', '>=', numberingType.prefix),
-      where('invoiceNumber', '<', numberingType.prefix + '\uf8ff'),
-      orderBy('invoiceNumber', 'desc')
-    );
-  }
+  const invoicesQuery = query(
+    collection(db, COLLECTION_NAME),
+    where('invoiceNumber', '>=', numberingType.prefix),
+    where('invoiceNumber', '<', numberingType.prefix + '\uf8ff'), // Unicode trick pro prefix search
+    orderBy('invoiceNumber', 'desc')
+  );
   
   const invoicesSnapshot = await getDocs(invoicesQuery);
   const invoices = invoicesSnapshot.docs.map(docToInvoice);

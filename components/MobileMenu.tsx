@@ -67,7 +67,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           {menuItems.map((item) => {
             const isActive = item.active;
             const theme = item.theme || SECTION_THEMES[item.id] || SECTION_THEMES[AppState.ALL_AUDITS];
-            
+
             return (
               <button
                 key={item.id}
@@ -77,8 +77,8 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                 }}
                 className={`
                   w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
-                  ${isActive 
-                    ? 'text-white shadow-md' 
+                  ${isActive
+                    ? 'text-white shadow-md'
                     : 'text-gray-700 hover:bg-gray-100'
                   }
                 `}
@@ -95,7 +95,13 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 
         {/* AI Cost Indicator */}
         <div className="px-4 py-3 border-t border-gray-200">
-          <div className="bg-gray-50 rounded-lg p-3">
+          <button
+            onClick={() => {
+              onNavigate(AppState.AI_USAGE_STATS);
+              onClose();
+            }}
+            className="w-full bg-gray-50 hover:bg-gray-100 rounded-lg p-3 transition-colors cursor-pointer text-left"
+          >
             <div className="text-xs text-gray-500 mb-1">💰 AI Náklady</div>
             <div className="text-sm font-semibold text-gray-900">
               {totalCost.czk.toFixed(2)} Kč
@@ -103,15 +109,15 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             <div className="text-xs text-gray-500 mt-1">
               ${totalCost.usd.toFixed(4)} USD
             </div>
-          </div>
+          </button>
         </div>
 
         {/* User Section */}
         <div className="px-4 py-4 border-t border-gray-200">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-semibold">
-              {currentUser?.displayName?.charAt(0).toUpperCase() || 
-               currentUser?.email?.charAt(0).toUpperCase() || 'U'}
+              {currentUser?.displayName?.charAt(0).toUpperCase() ||
+                currentUser?.email?.charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-gray-900 truncate">

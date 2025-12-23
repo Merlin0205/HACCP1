@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useThemeMode } from 'flowbite-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext';
 import { LoginScreen } from './components/LoginScreen';
 import { RegisterScreen } from './components/RegisterScreen';
 import WaitingForApprovalScreen from './components/WaitingForApprovalScreen';
@@ -53,7 +54,7 @@ const AppContent: React.FC = () => {
 
       try {
         let metadata = await fetchUserMetadata(currentUser.uid);
-        
+
         // Pokud uživatel nemá metadata, vytvořit ho (pro existující uživatele)
         if (!metadata) {
           const { createUserMetadata } = await import('./services/firestore/users');
@@ -65,7 +66,7 @@ const AppContent: React.FC = () => {
           // Znovu načíst
           metadata = await fetchUserMetadata(currentUser.uid);
         }
-        
+
         setUserMetadata(metadata);
       } catch (error) {
         console.error('[AppContent] Error loading user metadata:', error);
@@ -135,7 +136,9 @@ const AppContent: React.FC = () => {
 export const AppWithAuth: React.FC = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <UnsavedChangesProvider>
+        <AppContent />
+      </UnsavedChangesProvider>
     </AuthProvider>
   );
 };

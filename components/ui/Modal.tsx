@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Modal as FlowbiteModal, 
+import {
+  Modal as FlowbiteModal,
   ModalHeader as FlowbiteModalHeader,
   ModalBody as FlowbiteModalBody,
   ModalFooter as FlowbiteModalFooter
@@ -33,7 +33,7 @@ export const Modal: React.FC<ModalProps> = ({
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768); // md breakpoint
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
@@ -53,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   // Určit finální velikost podle responzivního nastavení
   let finalSize: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl';
-  
+
   if (responsiveSize) {
     // Použij mobilní velikost na mobilu, desktop velikost na desktopu
     if (isMobile) {

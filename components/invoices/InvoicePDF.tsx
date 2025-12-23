@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     height: 70,
     objectFit: 'contain',
   },
-  
+
   // Sekce Dodavatel / Odběratel
   partiesSection: {
     flexDirection: 'row',
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: TEXT_COLOR,
   },
-  
+
   // Zarovnání a šířky sloupců
   colName: { width: '35%' },
   colQty: { width: '10%', textAlign: 'right' },
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   totalsRight: {
     width: 220,
   },
-  
+
   // Tabulka DPH
   vatTable: {
     width: '100%',
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#374151',
   },
-  
+
   // Celkem k úhradě box
   totalBox: {
     backgroundColor: PRIMARY_COLOR,
@@ -335,8 +335,8 @@ function formatDateForPDF(date: Timestamp | string | undefined | null): string {
   }
 }
 
-export const InvoicePDF: React.FC<InvoicePDFProps> = ({ 
-  invoice, 
+export const InvoicePDF: React.FC<InvoicePDFProps> = ({
+  invoice,
   qrCodeDataUrl,
   logoDataUrl,
   stampDataUrl
@@ -349,10 +349,29 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
     }
     itemsByVatRate[item.vatRate].push(item);
   });
-
   // Vlastní jméno firmy pro patičku (pokud není v supplier.footerNote)
-  const footerText = invoice.footerNote || 
+  const footerText = invoice.footerNote ||
     `Vystavil: ${invoice.supplier.name}, ${invoice.supplier.street}, ${invoice.supplier.zip} ${invoice.supplier.city} | IČO: ${invoice.supplier.companyId}`;
+
+  // Definice šířek sloupců podle toho, zda je plátce DPH
+  const isVatPayer = invoice.supplier.isVatPayer;
+
+  const colStyles = isVatPayer ? {
+    colName: { width: '25%' },
+    colQty: { width: '8%', textAlign: 'right' as const },
+    colUnit: { width: '7%', textAlign: 'center' as const },
+    colPrice: { width: '12%', textAlign: 'right' as const },
+    colVatRate: { width: '8%', textAlign: 'right' as const },
+    colBase: { width: '13%', textAlign: 'right' as const },
+    colVatAmt: { width: '12%', textAlign: 'right' as const },
+    colTotal: { width: '15%', textAlign: 'right' as const },
+  } : {
+    colName: { width: '40%' },
+    colQty: { width: '10%', textAlign: 'right' as const },
+    colUnit: { width: '10%', textAlign: 'center' as const },
+    colPrice: { width: '20%', textAlign: 'right' as const },
+    colTotal: { width: '20%', textAlign: 'right' as const },
+  };
 
   return (
     <Document>
@@ -364,7 +383,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.invoiceTitle}>
-              Faktura - daňový doklad
+              {isVatPayer ? 'Faktura - daňový doklad' : 'Faktura'}
             </Text>
             <Text style={styles.invoiceNumber}>
               č. {invoice.invoiceNumber}
@@ -386,7 +405,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
             <Text style={styles.partyDetails}>{invoice.supplier.street}</Text>
             <Text style={styles.partyDetails}>{invoice.supplier.zip} {invoice.supplier.city}</Text>
             <Text style={styles.partyDetails}>{invoice.supplier.country}</Text>
-            
+
             <View style={{ marginTop: 8 }}>
               <Text style={styles.partyDetails}>IČO: {invoice.supplier.companyId}</Text>
               {invoice.supplier.vatId && <Text style={styles.partyDetails}>DIČ: {invoice.supplier.vatId}</Text>}
@@ -414,11 +433,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
               )}
             </View>
 
-            {invoice.supplier.courtRecord && (
-              <Text style={[styles.partyDetails, { marginTop: 4, fontSize: 8, color: LABEL_COLOR }]}>
-                {invoice.supplier.courtRecord}
-              </Text>
-            )}
+            {/* invoice.supplier.courtRecord removed as it does not exist on type */}
           </View>
 
           {/* Odběratel */}
@@ -428,7 +443,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
             <Text style={styles.partyDetails}>{invoice.customer.street}</Text>
             <Text style={styles.partyDetails}>{invoice.customer.zip} {invoice.customer.city}</Text>
             <Text style={styles.partyDetails}>{invoice.customer.country}</Text>
-            
+
             <View style={{ marginTop: 8 }}>
               {invoice.customer.companyId && <Text style={styles.partyDetails}>IČO: {invoice.customer.companyId}</Text>}
               {invoice.customer.vatId && <Text style={styles.partyDetails}>DIČ: {invoice.customer.vatId}</Text>}
@@ -454,11 +469,11 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
             <View style={styles.paymentColumn}>
               <Text style={styles.paymentLabel}>Způsob úhrady</Text>
               <Text style={styles.paymentValue}>
-                {invoice.payment.method === 'bank_transfer' ? 'Převodem' : 
-                 invoice.payment.method === 'cash' ? 'Hotově' : 
-                 invoice.payment.method === 'card' ? 'Kartou' : 'Jiné'}
+                {invoice.payment.method === 'bank_transfer' ? 'Převodem' :
+                  invoice.payment.method === 'cash' ? 'Hotově' :
+                    invoice.payment.method === 'card' ? 'Kartou' : 'Jiné'}
               </Text>
-              
+
               <Text style={styles.paymentLabel}>Datum vystavení</Text>
               <Text style={styles.paymentValue}>{formatDateForPDF(invoice.createdAt)}</Text>
             </View>
@@ -469,15 +484,19 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
                 <>
                   <Text style={styles.paymentLabel}>Bankovní účet</Text>
                   <Text style={styles.paymentValue}>
-                    {invoice.payment.accountNumber 
-                      ? `${invoice.payment.accountNumber}/${invoice.payment.bankCode}` 
+                    {invoice.payment.accountNumber
+                      ? `${invoice.payment.accountNumber}/${invoice.payment.bankCode}`
                       : invoice.payment.bankAccount}
                   </Text>
                 </>
               )}
-              
-              <Text style={styles.paymentLabel}>DUZP</Text>
-              <Text style={styles.paymentValue}>{formatDateForPDF(invoice.taxableSupplyDate)}</Text>
+
+              {isVatPayer && (
+                <>
+                  <Text style={styles.paymentLabel}>DUZP</Text>
+                  <Text style={styles.paymentValue}>{formatDateForPDF(invoice.taxableSupplyDate)}</Text>
+                </>
+              )}
             </View>
 
             {/* Sloupec 3: Symboly a Splatnost */}
@@ -497,7 +516,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
               <Text style={styles.paymentValue}>{formatDateForPDF(invoice.dueDate)}</Text>
             </View>
           </View>
-          
+
           {invoice.payment.iban && (
             <View style={{ marginTop: 3, paddingTop: 3, borderTopWidth: 1, borderTopColor: '#e5e7eb' }}>
               <Text style={styles.paymentLabel}>IBAN / SWIFT</Text>
@@ -511,29 +530,45 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
         {/* Položky */}
         <View style={styles.table}>
           <Text style={[styles.sectionTitle, { borderBottomWidth: 0, marginBottom: 4 }]}>Položky faktury</Text>
-          
+
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colName]}>Název</Text>
-            <Text style={[styles.tableHeaderCell, styles.colQty]}>Množství</Text>
-            <Text style={[styles.tableHeaderCell, styles.colUnit]}>Mj.</Text>
-            <Text style={[styles.tableHeaderCell, styles.colPrice]}>Cena/mj.</Text>
-            <Text style={[styles.tableHeaderCell, styles.colVat]}>DPH %</Text>
-            <Text style={[styles.tableHeaderCell, styles.colTotal]}>Celkem bez DPH</Text>
+            <Text style={[styles.tableHeaderCell, colStyles.colName]}>Název</Text>
+            <Text style={[styles.tableHeaderCell, colStyles.colQty]}>Množství</Text>
+            <Text style={[styles.tableHeaderCell, colStyles.colUnit]}>Mj.</Text>
+            <Text style={[styles.tableHeaderCell, colStyles.colPrice]}>
+              {isVatPayer ? 'Cena/mj.' : 'Cena/mj.'}
+            </Text>
+            {isVatPayer && (
+              <>
+                <Text style={[styles.tableHeaderCell, (colStyles as any).colVatRate]}>DPH %</Text>
+                <Text style={[styles.tableHeaderCell, (colStyles as any).colBase]}>Bez DPH</Text>
+                <Text style={[styles.tableHeaderCell, (colStyles as any).colVatAmt]}>DPH</Text>
+              </>
+            )}
+            <Text style={[styles.tableHeaderCell, colStyles.colTotal]}>Celkem</Text>
           </View>
 
           {invoice.items.map((item) => (
             <View key={item.id} style={styles.tableRow}>
-              <View style={styles.colName}>
+              <View style={colStyles.colName}>
                 <Text style={[styles.tableCell, { fontWeight: 'bold' }]}>{item.name}</Text>
                 {item.description && (
                   <Text style={{ fontSize: 8, color: LABEL_COLOR, marginTop: 1 }}>{item.description}</Text>
                 )}
               </View>
-              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
-              <Text style={[styles.tableCell, styles.colUnit]}>{item.unit}</Text>
-              <Text style={[styles.tableCell, styles.colPrice]}>{formatAmount(item.unitPrice)}</Text>
-              <Text style={[styles.tableCell, styles.colVat]}>{item.vatRate}%</Text>
-              <Text style={[styles.tableCell, styles.colTotal]}>{formatAmount(item.totalWithoutVat)}</Text>
+              <Text style={[styles.tableCell, colStyles.colQty]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, colStyles.colUnit]}>{item.unit}</Text>
+              <Text style={[styles.tableCell, colStyles.colPrice]}>{formatAmount(item.unitPrice)}</Text>
+              {isVatPayer && (
+                <>
+                  <Text style={[styles.tableCell, (colStyles as any).colVatRate]}>{item.vatRate}%</Text>
+                  <Text style={[styles.tableCell, (colStyles as any).colBase]}>{formatAmount(item.totalWithoutVat)}</Text>
+                  <Text style={[styles.tableCell, (colStyles as any).colVatAmt]}>{formatAmount(item.vatAmount)}</Text>
+                </>
+              )}
+              <Text style={[styles.tableCell, colStyles.colTotal]}>
+                {isVatPayer ? formatAmount(item.totalWithVat) : formatAmount(item.totalWithoutVat)}
+              </Text>
             </View>
           ))}
         </View>
@@ -543,34 +578,47 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
           {/* Levá část: DPH tabulka + QR + Razítko */}
           <View style={styles.totalsLeft}>
             {invoice.note && (
-               <View style={{ marginBottom: 8 }}>
-                 <Text style={{ fontSize: 8, color: LABEL_COLOR, marginBottom: 1 }}>Poznámka:</Text>
-                 <Text style={{ fontSize: 8 }}>{invoice.note}</Text>
-               </View>
+              <View style={{ marginBottom: 8 }}>
+                <Text style={{ fontSize: 8, color: LABEL_COLOR, marginBottom: 1 }}>Poznámka:</Text>
+                <Text style={{ fontSize: 8 }}>{invoice.note}</Text>
+              </View>
             )}
 
-            <Text style={{ fontSize: 8, fontWeight: 'bold', marginTop: 3 }}>Rekapitulace DPH</Text>
-            <View style={styles.vatTable}>
-              <View style={styles.vatHeader}>
-                <Text style={[styles.vatText, { width: '20%' }]}>Sazba</Text>
-                <Text style={[styles.vatText, { width: '40%', textAlign: 'right' }]}>Základ</Text>
-                <Text style={[styles.vatText, { width: '40%', textAlign: 'right' }]}>DPH</Text>
-              </View>
-              {Object.keys(itemsByVatRate).sort((a, b) => Number(b) - Number(a)).map((rateStr) => {
-                const rate = Number(rateStr);
-                const items = itemsByVatRate[rate];
-                const base = items.reduce((sum, i) => sum + i.totalWithoutVat, 0);
-                const vat = items.reduce((sum, i) => sum + i.vatAmount, 0);
-                return (
-                  <View key={rate} style={styles.vatRow}>
-                    <Text style={[styles.vatText, { width: '20%' }]}>{rate} %</Text>
-                    <Text style={[styles.vatText, { width: '40%', textAlign: 'right' }]}>{formatAmount(base)}</Text>
-                    <Text style={[styles.vatText, { width: '40%', textAlign: 'right' }]}>{formatAmount(vat)}</Text>
+            {isVatPayer && (
+              <>
+                <Text style={{ fontSize: 8, fontWeight: 'bold', marginTop: 3 }}>Rekapitulace DPH</Text>
+                <View style={styles.vatTable}>
+                  <View style={styles.vatHeader}>
+                    <Text style={[styles.vatText, { width: '20%' }]}>Sazba</Text>
+                    <Text style={[styles.vatText, { width: '25%', textAlign: 'right' }]}>Základ</Text>
+                    <Text style={[styles.vatText, { width: '25%', textAlign: 'right' }]}>DPH</Text>
+                    <Text style={[styles.vatText, { width: '30%', textAlign: 'right' }]}>Celkem</Text>
                   </View>
-                );
-              })}
-            </View>
-            
+                  {Object.keys(itemsByVatRate).sort((a, b) => Number(b) - Number(a)).map((rateStr) => {
+                    const rate = Number(rateStr);
+                    const items = itemsByVatRate[rate];
+                    const base = items.reduce((sum, i) => sum + i.totalWithoutVat, 0);
+                    const vat = items.reduce((sum, i) => sum + i.vatAmount, 0);
+                    const total = base + vat;
+                    return (
+                      <View key={rate} style={styles.vatRow}>
+                        <Text style={[styles.vatText, { width: '20%' }]}>{rate} %</Text>
+                        <Text style={[styles.vatText, { width: '25%', textAlign: 'right' }]}>{formatAmount(base)}</Text>
+                        <Text style={[styles.vatText, { width: '25%', textAlign: 'right' }]}>{formatAmount(vat)}</Text>
+                        <Text style={[styles.vatText, { width: '30%', textAlign: 'right' }]}>{formatAmount(total)}</Text>
+                      </View>
+                    );
+                  })}
+                  <View style={[styles.vatRow, { borderTopWidth: 1, borderTopColor: BORDER_COLOR, paddingTop: 2, marginTop: 2 }]}>
+                    <Text style={[styles.vatText, { width: '20%', fontWeight: 'bold' }]}>CELKEM</Text>
+                    <Text style={[styles.vatText, { width: '25%', textAlign: 'right', fontWeight: 'bold' }]}>{formatAmount(invoice.totals.baseWithoutVat)}</Text>
+                    <Text style={[styles.vatText, { width: '25%', textAlign: 'right', fontWeight: 'bold' }]}>{formatAmount(invoice.totals.vatAmount)}</Text>
+                    <Text style={[styles.vatText, { width: '30%', textAlign: 'right', fontWeight: 'bold' }]}>{formatAmount(invoice.totals.totalWithVat)}</Text>
+                  </View>
+                </View>
+              </>
+            )}
+
             <View style={styles.bottomSection}>
               {qrCodeDataUrl && (
                 <View style={styles.qrContainer}>
@@ -578,7 +626,7 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
                   <Text style={styles.qrLabel}>QR Platba</Text>
                 </View>
               )}
-              
+
               {stampDataUrl && (
                 <View style={styles.stampContainer}>
                   <Image src={stampDataUrl} style={styles.stampImage} />
@@ -590,36 +638,38 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({
 
           {/* Pravá část: Celkem */}
           <View style={styles.totalsRight}>
-             <View style={{ borderTopWidth: 1, borderTopColor: BORDER_COLOR, paddingTop: 8 }}>
+            {isVatPayer && (
+              <View style={{ borderTopWidth: 1, borderTopColor: BORDER_COLOR, paddingTop: 8 }}>
                 <View style={styles.totalBoxRow}>
-                   <Text style={{ fontSize: 9 }}>Celkem bez DPH</Text>
-                   <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{formatAmount(invoice.totals.baseWithoutVat)}</Text>
+                  <Text style={{ fontSize: 9 }}>Celkem bez DPH</Text>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{formatAmount(invoice.totals.baseWithoutVat)}</Text>
                 </View>
                 <View style={styles.totalBoxRow}>
-                   <Text style={{ fontSize: 9 }}>Celkem DPH</Text>
-                   <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{formatAmount(invoice.totals.vatAmount)}</Text>
+                  <Text style={{ fontSize: 9 }}>Celkem DPH</Text>
+                  <Text style={{ fontSize: 9, fontWeight: 'bold' }}>{formatAmount(invoice.totals.vatAmount)}</Text>
                 </View>
                 <View style={[styles.totalBoxRow, { marginTop: 4 }]}>
-                   <Text style={{ fontSize: 10, fontWeight: 'bold' }}>Celkem s DPH</Text>
-                   <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{formatAmount(invoice.totals.totalWithVat)}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold' }}>Celkem s DPH</Text>
+                  <Text style={{ fontSize: 10, fontWeight: 'bold' }}>{formatAmount(invoice.totals.totalWithVat)}</Text>
                 </View>
-             </View>
+              </View>
+            )}
 
-             <View style={styles.totalBox}>
-                <Text style={styles.totalBoxLabel}>Celkem k úhradě</Text>
-                <Text style={styles.totalBoxBigValue}>
-                  {formatCurrency(invoice.totals.totalWithVat, invoice.currency)}
+            <View style={styles.totalBox}>
+              <Text style={styles.totalBoxLabel}>Celkem k úhradě</Text>
+              <Text style={styles.totalBoxBigValue}>
+                {formatCurrency(invoice.totals.totalWithVat, invoice.currency)}
+              </Text>
+            </View>
+
+            {/* Zobrazení "NEJSME PLÁTCI DPH!!" pokud dodavatel není plátce DPH */}
+            {invoice.supplier.isVatPayer === false && (
+              <View style={{ marginTop: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#dc2626', textAlign: 'center' }}>
+                  NEJSME PLÁTCI DPH!!
                 </Text>
-             </View>
-             
-             {/* Zobrazení "NEJSME PLÁTCI DPH!!" pokud dodavatel není plátce DPH */}
-             {invoice.supplier.isVatPayer === false && (
-               <View style={{ marginTop: 8, alignItems: 'center' }}>
-                 <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#dc2626', textAlign: 'center' }}>
-                   NEJSME PLÁTCI DPH!!
-                 </Text>
-               </View>
-             )}
+              </View>
+            )}
           </View>
         </View>
 

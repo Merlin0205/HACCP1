@@ -212,3 +212,59 @@ export async function deleteReportPdf(storagePath: string): Promise<void> {
   await deleteObject(storageRef);
 }
 
+/**
+ * Nahraj razítko auditora do Storage (globální, nezávislé na uživateli)
+ * 
+ * @param file Soubor s razítkem
+ * @returns URL razítka
+ */
+export async function uploadAuditorStamp(
+  file: File
+): Promise<string> {
+  // Získat příponu souboru
+  const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
+  
+  // Název souboru: stamp.{ext}
+  // Storage path: auditor/stamp.{ext} (globální, ne pod userId)
+  const fileName = `stamp.${fileExtension}`;
+  const storagePath = `auditor/${fileName}`;
+  
+  const storageRef = ref(storage, storagePath);
+  
+  // Upload souboru
+  await uploadBytes(storageRef, file, {
+    contentType: file.type,
+    customMetadata: {
+      uploadedAt: new Date().toISOString(),
+      type: 'auditor_stamp'
+    }
+  });
+  
+  // Získat download URL
+  const url = await getDownloadURL(storageRef);
+  
+  return url;
+}
+
+/**
+ * Smaže razítko auditora ze Storage (globální)
+ */
+export async function deleteAuditorStamp(): Promise<void> {
+  // Zkusit smazat všechny možné formáty razítka
+  const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+  const deletePromises = extensions.map(async (ext) => {
+    try {
+      const storagePath = `auditor/stamp.${ext}`;
+      const storageRef = ref(storage, storagePath);
+      await deleteObject(storageRef);
+    } catch (error: any) {
+      // Ignorovat chyby pokud soubor neexistuje
+      if (error.code !== 'storage/object-not-found') {
+        throw error;
+      }
+    }
+  });
+  
+  await Promise.all(deletePromises);
+}
+

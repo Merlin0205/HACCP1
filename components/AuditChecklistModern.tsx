@@ -20,6 +20,7 @@ interface AuditChecklistModernProps {
   onSaveProgress?: () => void;
   onCompletedAtUpdate?: (completedAt: string) => void;
   onNoteUpdate?: (note: string) => void;
+  onPresentPersonUpdate?: (presentPerson: string) => void;
   log: (message: string) => void;
 }
 
@@ -32,6 +33,7 @@ const AuditChecklistModern: React.FC<AuditChecklistModernProps> = ({
   onSaveProgress, 
   onCompletedAtUpdate, 
   onNoteUpdate, 
+  onPresentPersonUpdate,
   log 
 }) => {
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
@@ -49,6 +51,9 @@ const AuditChecklistModern: React.FC<AuditChecklistModernProps> = ({
     return new Date().toISOString().split('T')[0];
   });
   const [note, setNote] = useState<string>(auditData.note || '');
+  const [presentPerson, setPresentPerson] = useState<string>(() => {
+    return (auditData.headerValues as any)?.present_person || '';
+  });
   const [isNoteRecording, setIsNoteRecording] = useState(false);
 
   const toggleSection = (sectionId: string) => {
@@ -128,6 +133,13 @@ const AuditChecklistModern: React.FC<AuditChecklistModernProps> = ({
     }
   };
 
+  const handlePresentPersonChange = (newValue: string) => {
+    setPresentPerson(newValue);
+    if (onPresentPersonUpdate) {
+      onPresentPersonUpdate(newValue);
+    }
+  };
+
   const handleNoteTranscription = useCallback((transcribedText: string) => {
     const cleaned = transcribedText.trim().replace(/\.+$/, '');
     const newText = note ? `${note} ${cleaned}`.trim() : cleaned;
@@ -147,7 +159,11 @@ const AuditChecklistModern: React.FC<AuditChecklistModernProps> = ({
     if (auditData.note !== undefined) {
       setNote(auditData.note);
     }
-  }, [auditData.completedAt, auditData.note]);
+    const incomingPresentPerson = (auditData.headerValues as any)?.present_person;
+    if (incomingPresentPerson !== undefined) {
+      setPresentPerson(incomingPresentPerson);
+    }
+  }, [auditData.completedAt, auditData.note, auditData.headerValues]);
 
   const sidebarContent = (
       <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
@@ -185,7 +201,12 @@ const AuditChecklistModern: React.FC<AuditChecklistModernProps> = ({
               <div className="flex items-center gap-2 sm:gap-2.5 md:gap-3 flex-1 min-w-0">
                 <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 rounded-full flex-shrink-0 ${note.trim() ? 'bg-blue-500' : 'bg-gray-300'}`}></span>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 leading-tight">Poznámka</h3>
+                  <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 leading-tight">Poznámka a Přítomná osoba</h3>
+                  {presentPerson.trim() && (
+                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5 leading-tight truncate">
+                      Přítomná osoba: {presentPerson}
+                    </p>
+                  )}
                   {note.trim() && (
                     <p className="text-xs sm:text-sm text-gray-600 mt-0.5 leading-tight truncate">
                       {note.length > 50 ? `${note.substring(0, 50)}...` : note}
@@ -199,6 +220,19 @@ const AuditChecklistModern: React.FC<AuditChecklistModernProps> = ({
           
           {isNoteExpanded && (
             <CardBody className="px-3 py-2 sm:px-3.5 sm:py-2.5 md:px-4 md:py-2.5">
+              <div className="mb-3">
+                <label htmlFor="presentPerson" className="block text-sm font-semibold text-gray-800 mb-1">
+                  Přítomná osoba
+                </label>
+                <input
+                  id="presentPerson"
+                  type="text"
+                  value={presentPerson}
+                  onChange={(e) => handlePresentPersonChange(e.target.value)}
+                  className="w-full px-3 md:px-4 py-2 text-sm md:text-base bg-white border border-gray-300 rounded-md"
+                  placeholder="Zadejte jméno osoby přítomné u auditu..."
+                />
+              </div>
               <div className="relative">
                 <textarea
                   id="auditNote"

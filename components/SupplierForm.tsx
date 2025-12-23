@@ -13,6 +13,7 @@ import { toast } from '../utils/toast';
 import { uploadSupplierLogo, uploadSupplierStamp } from '../services/storage';
 import { fileToBase64 } from '../services/storage';
 import { fetchInvoiceNumberingTypes } from '../services/firestore/invoiceNumberingTypes';
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
 
 type SupplierData = Omit<Supplier, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
 
@@ -30,7 +31,7 @@ const VatVerificationIcon: React.FC<{
     if (isVisible && wrapperRef.current && tooltipRef.current) {
       const updatePosition = () => {
         if (!wrapperRef.current || !tooltipRef.current) return;
-        
+
         const rect = wrapperRef.current.getBoundingClientRect();
         const tooltipRect = tooltipRef.current.getBoundingClientRect();
         const scrollX = window.scrollX || window.pageXOffset;
@@ -87,7 +88,7 @@ const VatVerificationIcon: React.FC<{
 
   return (
     <>
-      <div 
+      <div
         ref={wrapperRef}
         className="inline-flex items-center cursor-help"
         onMouseEnter={() => setIsVisible(true)}
@@ -108,7 +109,7 @@ const VatVerificationIcon: React.FC<{
         )}
       </div>
       {isVisible && (
-        <div 
+        <div
           ref={tooltipRef}
           className="fixed px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl pointer-events-none z-[10000]"
           style={{
@@ -134,6 +135,7 @@ interface SupplierFormProps {
 }
 
 export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave, onBack }) => {
+  const { setDirty } = useUnsavedChanges();
   const defaultSupplierData: SupplierData = {
     supplier_name: '',
     supplier_street: '',
@@ -176,7 +178,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
   useEffect(() => {
     if (initialData) {
       const { id, userId, createdAt, updatedAt, ...dataToEdit } = initialData;
-      
+
       // Migrace starého formátu bankAccount na nový (accountNumber + bankCode)
       if (dataToEdit.supplier_bankAccount && !dataToEdit.supplier_accountNumber) {
         const parts = dataToEdit.supplier_bankAccount.split('/');
@@ -185,7 +187,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
           dataToEdit.supplier_bankCode = parts[1].trim();
         }
       }
-      
+
       setSupplierData({ ...defaultSupplierData, ...dataToEdit });
       // Načíst preview loga pokud existuje
       if (initialData.supplier_logoUrl) {
@@ -219,11 +221,12 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setSupplierData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    setDirty(true);
   };
 
   const handleFetchFromAres = async () => {
     const ico = supplierData.supplier_ico?.trim();
-    
+
     if (!ico || !/^\d{8}$/.test(ico)) {
       toast.error('IČO musí mít přesně 8 číslic');
       return;
@@ -232,7 +235,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
     setIsLoadingAres(true);
     try {
       const companyData = await fetchCompanyByIco(ico);
-      
+
       // Log pro kontrolu co se načítá
       console.log('[SupplierForm] Načtená data z ARES:', {
         name: companyData.operator_name,
@@ -243,12 +246,12 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         dic: companyData.operator_dic,
         ico: companyData.operator_ico
       });
-      
+
       // Automaticky předvyplnit všechna pole z ARES
       // Použít hodnoty z ARES pokud existují (i když jsou prázdné stringy)
       setSupplierData(prev => {
         const newData = { ...prev };
-        
+
         // Použít hodnoty z ARES - použít i prázdné stringy pokud existují
         if (companyData.operator_name !== undefined) {
           newData.supplier_name = companyData.operator_name || '';
@@ -271,7 +274,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         if (companyData.operator_ico !== undefined) {
           newData.supplier_ico = companyData.operator_ico || '';
         }
-        
+
         console.log('[SupplierForm] Updated supplierData:', {
           name: newData.supplier_name,
           street: newData.supplier_street,
@@ -279,9 +282,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
           zip: newData.supplier_zip,
           dic: newData.supplier_dic
         });
-        
+
         return newData;
       });
+      setDirty(true);
 
       toast.success('Údaje byly načteny z ARES');
     } catch (error: any) {
@@ -299,7 +303,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
 
   const handleCheckVat = async () => {
     const dic = supplierData.supplier_dic?.trim();
-    
+
     if (!dic || dic.length < 3) {
       toast.error('DIČ musí být vyplněné');
       return;
@@ -308,7 +312,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
     setIsCheckingVat(true);
     try {
       const result = await checkVat(dic);
-      
+
       // Uložit výsledek ověření do supplierData
       setSupplierData(prev => ({
         ...prev,
@@ -321,6 +325,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
           vatNumber: result.vatNumber
         }
       }));
+      setDirty(true);
 
       if (result.valid) {
         toast.success('DIČ je platné - subjekt je plátce DPH');
@@ -382,6 +387,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         setLogoFile(file);
         toast.info('Logo bude nahráno po uložení dodavatele');
       }
+      setDirty(true);
     } catch (error: any) {
       console.error('[SupplierForm] Error uploading logo:', error);
       toast.error('Chyba při nahrávání loga: ' + error.message);
@@ -423,6 +429,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         setStampFile(file);
         toast.info('Razítko bude nahráno po uložení dodavatele');
       }
+      setDirty(true);
     } catch (error: any) {
       console.error('[SupplierForm] Error uploading stamp:', error);
       toast.error('Chyba při nahrávání razítka: ' + error.message);
@@ -441,6 +448,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
       // Po úspěšném uložení vymazat files
       setLogoFile(null);
       setStampFile(null);
+      setDirty(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -450,12 +458,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
     <div className="w-full">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Sekce: Základní údaje */}
-        <Card className="border-l-4" style={{ borderLeftColor: '#14b8a6' }}>
-          <CardHeader className="bg-gradient-to-r" style={{ 
-            background: 'linear-gradient(to right, #14b8a615, #14b8a605)' 
-          }}>
+        <Card className="border-l-4 border-[#14b8a6]">
+          <CardHeader className="bg-[linear-gradient(to_right,#14b8a615,#14b8a605)]">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#14b8a6' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#14b8a6]"></div>
               Základní údaje
             </h3>
           </CardHeader>
@@ -508,7 +514,7 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
                   {/* Ikona výsledku ověření hned vedle pole */}
                   {supplierData.vatVerification && !isCheckingVat && (
                     <div className="flex items-center px-1" style={{ marginTop: '28px' }}>
-                      <VatVerificationIcon 
+                      <VatVerificationIcon
                         verification={supplierData.vatVerification}
                         dic={supplierData.supplier_dic || ''}
                         formatDate={formatVerificationDate}
@@ -550,7 +556,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
                     type="checkbox"
                     id="isVatPayer"
                     checked={supplierData.isVatPayer !== false}
-                    onChange={(e) => setSupplierData(prev => ({ ...prev, isVatPayer: e.target.checked }))}
+                    onChange={(e) => {
+                      setSupplierData(prev => ({ ...prev, isVatPayer: e.target.checked }));
+                      setDirty(true);
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"></div>
@@ -561,12 +570,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         </Card>
 
         {/* Sekce: Adresa */}
-        <Card className="border-l-4" style={{ borderLeftColor: '#3b82f6' }}>
-          <CardHeader className="bg-gradient-to-r" style={{ 
-            background: 'linear-gradient(to right, #3b82f615, #3b82f605)' 
-          }}>
+        <Card className="border-l-4 border-[#3b82f6]">
+          <CardHeader className="bg-[linear-gradient(to_right,#3b82f615,#3b82f605)]">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#3b82f6' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#3b82f6]"></div>
               Adresa
             </h3>
           </CardHeader>
@@ -605,12 +612,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         </Card>
 
         {/* Sekce: Kontakt */}
-        <Card className="border-l-4" style={{ borderLeftColor: '#8b5cf6' }}>
-          <CardHeader className="bg-gradient-to-r" style={{ 
-            background: 'linear-gradient(to right, #8b5cf615, #8b5cf605)' 
-          }}>
+        <Card className="border-l-4 border-[#8b5cf6]">
+          <CardHeader className="bg-[linear-gradient(to_right,#8b5cf615,#8b5cf605)]">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#8b5cf6' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#8b5cf6]"></div>
               Kontakt
             </h3>
           </CardHeader>
@@ -642,12 +647,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         </Card>
 
         {/* Sekce: Bankovní údaje */}
-        <Card className="border-l-4" style={{ borderLeftColor: '#10b981' }}>
-          <CardHeader className="bg-gradient-to-r" style={{ 
-            background: 'linear-gradient(to right, #10b98115, #10b98105)' 
-          }}>
+        <Card className="border-l-4 border-[#10b981]">
+          <CardHeader className="bg-[linear-gradient(to_right,#10b98115,#10b98105)]">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10b981' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#10b981]"></div>
               Bankovní údaje
             </h3>
           </CardHeader>
@@ -684,12 +687,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         </Card>
 
         {/* Sekce: Dokumenty */}
-        <Card className="border-l-4" style={{ borderLeftColor: '#f59e0b' }}>
-          <CardHeader className="bg-gradient-to-r" style={{ 
-            background: 'linear-gradient(to right, #f59e0b15, #f59e0b05)' 
-          }}>
+        <Card className="border-l-4 border-[#f59e0b]">
+          <CardHeader className="bg-[linear-gradient(to_right,#f59e0b15,#f59e0b05)]">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#f59e0b' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#f59e0b]"></div>
               Dokumenty
             </h3>
           </CardHeader>
@@ -761,12 +762,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
         </Card>
 
         {/* Sekce: Nastavení */}
-        <Card className="border-l-4" style={{ borderLeftColor: '#ec4899' }}>
-          <CardHeader className="bg-gradient-to-r" style={{ 
-            background: 'linear-gradient(to right, #ec489915, #ec489905)' 
-          }}>
+        <Card className="border-l-4 border-[#ec4899]">
+          <CardHeader className="bg-[linear-gradient(to_right,#ec489915,#ec489905)]">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#ec4899' }}></div>
+              <div className="w-2 h-2 rounded-full bg-[#ec4899]"></div>
               Nastavení
             </h3>
           </CardHeader>
@@ -776,7 +775,10 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
                 label="Typ číslování faktur"
                 name="invoiceNumberingTypeId"
                 value={supplierData.invoiceNumberingTypeId || ''}
-                onChange={(e) => setSupplierData(prev => ({ ...prev, invoiceNumberingTypeId: e.target.value || undefined }))}
+                onChange={(e) => {
+                  setSupplierData(prev => ({ ...prev, invoiceNumberingTypeId: e.target.value || undefined }));
+                  setDirty(true);
+                }}
                 options={[
                   { value: '', label: '-- Vyberte typ číslování --' },
                   ...invoiceNumberingTypes.map(type => ({
@@ -827,4 +829,3 @@ export const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSave,
     </div>
   );
 };
-
