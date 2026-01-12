@@ -17,6 +17,7 @@ import {
   Timestamp,
   writeBatch
 } from 'firebase/firestore';
+import { deleteAllReportFiles } from '../storage';
 import { db, auth } from '../../firebaseConfig';
 import { Report } from '../../types';
 import { fetchUserMetadata } from './users';
@@ -210,7 +211,7 @@ export async function updateReport(reportId: string, reportData: Partial<Report>
     ...dataToUpdate,
     updatedAt: Timestamp.now()
   };
-  
+
   if (editorState !== undefined) {
     // Načíst aktuální report pro sloučení smart dat
     const currentReport = await fetchReport(reportId);
@@ -234,6 +235,16 @@ export async function updateReport(reportId: string, reportData: Partial<Report>
  * Smaže report
  */
 export async function deleteReport(reportId: string): Promise<void> {
+  // Nejdřív načíst report pro smazání souborů
+  try {
+    const report = await fetchReport(reportId);
+    if (report) {
+      await deleteAllReportFiles(report);
+    }
+  } catch (error) {
+    console.warn(`[deleteReport] Failed to delete files for report ${reportId}:`, error);
+  }
+
   const docRef = doc(db, COLLECTION_NAME, reportId);
   await deleteDoc(docRef);
 }
@@ -265,6 +276,17 @@ export async function deleteReportsByAuditIds(auditIds: string[]): Promise<void>
     );
 
     const snapshot = await getDocs(q);
+
+    // Pro každý report smazat soubory
+    await Promise.all(snapshot.docs.map(async (doc) => {
+      try {
+        const report = docToReport(doc);
+        await deleteAllReportFiles(report);
+      } catch (e) {
+        console.warn('Failed to delete files for report', doc.id, e);
+      }
+    }));
+
     const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
     await Promise.all(deletePromises);
   }
@@ -346,19 +368,19 @@ export async function updateReportEditorState(
   editorState: any
 ): Promise<void> {
   const docRef = doc(db, COLLECTION_NAME, reportId);
-  
+
   // Načíst aktuální report
   const currentReport = await fetchReport(reportId);
   if (!currentReport) {
     throw new Error('Report not found');
   }
-  
+
   // Sloučit stávající smart data s novým editorState
   const updatedSmart = {
     ...currentReport.smart,
     editorState
   };
-  
+
   await updateDoc(docRef, {
     smart: updatedSmart,
     updatedAt: Timestamp.now()

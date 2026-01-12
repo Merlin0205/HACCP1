@@ -401,7 +401,7 @@ const App: React.FC = () => {
                 // Migrace: Aktualizovat "Mobil" na "Telefon" pokud existuje
                 let needsUpdate = false;
                 const migratedStructure = JSON.parse(JSON.stringify(auditType.auditStructure)); // Deep copy
-                
+
                 // Aktualizovat labely v header_data
                 ['auditor', 'audited_premise', 'operator'].forEach(sectionKey => {
                   if (migratedStructure.header_data?.[sectionKey]?.fields) {
@@ -413,7 +413,7 @@ const App: React.FC = () => {
                     });
                   }
                 });
-                
+
                 if (needsUpdate) {
                   await updateAuditType(audit.auditTypeId, {
                     auditStructure: migratedStructure
@@ -438,7 +438,7 @@ const App: React.FC = () => {
           // Migrace: Aktualizovat "Mobil" na "Telefon" pokud existuje
           let needsUpdate = false;
           const migratedStructure = JSON.parse(JSON.stringify(savedStructure)); // Deep copy
-          
+
           // Aktualizovat labely v header_data
           ['auditor', 'audited_premise', 'operator'].forEach(sectionKey => {
             if (migratedStructure.header_data?.[sectionKey]?.fields) {
@@ -450,7 +450,7 @@ const App: React.FC = () => {
               });
             }
           });
-          
+
           if (needsUpdate) {
             const { saveAuditStructure } = await import('./services/firestore/settings');
             await saveAuditStructure(migratedStructure);
@@ -779,7 +779,7 @@ const App: React.FC = () => {
           operator.operator_zip,
           operator.operator_city
         ].filter(Boolean);
-        const operator_address = operatorAddressParts.length > 0 
+        const operator_address = operatorAddressParts.length > 0
           ? operatorAddressParts.join(', ')
           : '';
 
@@ -888,7 +888,7 @@ const App: React.FC = () => {
         operator.operator_zip,
         operator.operator_city
       ].filter(Boolean);
-      const operator_address = operatorAddressParts.length > 0 
+      const operator_address = operatorAddressParts.length > 0
         ? operatorAddressParts.join(', ')
         : '';
 
@@ -997,7 +997,7 @@ const App: React.FC = () => {
         activeOperator.operator_zip,
         activeOperator.operator_city
       ].filter(Boolean);
-      const operator_address = operatorAddressParts.length > 0 
+      const operator_address = operatorAddressParts.length > 0
         ? operatorAddressParts.join(', ')
         : '';
 
@@ -1038,9 +1038,9 @@ const App: React.FC = () => {
 
   const handleDeleteAudit = async (auditId: string) => {
     try {
-      // Smazat report nejdřív
+      // Smazat VŠECHNY reporty pro tento audit (všechny verze)
       try {
-        await deleteReportByAudit(auditId);
+        await deleteReportsByAuditIds([auditId]);
       } catch (reportError: any) {
         // Pokud report neexistuje, ignorovat chybu
       }

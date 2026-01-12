@@ -20,57 +20,55 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Fotky z auditů - uložené pod userId/audits/
-    match /users/{userId}/audits/{auditId}/{allPaths=**} {
-      // ČTENÍ: Všichni autentizovaní uživatelé mohou číst všechny obrázky
-      // Důvod: Admin a ostatní uživatelé potřebují vidět obrázky z auditů ostatních
-      // bez performance penalty způsobené proxy voláními
+    // --- NOVÁ LOGICKÁ STRUKTURA (Entity-Centric) ---
+
+    // Audity - uložené pod audits/{auditId}/
+    match /audits/{auditId}/{allPaths=**} {
       allow read: if isAuthenticated();
-      
-      // ZÁPIS: Pouze vlastník nebo admin může nahrávat/upravovat
-      allow create, update: if isAuthenticated() && 
-                      (request.auth.uid == userId || isAdmin()) &&
-                      isImage() &&
-                      isUnder10MB();
-                      
-      // MAZÁNÍ: Pouze vlastník nebo admin
-      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      // Umožnit nahrávání a mazání fotek všem auditorům
+      allow write: if isAuthenticated();
     }
-    
-    // PDF reporty - uložené pod userId/reports/
-    match /users/{userId}/reports/{reportId}/{allPaths=**} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+
+    // Reporty - uložené pod reports/
+    match /reports/{allPaths=**} {
+      allow read, write: if isAuthenticated();
     }
-    
-    // Logo a razítko dodavatelů - uložené pod userId/suppliers/
-    match /users/{userId}/suppliers/{supplierId}/{allPaths=**} {
-      // Čtení: vlastní soubory nebo admin
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      
-      // Zápis: vlastní soubory (nebo admin), musí to být obrázek do 10MB
-      allow write: if isAuthenticated() && 
-                      (request.auth.uid == userId || isAdmin()) &&
-                      isImage() &&
-                      isUnder10MB();
+
+    // Dodavatelé (loga, razítka) - uložené pod suppliers/{supplierId}/
+    match /suppliers/{supplierId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
+
+    // --- GLOBÁLNÍ A POMOCNÉ ---
+
     // Vlastní ikony vygenerované AI
     match /custom-icons/{userId}/{allPaths=**} {
-      // Čtení: Všichni autentizovaní uživatelé (pro sdílení v týmu atd.)
       allow read: if isAuthenticated();
-      
-      // Zápis: Pouze vlastník
       allow write: if isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Razítko auditora - globální (nezávislé na uživateli)
+    // Razítko auditora - globální
     match /auditor/{allPaths=**} {
-      // Čtení: Všichni autentizovaní uživatelé
       allow read: if isAuthenticated();
-      
-      // Zápis/Mazání: Pouze admin, musí to být obrázek do 10MB
       allow write: if isAuthenticated() && isAdmin() && isImage() && isUnder10MB();
+    }
+
+    // --- STARÁ STRUKTURA (Legacy - User Scoped) ---
+    // Ponecháno pro zpětnou kompatibilitu a přístup k existujícím souborům
+    
+    match /users/{userId}/audits/{auditId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+    
+    match /users/{userId}/reports/{reportId}/{allPaths=**} {
+      allow read, write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+    
+    match /users/{userId}/suppliers/{supplierId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
     }
   }
 }
-

@@ -481,13 +481,13 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                 reportTextNoNonCompliances: reportTextNoNonCompliances?.substring(0, 50) + '...',
                 reportTextWithNonCompliances: reportTextWithNonCompliances?.substring(0, 50) + '...'
             });
-            
-            await updateAuditType(selectedTypeId, { 
+
+            await updateAuditType(selectedTypeId, {
                 auditStructure: newStructure,
                 reportTextNoNonCompliances: reportTextNoNonCompliances || '',
                 reportTextWithNonCompliances: reportTextWithNonCompliances || ''
             });
-            
+
             setInitialStructure(newStructure);
             setInitialReportTexts({
                 noNonCompliances: reportTextNoNonCompliances,
@@ -499,12 +499,12 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
             // Aktualizovat lokální state
             setAuditTypes(prev => prev.map(t =>
                 t.id === selectedTypeId
-                    ? { 
-                        ...t, 
+                    ? {
+                        ...t,
                         auditStructure: newStructure,
                         reportTextNoNonCompliances: reportTextNoNonCompliances || '',
                         reportTextWithNonCompliances: reportTextWithNonCompliances || '',
-                        updatedAt: new Date() 
+                        updatedAt: new Date()
                     }
                     : t
             ));
@@ -1022,7 +1022,7 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                             ))}
 
                             <Button
-                                variant="secondary"
+                                variant="ghost"
                                 onClick={handleAddSection}
                                 fullWidth
                                 className="py-4 border-2 border-dashed border-gray-300 hover:border-blue-400 text-gray-600 hover:text-blue-600"
@@ -1038,7 +1038,7 @@ const AdminScreen: React.FC<AdminScreenProps> = ({ auditStructure, setAuditStruc
                             <p className="text-sm text-gray-600 mb-6">
                                 Nastavte texty, které se zobrazí v reportu podle toho, zda byly nalezeny neshody.
                             </p>
-                            
+
                             <div className="space-y-6">
                                 {/* Text když nejsou neshody */}
                                 <div>

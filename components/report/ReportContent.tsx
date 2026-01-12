@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import {
     DndContext,
     closestCenter,
@@ -23,6 +23,7 @@ import { NonComplianceItem } from './NonComplianceItem';
 import { fetchAuditorInfo } from '../../services/firestore/settings';
 import ConfirmationModal from '../ConfirmationModal';
 import { DocumentDuplicateIcon } from '@heroicons/react/24/outline';
+import { PAGE_LAYOUT } from '../../hooks/useMeasuredBlocks';
 
 interface ReportContentProps {
     report: Report;
@@ -46,6 +47,8 @@ interface ReportContentProps {
         overlayPageNumber?: number;
         overlayPosition?: { x: number; y: number };
     }>) => void;
+    initialRowHeights?: Map<string, number>;
+    onRowHeightsCalculated?: (heights: Map<string, number>) => void;
 }
 
 // Stamp Item Component - stejná struktura jako NonComplianceItem
@@ -343,107 +346,107 @@ const StampOverlay: React.FC<{
     return (
         // Vrstva přes celou stránku – stabilní šířka, aby se razítko \"nezmenšovalo\" u okraje
         <div ref={layerRef} className="absolute inset-0 z-50 print:z-50 pointer-events-none">
-          <div
-              ref={floatingRef}
-              className="absolute pointer-events-auto"
-              style={{
-                  left: pos.x,
-                  top: pos.y,
-                  width: `${Math.min(100, Math.max(10, (stamp.stampWidthRatio || 0.333) * 100))}%`,
-                  cursor: readOnly ? 'default' : (dragging ? 'grabbing' : 'grab')
-              }}
-              onMouseDown={onMouseDown}
-          >
-            {!readOnly && updateAuditorStamp && (
-                <div
-                    className="absolute -top-10 left-0 flex items-center gap-1 bg-white/95 border border-gray-200 rounded-lg shadow-sm px-2 py-1 print:hidden"
-                    onMouseDown={(e) => {
-                        // aby šlo klikat do tlačítek bez roztažení drag
-                        e.stopPropagation();
-                    }}
-                >
-                    <button
-                        className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                        title="Předchozí stránka"
-                        onClick={() => updateAuditorStamp({ overlayPageNumber: Math.max(1, pageNumber - 1) })}
-                    >
-                        ←
-                    </button>
-                    <span className="text-xs text-gray-600">
-                        Strana {pageNumber}/{totalPages}
-                    </span>
-                    <button
-                        className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                        title="Další stránka"
-                        onClick={() => updateAuditorStamp({ overlayPageNumber: Math.min(totalPages, pageNumber + 1) })}
-                    >
-                        →
-                    </button>
-                    <button
-                        className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
-                        title="Reset pozice"
-                        onClick={() => updateAuditorStamp({ overlayPosition: { x: 80, y: 120 } })}
-                    >
-                        Reset
-                    </button>
-                    <button
-                        className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700 hover:bg-purple-200"
-                        title="Vypnout volné umístění"
-                        onClick={() => updateAuditorStamp({ overlayEnabled: false })}
-                    >
-                        Overlay off
-                    </button>
-                </div>
-            )}
-            <div className="relative">
-                <div
-                    className={`${(stamp.stampAlignment || 'right') === 'center' ? 'text-center' : (stamp.stampAlignment || 'right') === 'right' ? 'text-right' : 'text-left'}`}
-                >
-                    <div className="inline-block align-top relative px-2 mb-4 text-left">
-                        <img
-                            src={stamp.stampUrl}
-                            alt="Razítko auditora"
-                            className="mx-auto block w-full h-auto max-h-[180mm]"
-                            draggable={false}
-                        />
-                    </div>
-                </div>
-
-                {/* Smooth Resize Handle (bottom-right corner) */}
+            <div
+                ref={floatingRef}
+                className="absolute pointer-events-auto"
+                style={{
+                    left: pos.x,
+                    top: pos.y,
+                    width: `${Math.min(100, Math.max(10, (stamp.stampWidthRatio || 0.333) * 100))}%`,
+                    cursor: readOnly ? 'default' : (dragging ? 'grabbing' : 'grab')
+                }}
+                onMouseDown={onMouseDown}
+            >
                 {!readOnly && updateAuditorStamp && (
                     <div
-                        className="absolute bottom-1 right-1 w-4 h-4 cursor-nwse-resize z-20 opacity-80 hover:opacity-100 print:hidden flex items-center justify-center"
+                        className="absolute -top-10 left-0 flex items-center gap-1 bg-white/95 border border-gray-200 rounded-lg shadow-sm px-2 py-1 print:hidden"
                         onMouseDown={(e) => {
-                            e.preventDefault();
+                            // aby šlo klikat do tlačítek bez roztažení drag
                             e.stopPropagation();
-
-                            const startX = e.clientX;
-                            const startWidthRatio = stamp.stampWidthRatio || 0.333;
-                            const layerWidth = layerRef.current?.clientWidth || 800;
-
-                            const handleMouseMove = (moveEvent: MouseEvent) => {
-                                const currentX = moveEvent.clientX;
-                                const diffPx = currentX - startX;
-                                const diffRatio = diffPx / layerWidth;
-                                let newRatio = startWidthRatio + diffRatio;
-                                newRatio = Math.max(0.1, Math.min(1.0, newRatio));
-                                updateAuditorStamp({ stampWidthRatio: newRatio });
-                            };
-
-                            const handleMouseUp = () => {
-                                document.removeEventListener('mousemove', handleMouseMove);
-                                document.removeEventListener('mouseup', handleMouseUp);
-                            };
-
-                            document.addEventListener('mousemove', handleMouseMove);
-                            document.addEventListener('mouseup', handleMouseUp);
                         }}
                     >
-                        <div className="w-3 h-3 border-r-2 border-b-2 border-blue-500/70"></div>
+                        <button
+                            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                            title="Předchozí stránka"
+                            onClick={() => updateAuditorStamp({ overlayPageNumber: Math.max(1, pageNumber - 1) })}
+                        >
+                            ←
+                        </button>
+                        <span className="text-xs text-gray-600">
+                            Strana {pageNumber}/{totalPages}
+                        </span>
+                        <button
+                            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                            title="Další stránka"
+                            onClick={() => updateAuditorStamp({ overlayPageNumber: Math.min(totalPages, pageNumber + 1) })}
+                        >
+                            →
+                        </button>
+                        <button
+                            className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200"
+                            title="Reset pozice"
+                            onClick={() => updateAuditorStamp({ overlayPosition: { x: 80, y: 120 } })}
+                        >
+                            Reset
+                        </button>
+                        <button
+                            className="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700 hover:bg-purple-200"
+                            title="Vypnout volné umístění"
+                            onClick={() => updateAuditorStamp({ overlayEnabled: false })}
+                        >
+                            Overlay off
+                        </button>
                     </div>
                 )}
+                <div className="relative">
+                    <div
+                        className={`${(stamp.stampAlignment || 'right') === 'center' ? 'text-center' : (stamp.stampAlignment || 'right') === 'right' ? 'text-right' : 'text-left'}`}
+                    >
+                        <div className="inline-block align-top relative px-2 mb-4 text-left">
+                            <img
+                                src={stamp.stampUrl}
+                                alt="Razítko auditora"
+                                className="mx-auto block w-full h-auto max-h-[180mm]"
+                                draggable={false}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Smooth Resize Handle (bottom-right corner) */}
+                    {!readOnly && updateAuditorStamp && (
+                        <div
+                            className="absolute bottom-1 right-1 w-4 h-4 cursor-nwse-resize z-20 opacity-80 hover:opacity-100 print:hidden flex items-center justify-center"
+                            onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+
+                                const startX = e.clientX;
+                                const startWidthRatio = stamp.stampWidthRatio || 0.333;
+                                const layerWidth = layerRef.current?.clientWidth || 800;
+
+                                const handleMouseMove = (moveEvent: MouseEvent) => {
+                                    const currentX = moveEvent.clientX;
+                                    const diffPx = currentX - startX;
+                                    const diffRatio = diffPx / layerWidth;
+                                    let newRatio = startWidthRatio + diffRatio;
+                                    newRatio = Math.max(0.1, Math.min(1.0, newRatio));
+                                    updateAuditorStamp({ stampWidthRatio: newRatio });
+                                };
+
+                                const handleMouseUp = () => {
+                                    document.removeEventListener('mousemove', handleMouseMove);
+                                    document.removeEventListener('mouseup', handleMouseUp);
+                                };
+
+                                document.addEventListener('mousemove', handleMouseMove);
+                                document.addEventListener('mouseup', handleMouseUp);
+                            }}
+                        >
+                            <div className="w-3 h-3 border-r-2 border-b-2 border-blue-500/70"></div>
+                        </div>
+                    )}
+                </div>
             </div>
-          </div>
         </div>
     );
 };
@@ -490,7 +493,9 @@ export const ReportContent: React.FC<ReportContentProps> = ({
     updateNonCompliance,
     moveNonCompliance,
     restoreAuditorStamp,
-    updateAuditorStamp
+    updateAuditorStamp,
+    initialRowHeights,
+    onRowHeightsCalculated
 }) => {
     // Helper to format date
     const formatDate = (dateString?: string): string => {
@@ -501,6 +506,10 @@ export const ReportContent: React.FC<ReportContentProps> = ({
     // Použít snapshot headerValues z reportu pokud existuje, jinak použít audit.headerValues
     const headerValues = report.headerValuesSnapshot || audit.headerValues;
 
+    // Vizuální kabát reportu (default / compact)
+    const visualTheme = editorState.visualTheme || 'default';
+    const isCompact = visualTheme === 'compact';
+
     const [activeId, setActiveId] = useState<string | null>(null);
     const [resizingStamp, setResizingStamp] = useState(false);
     const [restoringStamp, setRestoringStamp] = useState(false);
@@ -508,7 +517,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
     const stampContainerRef = React.useRef<HTMLDivElement>(null);
     const deleteStampButtonRef = React.useRef<HTMLButtonElement>(null);
     const [fallbackStamp, setFallbackStamp] = useState<any>(undefined);
-    
+
     // Načíst razítko z globálního nastavení, pokud není v editorState
     useEffect(() => {
         if (editorState.auditorStamp === undefined && !fallbackStamp && !readOnly) {
@@ -525,7 +534,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
             });
         }
     }, [editorState.auditorStamp, fallbackStamp, readOnly]);
-    
+
     // Pro razítko použít hodnotu z editorState.auditorStamp
     // null znamená, že bylo smazáno, undefined znamená, že nebylo nikdy nastaveno
     // Pokud není v editorState, použít fallbackStamp
@@ -571,25 +580,108 @@ export const ReportContent: React.FC<ReportContentProps> = ({
         setActiveId(event.active.id as string);
     };
 
-    // Pagination Constants
-    // Usable height: 297mm - 10mm (top) - 20mm (bottom footer) = 267mm ~= 1009px
-    // Reducing to 900px to ensure absolutely no overflow (safety buffer for footer)
-    const PAGE_HEIGHT_PX = 950;
-    // Pozn.: stránkování tabulky je ručně počítané. Tyto konstanty musí co nejvíc odpovídat reálnému renderu,
-    // jinak budou vznikat zbytečné mezery (příliš velký odhad) nebo přetečení (příliš malý odhad).
-    // V tabulce máme:
-    // - 1. sloupec: text-xs + p-2 (typicky 1 řádek, občas 2+ u delších názvů)
-    // - 2. sloupec (Popis): text-[7px] + leading-tight + px-2 py-1
-    // - 3. sloupec: status VYHOVUJE/NEVYHOVUJE s p-2 (typicky 1 řádek)
-    const TABLE_HEADER_HEIGHT = 36;
-    const SECTION_HEADER_HEIGHT = 36;
-    const BASE_ROW_HEIGHT = 32; // minimální výška řádku daná paddingem a 3. sloupcem
+    // --- Dynamic Layout Configuration ---
+    // Use PAGE_LAYOUT from useMeasuredBlocks hook for consistent A4 dimensions
+    // PAGE_LAYOUT.usableHeightPx = (297 - 10 - 20) * 3.78 = 1009.26px
+    // This is the maximum content height before hitting the footer
+    const PAGE_HEIGHT_PX = PAGE_LAYOUT.usableHeightPx;
 
-    const CHARS_PER_LINE_TITLE = 26; // úzký sloupec (22%)
-    const LINE_HEIGHT_TITLE = 16;    // text-xs ~ 12px font, ~16px line-height
+    // Layout Themes Config
+    const LAYOUT_CONFIG = {
+        default: {
+            tableHeaderHeight: 36,
+            sectionHeaderHeight: 36,
+            // Title: p-2 (16px) + text-xs/sm (14px*1.25=17.5) + border = ~34.5
+            titleBaseHeight: 35,
+            // Desc: py-1 (8px) + text-[7px] (9px) + border = ~18
+            descBaseHeight: 18,
+            lineHeightTitle: 17.5,
+            lineHeightDesc: 10,
+            titleFont: '12px Inter, sans-serif',
+            descFont: '10px Inter, sans-serif',
+            descColWidth: 498, // 66% of ~755px usable
+            titleColWidth: 165, // 22% of ~755px usable
+        },
+        compact: {
+            tableHeaderHeight: 32,
+            sectionHeaderHeight: 32,
+            // Title: p-1.5 (12px) + text-xs (12px*1.375=16.5) + border = ~29.5
+            titleBaseHeight: 29,
+            // Desc: py-0.5 (4px) + text-[10px] (10px*1.25=12.5) + border = ~17.5
+            descBaseHeight: 18,
+            lineHeightTitle: 16.5,
+            lineHeightDesc: 14,
+            titleFont: '12px Inter, sans-serif',
+            descFont: '10px Inter, sans-serif',
+            descColWidth: 498,
+            titleColWidth: 165,
+        }
+    };
 
-    const CHARS_PER_LINE_DESC = 200; // široký sloupec (66%) a malé písmo
-    const LINE_HEIGHT_DESC = 9;      // 7px + leading-tight (~8-9px)
+    const activeLayout = isCompact ? LAYOUT_CONFIG.compact : LAYOUT_CONFIG.default;
+
+    // Canvas for text measurement
+    const measureTextWidth = (text: string, font: string) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) return 0;
+        context.font = font;
+        return context.measureText(text).width;
+    };
+
+    const TABLE_HEADER_HEIGHT = activeLayout.tableHeaderHeight;
+    const SECTION_HEADER_HEIGHT = activeLayout.sectionHeaderHeight;
+    // Base row height for single-line comparisons is the max of the two bases
+    const BASE_ROW_HEIGHT = Math.max(activeLayout.titleBaseHeight, activeLayout.descBaseHeight);
+
+    const LINE_HEIGHT_TITLE = activeLayout.lineHeightTitle;
+    const LINE_HEIGHT_DESC = activeLayout.lineHeightDesc;
+
+    // --- DOM-Based Table Row Measurement ---
+    // Ref for hidden measurement container
+    const tableRowMeasureRef = useRef<HTMLDivElement>(null);
+    const [measuredRowHeights, setMeasuredRowHeights] = useState<Map<string, number>>(initialRowHeights || new Map());
+    const [measurementComplete, setMeasurementComplete] = useState(!!(initialRowHeights && initialRowHeights.size > 0));
+
+    // Build flat list of table elements for measurement
+    const allTableItems = useMemo(() => {
+        const items: { type: 'header' | 'row'; id: string; title?: string; item?: any; sectionId?: string }[] = [];
+        auditStructure.audit_sections.filter(s => s.active).forEach(section => {
+            items.push({ type: 'header', id: `section-${section.id}`, title: section.title });
+            section.items.filter((i: any) => i.active).forEach((item: any) => {
+                items.push({ type: 'row', id: item.id, item, sectionId: section.id });
+            });
+        });
+        return items;
+    }, [auditStructure]);
+
+    // Measure actual row heights after render
+    useLayoutEffect(() => {
+        // If measurements are provided initially and we are in readOnly mode (likely PDF generation),
+        // we can skip re-measurement or just respect the initial values.
+        // However, in live editor, we want to measure always to be safe.
+        // For renderToStaticMarkup, this effect won't run anyway.
+
+        const container = tableRowMeasureRef.current;
+        if (!container || allTableItems.length === 0) {
+            setMeasuredRowHeights(new Map());
+            setMeasurementComplete(true);
+            return;
+        }
+
+        const heights = new Map<string, number>();
+        allTableItems.forEach(item => {
+            const el = container.querySelector(`[data-row-id="${item.id}"]`);
+            if (el) {
+                heights.set(item.id, el.getBoundingClientRect().height);
+            }
+        });
+        setMeasuredRowHeights(heights);
+        setMeasurementComplete(true);
+        if (onRowHeightsCalculated) {
+            onRowHeightsCalculated(heights);
+        }
+    }, [allTableItems, isCompact, visualTheme, onRowHeightsCalculated]);
 
     // --- Non-Compliance Pagination Logic (v useMemo pro dynamické přepočítávání) ---
     const NC_HEADER_HEIGHT = 40; // "DETAIL ZJIŠTĚNÝCH NESHOD"
@@ -614,19 +706,62 @@ export const ReportContent: React.FC<ReportContentProps> = ({
             let textHeight = NC_BASE_HEIGHT;
 
             // Add height for each text field based on estimated length
-            const location = nc.location || '';
-            const finding = nc.finding || '';
-            const recommendation = nc.recommendation || '';
+            const location = (nc.location || '').trim();
+            const finding = (nc.finding || '').trim();
+            const recommendation = (nc.recommendation || '').trim();
 
-            // Each field can wrap, estimate lines (assuming ~60 chars per line in the red box)
-            const locationLines = Math.max(1, Math.ceil(location.length / 60));
-            const findingLines = Math.max(1, Math.ceil(finding.length / 60));
-            const recommendationLines = Math.max(1, Math.ceil(recommendation.length / 60));
+            // Fonts for NC text - assuming same as DESC_FONT from table for consistency or slightly larger?
+            // NC text usually inherits body font. Let's use 13.3px sans-serif as base.
+            const NC_FONT = '13.3px Inter, sans-serif';
 
-            // Add height for wrapped lines (16px line height approximately)
-            textHeight += (locationLines - 1) * 16;
-            textHeight += (findingLines - 1) * 16;
-            textHeight += (recommendationLines - 1) * 16;
+            // Width available for text: Page width (approx 794px) - Margins (p-8=32px*2=64px) - Border/Padding (pl-4=16px + border=4px = 20px)
+            // Approx available width = 710px. Let's be safe with 700px.
+            const NC_TEXT_WIDTH = 700;
+
+            const measureLines = (text: string) => {
+                if (!text) return 0;
+                const width = measureTextWidth(text, NC_FONT);
+                // Add 5% buffer for wrapping
+                return Math.max(1, Math.ceil((width * 1.05) / NC_TEXT_WIDTH));
+            };
+
+            const locationLines = measureLines(location);
+            const findingLines = measureLines(finding);
+            const recommendationLines = measureLines(recommendation);
+
+            // Height calculation:
+            // For each block: Label (1 line) + Text (N lines) + Spacing
+            // Label is bold, approx 20px height. Text line approx 19px.
+            // Layout: 
+            // - Misto Label (20px) + Text (N*19px) + mb-1 (4px)
+            // - Zjisteni Label (20px) + Text (N*19px) + mb-1 (4px)
+            // - Doporuceni Label (20px) + Text (N*19px)
+
+            const BLOCK_SPACING = isCompact ? 2 : 4;
+            const LABEL_HEIGHT = 20;
+            const TEXT_LINE_HEIGHT = 19;
+
+            textHeight += (LABEL_HEIGHT + locationLines * TEXT_LINE_HEIGHT + BLOCK_SPACING);
+            textHeight += (LABEL_HEIGHT + findingLines * TEXT_LINE_HEIGHT + BLOCK_SPACING);
+            textHeight += (LABEL_HEIGHT + recommendationLines * TEXT_LINE_HEIGHT);
+
+            // Remove the base "textHeight += ..." from original code which was adding lines relative to base height
+            // Actually NC_BASE_HEIGHT (160) likely included the red border padding and header info?
+            // NC_BASE_HEIGHT includes: Index/Title (approx 30px?) + Section (20px?) + Margins.
+            // Let's reset the dynamic part addition.
+            // Original code: textHeight = NC_BASE_HEIGHT + (lines-1)*19.
+            // Now we calculate full dynamic part.
+            // Let's say basic framework overhead (Title, Section, Red Border container padding) is ~60-80px.
+            // Let's adjust NC_BASE_HEIGHT to represent non-text parts.
+            // NC_BASE_HEIGHT was 160.
+            // If we add full height of text blocks, we should start from a lower base.
+            // Let's conservatively subtract some from base or just use calculated height on top of a smaller base.
+
+            // Refined Base: TitleRow (~24px) + SectionRow (~20px) + ContainerPadding (~20px) = ~64px.
+            // Let's try starting with 70px base.
+            textHeight = 70 + (LABEL_HEIGHT + locationLines * TEXT_LINE_HEIGHT + BLOCK_SPACING) +
+                (LABEL_HEIGHT + findingLines * TEXT_LINE_HEIGHT + BLOCK_SPACING) +
+                (LABEL_HEIGHT + recommendationLines * TEXT_LINE_HEIGHT);
 
             // 3. Process Photos (Layout Engine)
             type PhotoRow = {
@@ -800,7 +935,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
             const STAMP_BASE_HEIGHT = 200;
             const STAMP_MARGIN = 32;
             const stampHeight = STAMP_BASE_HEIGHT + STAMP_MARGIN;
-            
+
             if (currentStamp.pageBreakBefore) {
                 nonCompliancePages.push([]);
                 pageHeights.push(0);
@@ -808,7 +943,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                 if (nonCompliancePages.length > 0) {
                     const lastPageIndex = nonCompliancePages.length - 1;
                     const lastPageHeight = pageHeights[lastPageIndex] || 0;
-                    
+
                     if (lastPageHeight + stampHeight > PAGE_HEIGHT_PX) {
                         nonCompliancePages.push([]);
                         pageHeights.push(0);
@@ -818,7 +953,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                     pageHeights.push(NC_HEADER_HEIGHT);
                 }
             }
-            
+
             const lastPage = nonCompliancePages[nonCompliancePages.length - 1];
             lastPage.push({
                 id: '__stamp__',
@@ -832,7 +967,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                 renderText: true,
                 uniqueKey: '__stamp__'
             } as RenderableNCItem);
-            
+
             const lastPageIndex = nonCompliancePages.length - 1;
             if (pageHeights[lastPageIndex] !== undefined) {
                 pageHeights[lastPageIndex] += stampHeight;
@@ -870,116 +1005,84 @@ export const ReportContent: React.FC<ReportContentProps> = ({
         JSON.stringify(currentStamp?.overlayPosition || null)
     ]);
 
-    // --- Audit Table Pagination Logic ---
-
-    const estimateItemHeight = (item: any) => {
-        const titleText: string = (item?.title || '').toString();
-        const descText: string = (item?.description || '').toString();
-
-        const titleLines = Math.max(1, Math.ceil(titleText.length / CHARS_PER_LINE_TITLE));
-        const descLines = descText.trim() === '' ? 1 : Math.max(1, Math.ceil(descText.length / CHARS_PER_LINE_DESC));
-
-        // Výška buňky se odvíjí od počtu řádků. Řádek tabulky je max z buněk.
-        const titleHeight = BASE_ROW_HEIGHT + Math.max(0, titleLines - 1) * LINE_HEIGHT_TITLE;
-        const descHeight = BASE_ROW_HEIGHT + Math.max(0, descLines - 1) * LINE_HEIGHT_DESC;
-        const statusHeight = BASE_ROW_HEIGHT; // status je vždy 1 řádek
-
-        return Math.max(titleHeight, descHeight, statusHeight);
-    };
+    // --- Audit Table Pagination Logic (using measured heights) ---
 
     // Define renderable elements for the table
     type TableElement =
         | { type: 'header'; id: string; title: string; height: number }
         | { type: 'row'; id: string; item: any; height: number; sectionId: string };
 
-    const tablePages: TableElement[][] = [];
-    const tablePageHeights: number[] = [];
-    let currentTablePage: TableElement[] = [];
-    let currentTableHeight = TABLE_HEADER_HEIGHT;
+    // Fallback estimation function (used before measurement completes)
+    const estimateItemHeight = (item: any): number => {
+        // Simple estimation: base height + extra per character count  
+        const titleLen = (item?.title || '').length;
+        const descLen = (item?.description || '').length;
+        const titleLines = Math.max(1, Math.ceil(titleLen / 20));
+        const descLines = Math.max(1, Math.ceil(descLen / 60));
+        return BASE_ROW_HEIGHT + Math.max(0, Math.max(titleLines, descLines) - 1) * 16;
+    };
 
-    // Flatten structure into elements
-    const allElements: TableElement[] = [];
-    auditStructure.audit_sections.filter(s => s.active).forEach(section => {
-        // Add Section Header
-        allElements.push({
-            type: 'header',
-            id: section.id,
-            title: section.title,
-            height: SECTION_HEADER_HEIGHT
-        });
+    // Use measured heights or fall back to estimation
+    const getRowHeight = (itemId: string, item?: any): number => {
+        const measured = measuredRowHeights.get(itemId);
+        if (measured !== undefined) {
+            return measured;
+        }
+        // Fallback to estimation if not yet measured
+        if (item) {
+            return estimateItemHeight(item);
+        }
+        return SECTION_HEADER_HEIGHT;
+    };
 
-        // Add Items
-        section.items.filter((i: any) => i.active).forEach((item: any) => {
+    const tablePages: TableElement[][] = useMemo(() => {
+        if (!measurementComplete) return [];
+
+        const pages: TableElement[][] = [];
+        const allElements: TableElement[] = [];
+
+        // Build elements with measured heights
+        auditStructure.audit_sections.filter(s => s.active).forEach(section => {
             allElements.push({
-                type: 'row',
-                id: item.id,
-                item: item,
-                height: estimateItemHeight(item),
-                sectionId: section.id
+                type: 'header',
+                id: section.id,
+                title: section.title,
+                height: getRowHeight(`section-${section.id}`) || SECTION_HEADER_HEIGHT
+            });
+
+            section.items.filter((i: any) => i.active).forEach((item: any) => {
+                allElements.push({
+                    type: 'row',
+                    id: item.id,
+                    item: item,
+                    height: getRowHeight(item.id, item),
+                    sectionId: section.id
+                });
             });
         });
-    });
 
-    // Distribute elements to pages - sekce se nesmí rozdělit na více stránek
-    for (let i = 0; i < allElements.length; i++) {
-        const element = allElements[i];
+        // Paginate using measured heights
+        let currentPage: TableElement[] = [];
+        let currentHeight = TABLE_HEADER_HEIGHT;
 
-        if (element.type === 'header') {
-            // Vypočítat celkovou výšku celé sekce (header + všechny rows)
-            let sectionTotalHeight = element.height;
-            let sectionEndIndex = i + 1;
-            
-            // Najít všechny rows patřící k této sekci
-            while (sectionEndIndex < allElements.length && 
-                   allElements[sectionEndIndex].type === 'row' && 
-                   allElements[sectionEndIndex].sectionId === element.id) {
-                sectionTotalHeight += allElements[sectionEndIndex].height;
-                sectionEndIndex++;
-            }
-            
-            // Zkontrolovat, jestli se celá sekce vejde na aktuální stránku
-            if (currentTableHeight + sectionTotalHeight > PAGE_HEIGHT_PX) {
-                // Celá sekce se nevejde - přesunout na novou stránku
-                if (currentTablePage.length > 0) {
-                    tablePages.push(currentTablePage);
-                    tablePageHeights.push(currentTableHeight);
-                    currentTablePage = [];
-                    currentTableHeight = TABLE_HEADER_HEIGHT;
+        for (const element of allElements) {
+            if (currentHeight + element.height > PAGE_HEIGHT_PX) {
+                if (currentPage.length > 0) {
+                    pages.push(currentPage);
+                    currentPage = [];
+                    currentHeight = TABLE_HEADER_HEIGHT;
                 }
             }
-            
-            // Přidat celou sekci najednou (header + všechny rows)
-            currentTablePage.push(element);
-            currentTableHeight += element.height;
-            
-            // Přidat všechny rows sekce
-            for (let k = i + 1; k < sectionEndIndex; k++) {
-                currentTablePage.push(allElements[k]);
-                currentTableHeight += allElements[k].height;
-            }
-            
-            // Přeskočit rows, které jsme už přidali
-            i = sectionEndIndex - 1;
-        } else {
-            // Toto by se nemělo stát, protože všechny rows jsou zpracovány společně s jejich headerem
-            // Ale pro jistotu přidáme fallback
-            if (currentTableHeight + element.height > PAGE_HEIGHT_PX) {
-                if (currentTablePage.length > 0) {
-                    tablePages.push(currentTablePage);
-                    tablePageHeights.push(currentTableHeight);
-                    currentTablePage = [];
-                    currentTableHeight = TABLE_HEADER_HEIGHT;
-                }
-            }
-            currentTablePage.push(element);
-            currentTableHeight += element.height;
+            currentPage.push(element);
+            currentHeight += element.height;
         }
-    }
 
-    if (currentTablePage.length > 0) {
-        tablePages.push(currentTablePage);
-        tablePageHeights.push(currentTableHeight);
-    }
+        if (currentPage.length > 0) {
+            pages.push(currentPage);
+        }
+
+        return pages;
+    }, [measurementComplete, measuredRowHeights, auditStructure, PAGE_HEIGHT_PX, TABLE_HEADER_HEIGHT, SECTION_HEADER_HEIGHT]);
 
     // Použít paginaci z useMemo (už je definována výše)
     // nonCompliancePages a ncPageHeights jsou již vypočítány v useMemo výše
@@ -990,13 +1093,20 @@ export const ReportContent: React.FC<ReportContentProps> = ({
     const STAMP_MARGIN_PX = 32;
     const STAMP_HEIGHT_PX = STAMP_BASE_HEIGHT_PX + STAMP_MARGIN_PX;
 
+    // Calculate the height of the last table page from measured elements
+    const lastTablePageHeight = useMemo(() => {
+        if (tablePages.length === 0) return 0;
+        const lastPage = tablePages[tablePages.length - 1];
+        return TABLE_HEADER_HEIGHT + lastPage.reduce((sum, el) => sum + el.height, 0);
+    }, [tablePages, TABLE_HEADER_HEIGHT]);
+
     const canEmbedStampIntoLastTablePage =
         Boolean(currentStamp?.stampUrl) &&
         (!editorState.nonCompliances || editorState.nonCompliances.length === 0) &&
         !currentStamp?.overlayEnabled &&
         !currentStamp?.pageBreakBefore &&
         tablePages.length > 0 &&
-        (tablePageHeights[tablePageHeights.length - 1] || 0) + STAMP_HEIGHT_PX <= PAGE_HEIGHT_PX;
+        lastTablePageHeight + STAMP_HEIGHT_PX <= PAGE_HEIGHT_PX;
 
     // Calculate Total Pages
     const totalPages = 1 + tablePages.length + (nonCompliancePages.length > 0 ? nonCompliancePages.length : 0);
@@ -1055,7 +1165,9 @@ export const ReportContent: React.FC<ReportContentProps> = ({
 
     // 1. Header Tables (Fixed approx height)
     // Title (40) + Date/Op (40) + Auditor (120) + Premise/Op (180) + Margins
-    const HEADER_TABLES_HEIGHT = 450;
+    // Kompaktní varianta má sekce "Pracoviště" a "Provozovatel" pod sebou (vyšší, ale hustší řádky).
+    // Raději lehce nadhodnotit, aby nikdy nedošlo k přetečení na 1. stránce.
+    const HEADER_TABLES_HEIGHT = isCompact ? 460 : 450;
     rawSummaryBlocks.push({ type: 'header_tables', height: HEADER_TABLES_HEIGHT });
 
     // 2. Summary Title
@@ -1197,7 +1309,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
     // --- Render Functions ---
 
     const renderSummaryPage = (blocks: SummaryBlock[], pageIndex: number) => (
-        <div className="font-sans text-sm">
+        <div className={`font-sans ${isCompact ? 'report-theme-compact text-xs leading-[1.25]' : 'report-theme-default text-sm'}`}>
             {blocks.map((block, idx) => {
                 switch (block.type) {
                     case 'header_tables':
@@ -1205,15 +1317,15 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                             <div key={idx}>
                                 {/* Header */}
                                 <h1 className="text-2xl font-bold text-center mb-4">{auditStructure.audit_title}</h1>
-                                <div className="text-center mb-8 text-base">
+                                <div className={`text-center ${isCompact ? 'mb-4' : 'mb-8'} ${isCompact ? '' : 'text-base'}`}>
                                     <p><strong>Datum auditu:</strong> {formatDate(audit.completedAt)}</p>
                                     <p><strong>Za provozovatele přítomen:</strong> {(headerValues as any).present_person || 'Neuvedeno'}</p>
                                 </div>
 
                                 {/* Auditor Table */}
-                                <div className="mb-8 border-y-2 border-black py-2">
+                                <div className={`${isCompact ? 'mb-4' : 'mb-8'} border-y-2 border-black py-2`}>
                                     <h2 className="text-sm font-bold uppercase text-center mb-2">Zpracovatel Auditu</h2>
-                                    <table className="w-full text-sm">
+                                    <table className={`w-full ${isCompact ? '' : 'text-sm'}`}>
                                         <thead>
                                             <tr className="text-left">
                                                 {auditStructure.header_data.auditor.fields.map(field => (
@@ -1237,7 +1349,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                                                         'auditor_web': auditorInfo.web
                                                     };
                                                     return (
-                                                        <td key={field.id} className="p-1">{auditorValueMap[field.id] || '-'}</td>
+                                                        <td key={field.id} className={`${isCompact ? 'p-0.5' : 'p-1'}`}>{auditorValueMap[field.id] || '-'}</td>
                                                     );
                                                 })}
                                             </tr>
@@ -1246,35 +1358,100 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                                 </div>
 
                                 {/* Header Sections (Premise & Operator) */}
-                                <div className="grid grid-cols-2 gap-x-12 mb-8">
-                                    {[auditStructure.header_data.audited_premise, auditStructure.header_data.operator].map((section, sIdx) => (
-                                        <div key={sIdx} className="mb-4">
-                                            <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{section.title}</h2>
-                                            <table className="w-full text-sm">
-                                                <tbody>
-                                                    {section.fields.map(field => (
-                                                        <tr key={field.id}>
-                                                            <td className="font-bold pr-4 py-1 align-top w-40">{field.label}</td>
-                                                            <td className="py-1">{headerValues[field.id] || '-'}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ))}
-                                </div>
+                                {isCompact ? (
+                                    // Kompaktní: sekce pod sebou (lepší využití šířky pro dlouhé hodnoty, hlavně "Název, obchodní firma")
+                                    <div className="mb-4 space-y-4">
+                                        {[auditStructure.header_data.audited_premise, auditStructure.header_data.operator].map((section, sIdx) => (
+                                            <div key={sIdx}>
+                                                <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{section.title}</h2>
+                                                {(() => {
+                                                    const phoneField = section.fields.find(f => /telefon/i.test(f.label));
+                                                    const emailField = section.fields.find(f => /e-?mail/i.test(f.label));
+                                                    const otherFields = section.fields.filter(f => f.id !== phoneField?.id && f.id !== emailField?.id);
+
+                                                    return (
+                                                        <table className="w-full text-xs">
+                                                            <tbody>
+                                                                {otherFields.map(field => (
+                                                                    <tr key={field.id}>
+                                                                        <td className="font-semibold pr-4 py-0.5 w-44 align-top whitespace-nowrap">
+                                                                            {field.label}
+                                                                        </td>
+                                                                        <td
+                                                                            className="py-0.5 leading-snug"
+                                                                            style={{
+                                                                                overflowWrap: 'anywhere',
+                                                                                wordBreak: 'break-word'
+                                                                            }}
+                                                                        >
+                                                                            {headerValues[field.id] || '-'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                                {(phoneField || emailField) && (
+                                                                    <tr>
+                                                                        <td className="font-semibold pr-4 py-0.5 w-44 align-top whitespace-nowrap">Kontakt</td>
+                                                                        <td className="py-0.5 leading-snug">
+                                                                            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                                                                                {phoneField && (
+                                                                                    <div className="min-w-0">
+                                                                                        <span className="font-semibold text-gray-700">Telefon:</span>{' '}
+                                                                                        <span style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                                                            {headerValues[phoneField.id] || '-'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+                                                                                {emailField && (
+                                                                                    <div className="min-w-0">
+                                                                                        <span className="font-semibold text-gray-700">E-mail:</span>{' '}
+                                                                                        <span style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                                                            {headerValues[emailField.id] || '-'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </tbody>
+                                                        </table>
+                                                    );
+                                                })()}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    // Default: původní layout vedle sebe (beze změny)
+                                    <div className="grid grid-cols-2 gap-x-12 mb-8">
+                                        {[auditStructure.header_data.audited_premise, auditStructure.header_data.operator].map((section, sIdx) => (
+                                            <div key={sIdx} className="mb-4">
+                                                <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">{section.title}</h2>
+                                                <table className="w-full text-sm">
+                                                    <tbody>
+                                                        {section.fields.map(field => (
+                                                            <tr key={field.id}>
+                                                                <td className="font-bold pr-4 py-1 align-top w-40">{field.label}</td>
+                                                                <td className="py-1">{headerValues[field.id] || '-'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         );
                     case 'summary_title':
                         return (
-                            <h3 key={idx} className="text-xl font-bold text-gray-800 border-b-2 border-gray-300 pb-2 mb-4">Souhrnné hodnocení auditu</h3>
+                            <h3 key={idx} className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-4">Souhrnné hodnocení auditu</h3>
                         );
                     case 'evaluation':
                         return (
                             <div key={idx} className="mb-4">
                                 <EditableText
                                     tagName="div"
-                                    className="text-gray-600"
+                                    className={`text-gray-600 ${isCompact ? 'text-xs' : 'text-base'}`}
                                     value={block.value}
                                     onChange={(val) => setEditorState?.({
                                         ...editorState,
@@ -1299,14 +1476,14 @@ export const ReportContent: React.FC<ReportContentProps> = ({
     const renderAuditTablePage = (elements: TableElement[], pageIndex: number, renderStampAtEnd: boolean) => (
         <div className="mt-0 h-full flex flex-col">
             {pageIndex === 0 && (
-                <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">SEZNAM AUDITOVANÝCH POLOŽEK</h2>
+                <h2 className={`${isCompact ? 'pb-0.5 mb-1' : 'text-sm pb-1 mb-2'} font-bold uppercase border-b-2 border-black`}>SEZNAM AUDITOVANÝCH POLOŽEK</h2>
             )}
-            <table className={`w-full text-sm border-collapse border border-gray-300 ${renderStampAtEnd ? 'mb-4' : 'mb-auto'}`}>
+            <table className={`w-full border-collapse border border-gray-300 ${isCompact ? 'text-xs' : 'text-sm'} ${renderStampAtEnd ? (isCompact ? 'mb-2' : 'mb-4') : 'mb-auto'}`}>
                 <thead>
                     <tr className="bg-gray-100">
-                        <th className="border border-gray-300 p-2 text-left w-[22%]">Předmět auditu</th>
-                        <th className="border border-gray-300 p-2 text-left w-[66%]">Popis</th>
-                        <th className="border border-gray-300 p-2 text-left w-[12%]">Hodnocení</th>
+                        <th className={`border border-gray-300 text-left w-[22%] ${isCompact ? 'p-1.5' : 'p-2'}`}>Předmět auditu</th>
+                        <th className={`border border-gray-300 text-left w-[66%] ${isCompact ? 'p-1.5' : 'p-2'}`}>Popis</th>
+                        <th className={`border border-gray-300 text-left w-[12%] ${isCompact ? 'p-1.5' : 'p-2'}`}>Hodnocení</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1314,7 +1491,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                         if (element.type === 'header') {
                             return (
                                 <tr key={`${element.id}-header-${idx}`} className="bg-gray-50">
-                                    <td colSpan={3} className="border border-gray-300 p-2 font-bold">{element.title}</td>
+                                    <td colSpan={3} className={`border border-gray-300 font-bold ${isCompact ? 'p-1.5' : 'p-2'}`}>{element.title}</td>
                                 </tr>
                             );
                         } else {
@@ -1328,9 +1505,9 @@ export const ReportContent: React.FC<ReportContentProps> = ({
 
                             return (
                                 <tr key={item.id}>
-                                    <td className="border border-gray-300 p-2 text-xs">{item.title}</td>
-                                    <td className="border border-gray-300 px-2 py-1 text-[7px] leading-tight text-gray-500">{item.description}</td>
-                                    <td className={`border border-gray-300 p-2 ${status.color} whitespace-nowrap`}>{status.text}</td>
+                                    <td className={`border border-gray-300 ${isCompact ? 'p-1.5 leading-snug' : 'p-2 text-xs'}`}>{item.title}</td>
+                                    <td className={`border border-gray-300 leading-tight text-gray-500 ${isCompact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-[7px]'}`}>{item.description}</td>
+                                    <td className={`border border-gray-300 ${status.color} whitespace-nowrap ${isCompact ? 'p-1.5' : 'p-2'}`}>{status.text}</td>
                                 </tr>
                             );
                         }
@@ -1342,7 +1519,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                 <div className="mt-2 break-inside-avoid">
                     <StampItem
                         stamp={currentStamp}
-                        updateAuditorStamp={readOnly ? (() => {}) : (updateAuditorStamp || ((_: any) => {}))}
+                        updateAuditorStamp={readOnly ? (() => { }) : (updateAuditorStamp || ((_: any) => { }))}
                         readOnly={readOnly}
                         pageBreakBefore={false}
                     />
@@ -1357,7 +1534,55 @@ export const ReportContent: React.FC<ReportContentProps> = ({
             : null;
 
     return (
-        <div className="font-sans text-sm print:bg-white">
+        <div className={`font-sans print:bg-white ${isCompact ? 'report-theme-compact text-xs leading-[1.25]' : 'report-theme-default text-sm'}`}>
+            {/* Hidden Measurement Container for DOM-based pagination */}
+            <div
+                ref={tableRowMeasureRef}
+                style={{
+                    position: 'absolute',
+                    visibility: 'hidden',
+                    width: `${PAGE_LAYOUT.usableWidthPx}px`,
+                    left: '-9999px',
+                    top: 0,
+                    pointerEvents: 'none'
+                }}
+                aria-hidden="true"
+            >
+                <table className={`w-full border-collapse border border-gray-300 ${isCompact ? 'text-xs' : 'text-sm'}`}>
+                    <thead>
+                        <tr className="bg-gray-100">
+                            <th className={`border border-gray-300 text-left w-[22%] ${isCompact ? 'p-1.5' : 'p-2'}`}>Předmět auditu</th>
+                            <th className={`border border-gray-300 text-left w-[66%] ${isCompact ? 'p-1.5' : 'p-2'}`}>Popis</th>
+                            <th className={`border border-gray-300 text-left w-[12%] ${isCompact ? 'p-1.5' : 'p-2'}`}>Hodnocení</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {allTableItems.map(item => {
+                            if (item.type === 'header') {
+                                return (
+                                    <tr key={item.id} data-row-id={item.id} className="bg-gray-50">
+                                        <td colSpan={3} className={`border border-gray-300 font-bold ${isCompact ? 'p-1.5' : 'p-2'}`}>{item.title}</td>
+                                    </tr>
+                                );
+                            } else {
+                                const answersToUse = report.answersSnapshot || audit.answers;
+                                const answer = answersToUse[item.item.id];
+                                const status = answer && !answer.compliant
+                                    ? { text: 'NEVYHOVUJE', color: 'text-red-600 font-bold' }
+                                    : { text: 'VYHOVUJE', color: 'text-black font-bold' };
+                                return (
+                                    <tr key={item.id} data-row-id={item.id}>
+                                        <td className={`border border-gray-300 ${isCompact ? 'p-1.5 leading-snug' : 'p-2 text-xs'}`}>{item.item.title}</td>
+                                        <td className={`border border-gray-300 leading-tight text-gray-500 ${isCompact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-[7px]'}`}>{item.item.description}</td>
+                                        <td className={`border border-gray-300 ${status.color} whitespace-nowrap ${isCompact ? 'p-1.5' : 'p-2'}`}>{status.text}</td>
+                                    </tr>
+                                );
+                            }
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
             {/* Summary Pages (Header + Summary Sections) */}
             {summaryPages.map((pageBlocks, idx) => (
                 <PageSheet
@@ -1423,13 +1648,13 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                                         <StampItem
                                             key="__stamp__"
                                             stamp={currentStamp!}
-                                            updateAuditorStamp={() => {}}
+                                            updateAuditorStamp={() => { }}
                                             readOnly={true}
                                             pageBreakBefore={nc.pageBreakBefore || false}
                                         />
                                     );
                                 }
-                                
+
                                 return (
                                     <NonComplianceItem
                                         key={nc.id}
@@ -1438,6 +1663,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                                         readOnly={true}
                                         renderText={nc.renderText}
                                         photoSlice={nc.photoSlice}
+                                        compact={isCompact}
                                     />
                                 );
                             })}
@@ -1475,72 +1701,74 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                             // Zkontrolovat, zda první položka na stránce má pageBreakBefore
                             const firstItem = pageItems[0];
                             const hasPageBreak = firstItem?.pageBreakBefore && pageIdx > 0;
-                            
+
                             return (
-                            <PageSheet
-                                key={`nc-page-edit-${pageIdx}`}
-                                className={`${hasPageBreak ? 'break-before-page' : (pageIdx > 0 ? 'break-before-page' : '')} ${currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + tablePages.length + pageIdx) ? 'has-overlay-stamp' : ''}`}
-                                pageNumber={1 + summaryPages.length + tablePages.length + pageIdx}
-                                totalPages={totalPages}
-                            >
-                                {pageIdx === 0 && (
-                                    <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESHOD</h2>
-                                )}
-                                {pageItems.map((nc) => {
-                                    // Zkontrolovat, zda je to razítko
-                                    if (nc.id === '__stamp__') {
-                                        if (currentStamp?.overlayEnabled) return null;
-                                        return (
-                                            <StampItem
-                                                key="__stamp__"
-                                                stamp={currentStamp!}
-                                                updateAuditorStamp={updateAuditorStamp!}
-                                                readOnly={readOnly}
-                                                pageBreakBefore={nc.pageBreakBefore || false}
-                                            />
-                                        );
-                                    }
+                                <PageSheet
+                                    key={`nc-page-edit-${pageIdx}`}
+                                    className={`${hasPageBreak ? 'break-before-page' : (pageIdx > 0 ? 'break-before-page' : '')} ${currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + tablePages.length + pageIdx) ? 'has-overlay-stamp' : ''}`}
+                                    pageNumber={1 + summaryPages.length + tablePages.length + pageIdx}
+                                    totalPages={totalPages}
+                                >
+                                    {pageIdx === 0 && (
+                                        <h2 className="text-sm font-bold uppercase border-b-2 border-black pb-1 mb-2">DETAIL ZJIŠTĚNÝCH NESHOD</h2>
+                                    )}
+                                    {pageItems.map((nc) => {
+                                        // Zkontrolovat, zda je to razítko
+                                        if (nc.id === '__stamp__') {
+                                            if (currentStamp?.overlayEnabled) return null;
+                                            return (
+                                                <StampItem
+                                                    key="__stamp__"
+                                                    stamp={currentStamp!}
+                                                    updateAuditorStamp={updateAuditorStamp!}
+                                                    readOnly={readOnly}
+                                                    pageBreakBefore={nc.pageBreakBefore || false}
+                                                />
+                                            );
+                                        }
 
-                                    const isMainPart = nc.renderText !== false;
+                                        const isMainPart = nc.renderText !== false;
 
-                                    if (isMainPart) {
-                                        return (
-                                            <SortableItem
-                                                key={nc.uniqueKey || nc.id}
-                                                id={nc.id}
-                                                nc={nc}
-                                                index={editorState.nonCompliances.findIndex(i => i.id === nc.id)}
-                                                updateNonCompliance={updateNonCompliance!}
-                                                moveNonCompliance={moveNonCompliance!}
-                                                renderText={nc.renderText}
-                                                photoSlice={nc.photoSlice}
-                                            />
-                                        );
-                                    } else {
-                                        return (
-                                            <NonComplianceItem
-                                                key={nc.uniqueKey || nc.id}
-                                                nc={nc}
-                                                index={editorState.nonCompliances.findIndex(i => i.id === nc.id)}
-                                                updateNonCompliance={updateNonCompliance!}
-                                                renderText={false}
-                                                photoSlice={nc.photoSlice}
-                                            // No drag props for continuations
-                                            />
-                                        );
-                                    }
-                                })}
-                                {pageItems.length === 0 && <div className="text-gray-400 italic p-4 text-center">Žádné neshody na této stránce</div>}
-                                {currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + tablePages.length + pageIdx) && (
-                                    <StampOverlay
-                                        stamp={currentStamp}
-                                        readOnly={readOnly}
-                                        pageNumber={1 + summaryPages.length + tablePages.length + pageIdx}
-                                        totalPages={totalPages}
-                                        updateAuditorStamp={readOnly ? undefined : (updateAuditorStamp as any)}
-                                    />
-                                )}
-                            </PageSheet>
+                                        if (isMainPart) {
+                                            return (
+                                                <SortableItem
+                                                    key={nc.uniqueKey || nc.id}
+                                                    id={nc.id}
+                                                    nc={nc}
+                                                    index={editorState.nonCompliances.findIndex(i => i.id === nc.id)}
+                                                    updateNonCompliance={updateNonCompliance!}
+                                                    moveNonCompliance={moveNonCompliance!}
+                                                    renderText={nc.renderText}
+                                                    photoSlice={nc.photoSlice}
+                                                    compact={isCompact}
+                                                />
+                                            );
+                                        } else {
+                                            return (
+                                                <NonComplianceItem
+                                                    key={nc.uniqueKey || nc.id}
+                                                    nc={nc}
+                                                    index={editorState.nonCompliances.findIndex(i => i.id === nc.id)}
+                                                    updateNonCompliance={updateNonCompliance!}
+                                                    renderText={false}
+                                                    photoSlice={nc.photoSlice}
+                                                    // No drag props for continuations
+                                                    compact={isCompact}
+                                                />
+                                            );
+                                        }
+                                    })}
+                                    {pageItems.length === 0 && <div className="text-gray-400 italic p-4 text-center">Žádné neshody na této stránce</div>}
+                                    {currentStamp?.stampUrl && currentStamp.overlayEnabled && overlayTargetPageNumber === (1 + summaryPages.length + tablePages.length + pageIdx) && (
+                                        <StampOverlay
+                                            stamp={currentStamp}
+                                            readOnly={readOnly}
+                                            pageNumber={1 + summaryPages.length + tablePages.length + pageIdx}
+                                            totalPages={totalPages}
+                                            updateAuditorStamp={readOnly ? undefined : (updateAuditorStamp as any)}
+                                        />
+                                    )}
+                                </PageSheet>
                             );
                         })}
                     </SortableContext>
@@ -1550,7 +1778,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                                 {activeId === '__stamp__' ? (
                                     <StampItem
                                         stamp={currentStamp!}
-                                        updateAuditorStamp={() => {}}
+                                        updateAuditorStamp={() => { }}
                                         readOnly={true}
                                         pageBreakBefore={currentStamp?.pageBreakBefore || false}
                                     />
@@ -1559,6 +1787,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                                         nc={editorState.nonCompliances.find(i => i.id === activeId)!}
                                         index={editorState.nonCompliances.findIndex(i => i.id === activeId)}
                                         readOnly={true}
+                                        compact={isCompact}
                                     />
                                 )}
                             </div>
@@ -1567,7 +1796,7 @@ export const ReportContent: React.FC<ReportContentProps> = ({
                     </DragOverlay >
                 </DndContext >
             )) : null}
-            
+
             {/* Razítko bez neshod: fallback na samostatnou stránku pouze pokud se nevešlo na poslední stránku tabulky */}
             {currentStamp?.stampUrl && (!editorState.nonCompliances || editorState.nonCompliances.length === 0) && !currentStamp.overlayEnabled && !canEmbedStampIntoLastTablePage && (
                 <PageSheet

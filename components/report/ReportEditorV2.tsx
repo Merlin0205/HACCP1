@@ -56,6 +56,13 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
         })
     );
 
+    // Store calculated row heights from the live editor for PDF generation
+    const latestRowHeights = React.useRef<Map<string, number>>(new Map());
+
+    const handleRowHeightsCalculated = React.useCallback((heights: Map<string, number>) => {
+        latestRowHeights.current = heights;
+    }, []);
+
     // Použít snapshot headerValues z reportu pokud existuje, jinak použít audit.headerValues
     // Použít pouze report.id a audit.id jako dependencies - headerValues se získají přímo v useMemo
     const currentHeaderValues = useMemo(() => {
@@ -127,7 +134,7 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                 // editorState může být buď v smart.editorState (novější verze) nebo přímo v reportu (starší verze)
                 // Priorita: smart.editorState > editorState (novější verze mají prioritu)
                 const editorStateFromReport = reportAny.smart?.editorState || reportAny.editorState;
-                
+
                 if (reportAny.smart?.editorState) {
                     console.log('[ReportEditorV2] editorState nalezen v smart.editorState');
                 } else if (reportAny.editorState) {
@@ -138,13 +145,17 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
 
                 if (editorStateFromReport) {
                     console.log('[ReportEditorV2] Načítám editorState z reportu:', report.id);
-                    
+                    // Default vzhled (kvůli zpětné kompatibilitě)
+                    if (!editorStateFromReport.visualTheme) {
+                        editorStateFromReport.visualTheme = 'default';
+                    }
+
                     // Validace editorState - zkontrolovat, že obsahuje nonCompliances
                     if (!editorStateFromReport.nonCompliances || !Array.isArray(editorStateFromReport.nonCompliances)) {
                         console.warn('[ReportEditorV2] editorState nemá validní nonCompliances, používám prázdný seznam');
                         editorStateFromReport.nonCompliances = [];
                     }
-                    
+
                     // Validace a čištění fotek v neshodách
                     editorStateFromReport.nonCompliances = editorStateFromReport.nonCompliances.map((nc: any) => {
                         if (nc.photos && Array.isArray(nc.photos)) {
@@ -195,7 +206,7 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                             console.error('[ReportEditorV2] Error loading auditor info:', error);
                         }
                     }
-                    
+
                     setEditorState(editorStateFromReport);
                     setIsDirty(false); // Reset dirty state při načtení editorState z reportu
                     console.log('[ReportEditorV2] editorState načten úspěšně, počet neshod:', editorStateFromReport.nonCompliances?.length || 0);
@@ -203,22 +214,24 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                     // Pokud editorState neexistuje, zkusit použít reportData.summary jako fallback
                     // Toto je pro velmi staré verze reportů, které nemají editorState
                     console.warn('[ReportEditorV2] Report nemá editorState, zkouším použít reportData.summary jako fallback:', report.id);
-                    
+
                     const summary = reportAny.reportData?.summary;
-                    
+
                     if (summary) {
                         // Vytvořit minimální editorState z reportData.summary
                         // Toto je fallback pro starší verze, které nemají kompletní editorState
                         const fallbackEditorState = {
+                            visualTheme: 'default',
                             nonCompliances: [], // Starší verze nemají detailní neshody v editorState
                             zoomLevel: 1.0,
                             summaryOverrides: {
                                 evaluation_text: summary.evaluation_text || '',
                                 key_findings: summary.key_findings || [],
                                 key_recommendations: summary.key_recommendations || []
-                            }
+                            },
+                            auditorStamp: undefined as any
                         };
-                        
+
                         // Načíst aktuální auditorInfo pro razítko
                         let auditorStamp: any = undefined;
                         try {
@@ -234,9 +247,9 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                         } catch (error) {
                             console.error('[ReportEditorV2] Error loading auditor info:', error);
                         }
-                        
+
                         fallbackEditorState.auditorStamp = auditorStamp;
-                        
+
                         setEditorState(fallbackEditorState);
                         setIsDirty(false);
                         console.log('[ReportEditorV2] Použit fallback editorState z reportData.summary');
@@ -245,6 +258,7 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                         console.error('[ReportEditorV2] Report nemá editorState ani reportData.summary:', report.id);
                         toast.error('Tato verze reportu nemá uložená data. Report nelze zobrazit.');
                         setEditorState({
+                            visualTheme: 'default',
                             nonCompliances: [],
                             zoomLevel: 1.0
                         });
@@ -259,12 +273,16 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                 const editorStateFromProp = reportAny.smart?.editorState || reportAny.editorState;
                 if (editorStateFromProp) {
                     console.log('[ReportEditorV2] Použit editorState z prop (fallback po chybě)');
+                    if (!editorStateFromProp.visualTheme) {
+                        editorStateFromProp.visualTheme = 'default';
+                    }
                     setEditorState(editorStateFromProp);
                     setIsDirty(false); // Reset dirty state při načtení editorState z prop
                 } else {
                     // Pokud ani prop nemá editorState, vytvořit prázdný
                     console.warn('[ReportEditorV2] Ani prop nemá editorState, vytvářím prázdný');
                     setEditorState({
+                        visualTheme: 'default',
                         nonCompliances: [],
                         zoomLevel: 1.0
                     });
@@ -352,6 +370,7 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                     auditStructure={auditStructure}
                     editorState={editorState}
                     readOnly={true}
+                    initialRowHeights={latestRowHeights.current}
                 />
             );
 
@@ -363,9 +382,9 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                     <meta name="viewport" content="width=device-width, initial-scale=1.0">
                     <title>Audit Report</title>
                     <script src="https://cdn.tailwindcss.com"></script>
-                    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+                    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
                     <style>
-                        body { font-family: 'Roboto', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; overflow-wrap: break-word; word-break: break-word; }
+                        body { font-family: 'Inter', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; padding: 0; overflow-wrap: break-word; word-break: break-word; }
                         ul { list-style-type: disc; padding-left: 2em; margin: 0.5em 0; }
                         ol { list-style-type: decimal; padding-left: 2em; margin: 0.5em 0; }
                         li { margin: 0.25em 0; }
@@ -383,6 +402,16 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                         }
                         .print\\:break-inside-avoid {
                             page-break-inside: avoid !important;
+                        }
+                        /* Kompaktní typografie (globálně) */
+                        .report-theme-compact {
+                            font-size: 13.3px; /* ~10pt */
+                            line-height: 1.25;
+                        }
+                        .report-theme-compact td,
+                        .report-theme-compact th {
+                            overflow-wrap: anywhere;
+                            word-break: break-word;
                         }
 
                         /* PDF/print: zabránit "mezistránkovým" marginům, které v Chromu často vytvoří poslední prázdnou stránku */
@@ -518,7 +547,7 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
         overlayPosition?: { x: number; y: number };
     }>) => {
         if (!editorState) return;
-        
+
         // Pokud je stampUrl null, smazat razítko (nastavit na null místo undefined, aby bylo jasné, že bylo smazáno)
         if (updates.stampUrl === null) {
             setEditorState({
@@ -592,6 +621,17 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
 
     if (!editorState) return <div>Načítání editoru...</div>;
 
+    const currentVisualTheme = editorState.visualTheme || 'default';
+
+    const setVisualTheme = (theme: 'default' | 'compact') => {
+        if (currentVisualTheme === theme) return;
+        setEditorState({
+            ...editorState,
+            visualTheme: theme
+        });
+        setIsDirty(true);
+    };
+
     return (
         <div className="bg-gray-100 relative">
             {/* Sticky Header for Editor Actions */}
@@ -635,6 +675,30 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                         </button>
                     </div>
 
+                    {/* Visual Theme Toggle */}
+                    <div className="flex items-center bg-gray-100 rounded-lg p-1 mr-2" title="Vzhled reportu">
+                        <button
+                            type="button"
+                            onClick={() => setVisualTheme('default')}
+                            className={`px-2.5 py-1 text-xs rounded-md transition-colors ${currentVisualTheme === 'default'
+                                ? 'bg-white shadow-sm text-gray-900'
+                                : 'text-gray-600 hover:bg-white/70'
+                                }`}
+                        >
+                            Aktuální
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setVisualTheme('compact')}
+                            className={`px-2.5 py-1 text-xs rounded-md transition-colors ${currentVisualTheme === 'compact'
+                                ? 'bg-white shadow-sm text-gray-900'
+                                : 'text-gray-600 hover:bg-white/70'
+                                }`}
+                        >
+                            Kompaktní
+                        </button>
+                    </div>
+
                     <Button
                         variant="primary"
                         onClick={handleSaveClick}
@@ -675,6 +739,7 @@ export const ReportEditorV2: React.FC<ReportEditorV2Props> = ({
                         moveNonCompliance={moveNonCompliance}
                         updateAuditorStamp={updateAuditorStamp}
                         restoreAuditorStamp={restoreAuditorStamp}
+                        onRowHeightsCalculated={handleRowHeightsCalculated}
                     />
                 </div>
             </div>

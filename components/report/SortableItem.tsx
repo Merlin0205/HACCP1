@@ -12,6 +12,7 @@ interface SortableItemProps {
     moveNonCompliance: (id: string, direction: 'up' | 'down') => void;
     renderText?: boolean;
     photoSlice?: [number, number];
+    compact?: boolean;
 }
 
 export const SortableItem: React.FC<SortableItemProps> = ({
@@ -21,7 +22,8 @@ export const SortableItem: React.FC<SortableItemProps> = ({
     updateNonCompliance,
     moveNonCompliance,
     renderText,
-    photoSlice
+    photoSlice,
+    compact = false
 }) => {
     const {
         attributes,
@@ -52,6 +54,7 @@ export const SortableItem: React.FC<SortableItemProps> = ({
             dragListeners={listeners}
             renderText={renderText}
             photoSlice={photoSlice}
+            compact={compact}
         />
     );
 };

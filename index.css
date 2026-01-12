@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Compact report theme: force legacy <font> tags to inherit font-size */
+.report-theme-compact font,
+.report-theme-compact [size] {
+  font-size: inherit !important;
+}
+
 /* Tenký scrollbar pro celou stránku - zobrazí se automaticky pouze když je obsah vyšší */
 body::-webkit-scrollbar {
   width: 8px;

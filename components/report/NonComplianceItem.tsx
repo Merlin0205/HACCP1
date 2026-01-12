@@ -21,6 +21,7 @@ interface NonComplianceItemProps {
     innerRef?: (node: HTMLElement | null) => void;
     renderText?: boolean;
     photoSlice?: [number, number];
+    compact?: boolean;
 }
 
 export const NonComplianceItem: React.FC<NonComplianceItemProps> = ({
@@ -34,7 +35,8 @@ export const NonComplianceItem: React.FC<NonComplianceItemProps> = ({
     style,
     innerRef,
     renderText = true,
-    photoSlice
+    photoSlice,
+    compact = false
 }) => {
     const photoContainerRef = React.useRef<HTMLDivElement>(null);
     const [resizingPhotoId, setResizingPhotoId] = React.useState<string | null>(null);
@@ -45,7 +47,11 @@ export const NonComplianceItem: React.FC<NonComplianceItemProps> = ({
         : nc.photos;
 
     return (
-        <div ref={innerRef} style={style} className={`mb-6 pt-4 ${renderText ? 'border-t border-gray-200' : ''} group/item relative ${readOnly ? '' : 'hover:bg-gray-50'}`}>
+        <div
+            ref={innerRef}
+            style={style}
+            className={`${compact ? 'mb-4 pt-3 text-xs' : 'mb-6 pt-4'} ${renderText ? 'border-t border-gray-200' : ''} group/item relative ${readOnly ? '' : 'hover:bg-gray-50'}`}
+        >
 
             {/* Gutter Controls - Outside the content flow */}
             {!readOnly && moveNonCompliance && renderText && (
@@ -94,45 +100,54 @@ export const NonComplianceItem: React.FC<NonComplianceItemProps> = ({
             {/* Content - Only if renderText is true */}
             {renderText && (
                 <>
-                    <div className="flex items-baseline gap-2 mb-1">
-                        <span className="font-bold text-md">{index + 1}.</span>
+                    <div className={`flex items-baseline gap-2 ${compact ? 'mb-0.5' : 'mb-1'}`}>
+                        <span className={`font-bold ${compact ? '' : 'text-md'}`}>{index + 1}.</span>
                         <EditableText
                             tagName="h3"
                             value={nc.itemTitle}
                             onChange={(val) => updateNonCompliance?.(nc.id, { itemTitle: val })}
-                            className="font-bold text-md flex-1"
+                            className={`font-bold flex-1 ${compact ? 'leading-snug' : 'text-md'}`}
                             readOnly={readOnly}
                         />
                     </div>
-                    <p className="text-xs text-gray-500 mb-2">Sekce: {nc.sectionTitle}</p>
+                    <p className={`${compact ? 'mb-1' : 'text-xs mb-2'} text-gray-500`}>Sekce: {nc.sectionTitle}</p>
 
-                    <div className="pl-4 border-l-4 border-red-500 mb-4 text-sm">
-                        <div className="mb-1">
-                            <strong>Místo: </strong>
-                            <EditableText
-                                tagName="span"
-                                value={nc.location}
-                                onChange={(val) => updateNonCompliance?.(nc.id, { location: val })}
-                                readOnly={readOnly}
-                            />
+                    <div className={`${compact ? 'pl-3 border-l-4 mb-3' : 'pl-4 border-l-4 mb-4 text-sm'} border-red-500`}>
+                        <div className={compact ? 'mb-0.5' : 'mb-1'}>
+                            <div className="font-bold whitespace-nowrap">Místo:</div>
+                            <div className="pl-[0.5em]">
+                                <EditableText
+                                    tagName="div"
+                                    value={(nc.location || '').trim()}
+                                    onChange={(val) => updateNonCompliance?.(nc.id, { location: val })}
+                                    readOnly={readOnly}
+                                    className={compact ? 'text-xs' : ''}
+                                />
+                            </div>
                         </div>
-                        <div className="mb-1">
-                            <strong>Zjištění: </strong>
-                            <EditableText
-                                tagName="span"
-                                value={nc.finding}
-                                onChange={(val) => updateNonCompliance?.(nc.id, { finding: val })}
-                                readOnly={readOnly}
-                            />
+                        <div className={compact ? 'mb-0.5' : 'mb-1'}>
+                            <div className="font-bold whitespace-nowrap">Zjištění:</div>
+                            <div className="pl-[0.5em]">
+                                <EditableText
+                                    tagName="div"
+                                    value={(nc.finding || '').trim()}
+                                    onChange={(val) => updateNonCompliance?.(nc.id, { finding: val })}
+                                    readOnly={readOnly}
+                                    className={compact ? 'text-xs' : ''}
+                                />
+                            </div>
                         </div>
                         <div>
-                            <strong>Doporučení: </strong>
-                            <EditableText
-                                tagName="span"
-                                value={nc.recommendation}
-                                onChange={(val) => updateNonCompliance?.(nc.id, { recommendation: val })}
-                                readOnly={readOnly}
-                            />
+                            <div className="font-bold whitespace-nowrap">Doporučení:</div>
+                            <div className="pl-[0.5em]">
+                                <EditableText
+                                    tagName="div"
+                                    value={(nc.recommendation || '').trim()}
+                                    onChange={(val) => updateNonCompliance?.(nc.id, { recommendation: val })}
+                                    readOnly={readOnly}
+                                    className={compact ? 'text-xs' : ''}
+                                />
+                            </div>
                         </div>
                     </div>
                 </>

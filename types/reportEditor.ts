@@ -68,6 +68,12 @@ export interface AuditorStamp {
 }
 
 export interface ReportEditorState {
+  /**
+   * Vizuální vzhled reportu (pouze vizuální kabát, bez změny dat).
+   * - 'default' = stávající vzhled (beze změny)
+   * - 'compact' = kompaktní vzhled (hustší typografie a 1. stránka)
+   */
+  visualTheme?: 'default' | 'compact';
   // Global overrides for summary text
   summaryOverrides?: {
     evaluation_text?: string;

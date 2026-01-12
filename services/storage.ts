@@ -13,6 +13,7 @@ import {
 } from 'firebase/storage';
 import { storage, auth } from '../firebaseConfig';
 import { generatePhotoFilename } from '../utils/photoIdGenerator';
+import { Report } from '../types';
 
 /**
  * Nahraj logo dodavatele do Storage
@@ -26,22 +27,22 @@ export async function uploadSupplierLogo(
   file: File
 ): Promise<string> {
   const userId = getCurrentUserId();
-  
+
   // Získat příponu souboru
   const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
-  
+
   // Název souboru: logo.{ext}
   const fileName = `logo.${fileExtension}`;
-  const storagePath = `users/${userId}/suppliers/${supplierId}/${fileName}`;
-  
+  const storagePath = `suppliers/${supplierId}/${fileName}`;
+
   const storageRef = ref(storage, storagePath);
-  
+
   // Upload souboru
   await uploadBytes(storageRef, file);
-  
+
   // Získat download URL
   const url = await getDownloadURL(storageRef);
-  
+
   return url;
 }
 
@@ -57,22 +58,22 @@ export async function uploadSupplierStamp(
   file: File
 ): Promise<string> {
   const userId = getCurrentUserId();
-  
+
   // Získat příponu souboru
   const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
-  
+
   // Název souboru: stamp.{ext}
   const fileName = `stamp.${fileExtension}`;
-  const storagePath = `users/${userId}/suppliers/${supplierId}/${fileName}`;
-  
+  const storagePath = `suppliers/${supplierId}/${fileName}`;
+
   const storageRef = ref(storage, storagePath);
-  
+
   // Upload souboru
   await uploadBytes(storageRef, file);
-  
+
   // Získat download URL
   const url = await getDownloadURL(storageRef);
-  
+
   return url;
 }
 
@@ -100,15 +101,13 @@ export async function uploadAuditPhoto(
   file: File,
   index: number
 ): Promise<{ url: string; storagePath: string }> {
-  const userId = getCurrentUserId();
-  
   // Generovat human-readable název fotky (formát: F{YYYYMMDD}_{COUNTER}.{ext})
   const fileExtension = file.name.split('.').pop() || 'jpg';
   const fileName = await generatePhotoFilename(auditId, fileExtension);
-  const storagePath = `users/${userId}/audits/${auditId}/${fileName}`;
-  
+  const storagePath = `audits/${auditId}/${fileName}`;
+
   const storageRef = ref(storage, storagePath);
-  
+
   // Upload souboru
   await uploadBytes(storageRef, file, {
     contentType: file.type,
@@ -117,10 +116,10 @@ export async function uploadAuditPhoto(
       uploadedAt: new Date().toISOString()
     }
   });
-  
+
   // Získat download URL
   const url = await getDownloadURL(storageRef);
-  
+
   return { url, storagePath };
 }
 
@@ -140,10 +139,9 @@ export async function deleteAuditPhoto(storagePath: string): Promise<void> {
  * @param auditId ID auditu
  */
 export async function deleteAllAuditPhotos(auditId: string): Promise<void> {
-  const userId = getCurrentUserId();
-  const folderPath = `users/${userId}/audits/${auditId}`;
+  const folderPath = `audits/${auditId}`;
   const folderRef = ref(storage, folderPath);
-  
+
   try {
     const listResult = await listAll(folderRef);
     const deletePromises = listResult.items.map(item => deleteObject(item));
@@ -182,13 +180,12 @@ export async function uploadReportPdf(
   reportId: string,
   pdfBlob: Blob
 ): Promise<{ url: string; storagePath: string }> {
-  const userId = getCurrentUserId();
   const timestamp = Date.now();
   const fileName = `report_${reportId}_${timestamp}.pdf`;
-  const storagePath = `users/${userId}/reports/${fileName}`;
-  
+  const storagePath = `reports/${fileName}`;
+
   const storageRef = ref(storage, storagePath);
-  
+
   await uploadBytes(storageRef, pdfBlob, {
     contentType: 'application/pdf',
     customMetadata: {
@@ -196,9 +193,9 @@ export async function uploadReportPdf(
       uploadedAt: new Date().toISOString()
     }
   });
-  
+
   const url = await getDownloadURL(storageRef);
-  
+
   return { url, storagePath };
 }
 
@@ -223,14 +220,14 @@ export async function uploadAuditorStamp(
 ): Promise<string> {
   // Získat příponu souboru
   const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
-  
+
   // Název souboru: stamp.{ext}
   // Storage path: auditor/stamp.{ext} (globální, ne pod userId)
   const fileName = `stamp.${fileExtension}`;
   const storagePath = `auditor/${fileName}`;
-  
+
   const storageRef = ref(storage, storagePath);
-  
+
   // Upload souboru
   await uploadBytes(storageRef, file, {
     contentType: file.type,
@@ -239,10 +236,10 @@ export async function uploadAuditorStamp(
       type: 'auditor_stamp'
     }
   });
-  
+
   // Získat download URL
   const url = await getDownloadURL(storageRef);
-  
+
   return url;
 }
 
@@ -264,7 +261,46 @@ export async function deleteAuditorStamp(): Promise<void> {
       }
     }
   });
-  
+
   await Promise.all(deletePromises);
 }
 
+
+/**
+ * Smaže všechny fyzické soubory spojené s reportem (PDF, koncepty)
+ * 
+ * @param report Report objekt
+ */
+export async function deleteAllReportFiles(report: Report): Promise<void> {
+  const promises: Promise<void>[] = [];
+
+  // 1. Smazat lastSmartDraftPath
+  if (report.smart?.lastSmartDraftPath) {
+    promises.push(
+      deleteReportPdf(report.smart.lastSmartDraftPath)
+        .catch(err => console.warn(`[deleteAllReportFiles] Failed to delete draft: ${report.smart?.lastSmartDraftPath}`, err))
+    );
+  }
+
+  // 2. Smazat finalVersions
+  if (report.smart?.finalVersions && Array.isArray(report.smart.finalVersions)) {
+    report.smart.finalVersions.forEach(version => {
+      // Smazat reportPath
+      if (version.reportPath) {
+        promises.push(
+          deleteReportPdf(version.reportPath)
+            .catch(err => console.warn(`[deleteAllReportFiles] Failed to delete reportPath: ${version.reportPath}`, err))
+        );
+      }
+      // Smazat pdfPath
+      if (version.pdfPath) {
+        promises.push(
+          deleteReportPdf(version.pdfPath)
+            .catch(err => console.warn(`[deleteAllReportFiles] Failed to delete pdfPath: ${version.pdfPath}`, err))
+        );
+      }
+    });
+  }
+
+  await Promise.all(promises);
+}
